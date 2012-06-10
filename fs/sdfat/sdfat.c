@@ -1042,7 +1042,7 @@ static int sdfat_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 }
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(3, 4, 0)
 static int sdfat_create(struct inode *dir, struct dentry *dentry, umode_t mode,
-			struct nameidata *nd)
+			bool excl)
 {
 	return __sdfat_create(dir, dentry);
 }
