@@ -724,7 +724,7 @@ static struct dentry *sdfat_lookup(struct inode *dir, struct dentry *dentry,
 }
 #else /* LINUX_VERSION_CODE < KERNEL_VERSION(3, 6, 0) */
 static struct dentry *sdfat_lookup(struct inode *dir, struct dentry *dentry,
-						   struct nameidata *nd)
+						   unsigned int flags)
 {
 	return __sdfat_lookup(dir, dentry);
 }
