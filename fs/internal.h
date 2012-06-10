@@ -83,8 +83,6 @@ extern int umount2(char *name, int flags);
  * open.c
  */
 struct opendata {
-	struct dentry *dentry;
-	struct vfsmount *mnt;
 	struct file *filp;
 };
 struct open_flags {
