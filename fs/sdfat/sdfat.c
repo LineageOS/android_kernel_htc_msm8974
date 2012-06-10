@@ -675,20 +675,20 @@ static inline void clear_inode(struct inode *inode)
 	end_writeback(inode);
 }
 
-static int sdfat_revalidate(struct dentry *dentry, struct nameidata *nd)
+static int sdfat_revalidate(struct dentry *dentry, unsigned int flags)
 {
-	if (nd && nd->flags & LOOKUP_RCU)
+	if (flags & LOOKUP_RCU)
 		return -ECHILD;
 
 	return __sdfat_revalidate(dentry);
 }
 
-static int sdfat_revalidate_ci(struct dentry *dentry, struct nameidata *nd)
+static int sdfat_revalidate_ci(struct dentry *dentry, unsigned int flags)
 {
-	if (nd && nd->flags & LOOKUP_RCU)
+	if (flags & LOOKUP_RCU)
 		return -ECHILD;
 
-	return __sdfat_revalidate_ci(dentry, nd ? nd->flags : 0);
+	return __sdfat_revalidate_ci(dentry, flags);
 
 }
 
