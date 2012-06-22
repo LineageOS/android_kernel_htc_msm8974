@@ -82,9 +82,6 @@ extern int umount2(char *name, int flags);
 /*
  * open.c
  */
-struct opendata {
-	struct file *filp;
-};
 struct open_flags {
 	int open_flag;
 	umode_t mode;
