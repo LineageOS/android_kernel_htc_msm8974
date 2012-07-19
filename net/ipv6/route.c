@@ -269,7 +269,7 @@ static inline struct rt6_info *ip6_dst_alloc(struct dst_ops *ops,
 					     struct net_device *dev,
 					     int flags)
 {
-	struct rt6_info *rt = dst_alloc(ops, dev, 0, 0, flags);
+	struct rt6_info *rt = dst_alloc(ops, dev, 0, DST_OBSOLETE_NONE, flags);
 
 	if (rt)
 		memset(&rt->rt6i_table, 0,
@@ -986,7 +986,7 @@ struct dst_entry *ip6_blackhole_route(struct net *net, struct dst_entry *dst_ori
 	struct rt6_info *rt, *ort = (struct rt6_info *) dst_orig;
 	struct dst_entry *new = NULL;
 
-	rt = dst_alloc(&ip6_dst_blackhole_ops, ort->dst.dev, 1, 0, 0);
+	rt = dst_alloc(&ip6_dst_blackhole_ops, ort->dst.dev, 1, DST_OBSOLETE_NONE, 0);
 	if (rt) {
 		memset(&rt->rt6i_table, 0, sizeof(*rt) - sizeof(struct dst_entry));
 
