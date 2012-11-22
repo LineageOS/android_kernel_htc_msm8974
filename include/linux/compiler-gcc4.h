@@ -31,6 +31,8 @@
 
 #define __linktime_error(message) __attribute__((__error__(message)))
 
+#define __UNIQUE_ID(prefix) __PASTE(__PASTE(__UNIQUE_ID_, prefix), __COUNTER__)
+
 /*
  * GCC 'asm goto' miscompiles certain code sequences:
  *
