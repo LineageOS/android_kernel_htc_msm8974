@@ -1352,7 +1352,7 @@ static int projector2_bind_config(struct usb_configuration *c)
 	dev->cdev = c->cdev;
 	dev->function.name = "projector2";
 	dev->function.strings = projector2_strings;
-	dev->function.descriptors = fs_projector2_descs;
+	dev->function.fs_descriptors = fs_projector2_descs;
 	dev->function.hs_descriptors = hs_projector2_descs;
 	dev->function.bind = projector2_function_bind;
 	dev->function.unbind = projector2_function_unbind;
