@@ -417,8 +417,7 @@ static void f_midi_unbind(struct usb_configuration *c, struct usb_function *f)
 	kfree(midi->id);
 	midi->id = NULL;
 
-	usb_free_descriptors(f->descriptors);
-	usb_free_descriptors(f->hs_descriptors);
+	usb_free_all_descriptors(f);
 	kfree(midi);
 }
 
@@ -879,8 +878,14 @@ f_midi_bind(struct usb_configuration *c, struct usb_function *f)
 	midi_function[i++] = (struct usb_descriptor_header *) &ms_in_desc;
 	midi_function[i++] = NULL;
 
-	f->descriptors = usb_copy_descriptors(midi_function);
-	if (!f->descriptors)
+	/*
+	 * support all relevant hardware speeds... we expect that when
+	 * hardware is dual speed, all bulk-capable endpoints work at
+	 * both speeds
+	 */
+	/* copy descriptors, and track endpoint copies */
+	f->fs_descriptors = usb_copy_descriptors(midi_function);
+	if (!f->fs_descriptors)
 		goto fail_f_midi;
 
 	if (gadget_is_dualspeed(c->cdev->gadget)) {
@@ -898,6 +903,7 @@ f_midi_bind(struct usb_configuration *c, struct usb_function *f)
 fail_f_midi:
 	kfree(midi_function);
 	usb_free_descriptors(f->hs_descriptors);
+
 fail:
 	/* we might as well release our claims on endpoints */
 	if (midi->out_ep)

@@ -1541,9 +1541,19 @@ static int mtp_bind_config(struct usb_configuration *c, bool ptp_config)
 
 	dev->cdev = c->cdev;
 	dev->function.name = "mtp";
-	dev->function.strings = mtp_strings;
-		dev->function.descriptors = fs_mtp_descs;
+	if (ptp_config) {
+//		dev->function.strings = ptp_strings;
+		dev->function.fs_descriptors = fs_ptp_descs;
+		dev->function.hs_descriptors = hs_ptp_descs;
+		if (gadget_is_superspeed(c->cdev->gadget))
+			dev->function.ss_descriptors = ss_ptp_descs;
+	} else {
+		dev->function.strings = mtp_strings;
+		dev->function.fs_descriptors = fs_mtp_descs;
 		dev->function.hs_descriptors = hs_mtp_descs;
+		if (gadget_is_superspeed(c->cdev->gadget))
+			dev->function.ss_descriptors = ss_mtp_descs;
+	}
 
 	if (ptp_config || !mac_mtp_mode) {
 		mtp_interface_desc.bInterfaceClass =
