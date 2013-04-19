@@ -804,7 +804,7 @@ static void diag_function_unbind(struct usb_configuration *c,
 	if (gadget_is_dualspeed(c->cdev->gadget))
 		usb_free_descriptors(f->hs_descriptors);
 
-	usb_free_descriptors(f->descriptors);
+	usb_free_descriptors(f->fs_descriptors);
 
 	/*
 	 * Channel priv_usb may point to other diag function.
@@ -844,8 +844,8 @@ static int diag_function_bind(struct usb_configuration *c,
 
 	status = -ENOMEM;
 	/* copy descriptors, and track endpoint copies */
-	f->descriptors = usb_copy_descriptors(fs_diag_desc);
-	if (!f->descriptors)
+	f->fs_descriptors = usb_copy_descriptors(fs_diag_desc);
+	if (!f->fs_descriptors)
 		goto fail;
 
 	if (gadget_is_dualspeed(c->cdev->gadget)) {
@@ -878,8 +878,8 @@ fail:
 		usb_free_descriptors(f->ss_descriptors);
 	if (f->hs_descriptors)
 		usb_free_descriptors(f->hs_descriptors);
-	if (f->descriptors)
-		usb_free_descriptors(f->descriptors);
+	if (f->fs_descriptors)
+		usb_free_descriptors(f->fs_descriptors);
 	if (ctxt->out)
 		ctxt->out->driver_data = NULL;
 	if (ctxt->in)
@@ -953,7 +953,7 @@ int diag_function_add(struct usb_configuration *c, const char *name,
 	dev->cdev = c->cdev;
 	dev->function.name = _ch->name;
 	dev->function.strings = diag_strings;
-	dev->function.descriptors = fs_diag_desc;
+	dev->function.fs_descriptors = fs_diag_desc;
 	dev->function.hs_descriptors = hs_diag_desc;
 	dev->function.bind = diag_function_bind;
 	dev->function.unbind = diag_function_unbind;
