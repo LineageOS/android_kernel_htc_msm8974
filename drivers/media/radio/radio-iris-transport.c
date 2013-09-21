@@ -216,6 +216,14 @@ static void radio_hci_smd_exit(void)
 	radio_hci_smd_deregister();
 }
 
+int hci_fm_smd_register(void) {
+	return radio_hci_smd_register_dev(&hs);
+}
+
+void hci_fm_smd_deregister(void) {
+	radio_hci_smd_deregister();
+}
+
 static int hcismd_fm_set_enable(const char *val, struct kernel_param *kp)
 {
 	int ret = 0;
