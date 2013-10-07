@@ -237,6 +237,13 @@ static int veth_dev_init(struct net_device *dev)
 
 	priv = netdev_priv(dev);
 	priv->stats = stats;
+
+	for_each_possible_cpu(i) {
+		struct veth_net_stats *veth_stats;
+		veth_stats = per_cpu_ptr(priv->stats, i);
+		u64_stats_init(&veth_stats->syncp);
+	}
+
 	return 0;
 }
 
