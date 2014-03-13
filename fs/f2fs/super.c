@@ -983,6 +983,8 @@ static int f2fs_remount(struct super_block *sb, int *flags, char *data)
 	bool need_stop_gc = false;
 	bool no_extent_cache = !test_opt(sbi, EXTENT_CACHE);
 
+	sync_filesystem(sb);
+
 	/*
 	 * Save the old mount options in case we
 	 * need to restore them.
