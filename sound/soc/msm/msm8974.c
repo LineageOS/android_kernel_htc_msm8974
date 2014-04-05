@@ -35,7 +35,7 @@
 #include "../codecs/wcd9xxx-common.h"
 #include "../codecs/wcd9320.h"
 
-#ifdef CONFIG_MACH_M8
+#if (defined(CONFIG_MACH_M8) || defined(CONFIG_MACH_M8_WHL) || defined(CONFIG_MACH_M8_WL))
 #include <mach/devices_cmdline.h>
 #include <mach/htc_acoustic_alsa.h>
 #include <linux/module.h>
