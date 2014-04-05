@@ -403,6 +403,76 @@ static int __maybe_unused m8wl_usb_product_id_match(int product_id, int intrshar
 }
 
 
+static int __maybe_unused m8wl_usb_product_id_match_array[] = {
+		0x0ff8, 0x0e65, 
+		0x0fa4, 0x0eab, 
+		0x0fa5, 0x0eac, 
+		0x0f91, 0x0ec3, 
+		0x0f64, 0x07ca, 
+		0x0f63, 0x07cb, 
+		0x0f29, 0x07c8, 
+		0x0f2a, 0x07c9, 
+		0x0f9a, 0x0eae, 
+		0x0f99, 0x0ead, 
+		-1,
+};
+
+static int __maybe_unused m8wl_usb_product_id_rndis[] = {
+	0x0762, 
+	0x0768, 
+	0x0763, 
+	0x0769, 
+	0x07be, 
+	0x07c2, 
+	0x07bf, 
+	0x07c3, 
+};
+static int __maybe_unused m8wl_usb_product_id_match(int product_id, int intrsharing)
+{
+	int *pid_array = m8wl_usb_product_id_match_array;
+	int *rndis_array = m8wl_usb_product_id_rndis;
+	int category = 0;
+
+	if (!pid_array)
+		return product_id;
+
+	
+	if (board_mfg_mode())
+		return product_id;
+
+	while (pid_array[0] >= 0) {
+		if (product_id == pid_array[0])
+			return pid_array[1];
+		pid_array += 2;
+	}
+	printk("%s(%d):product_id=%d, intrsharing=%d\n", __func__, __LINE__, product_id, intrsharing);
+
+	switch (product_id) {
+		case 0x0f8c: 
+			category = 0;
+			break;
+		case 0x0f8d: 
+			category = 1;
+			break;
+		case 0x0f5f: 
+			category = 2;
+			break;
+		case 0x0f60: 
+			category = 3;
+			break;
+		default:
+			category = -1;
+			break;
+	}
+	if (category != -1) {
+		if (intrsharing)
+			return rndis_array[category * 2];
+		else
+			return rndis_array[category * 2 + 1];
+	}
+	return product_id;
+}
+
 static struct android_usb_platform_data android_usb_pdata = {
 	.vendor_id      = 0x0bb4,
 	.product_id     = 0x060e, 
@@ -413,7 +483,7 @@ static struct android_usb_platform_data android_usb_pdata = {
 	.usb_rmnet_interface = "smd,bam",
 	.usb_diag_interface = "diag",
 	.fserial_init_string = "smd:modem,tty,tty:autobot,tty:serial,tty:autobot,tty:acm",
-#ifdef CONFIG_MACH_DUMMY
+#ifdef CONFIG_MACH_M8_WL
 	.match = m8wl_usb_product_id_match,
 #endif
 	.nluns = 1,
@@ -437,7 +507,7 @@ static void htc_8974_add_usb_devices(void)
 	mid = board_mid();
 
 	if (board_mfg_mode() == 0) {
-#ifdef CONFIG_MACH_DUMMY
+#ifdef CONFIG_MACH_M8_WHL
 		android_usb_pdata.nluns = 2;
 		android_usb_pdata.cdrom_lun = 0x2;
 #elif defined(CONFIG_MACH_DUMMY)
@@ -454,7 +524,7 @@ static void htc_8974_add_usb_devices(void)
 	}
 #ifdef CONFIG_MACH_M8
 	android_usb_pdata.product_id	= 0x061A;
-#elif defined(CONFIG_MACH_DUMMY)
+#elif defined(CONFIG_MACH_M8_WL)
 	android_usb_pdata.product_id	= 0x0616;
 	android_usb_pdata.vzw_unmount_cdrom = 1;
 #elif defined(CONFIG_MACH_DUMMY)
