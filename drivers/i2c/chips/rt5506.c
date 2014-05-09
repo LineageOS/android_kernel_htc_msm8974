@@ -150,7 +150,7 @@ static int rt5506_headset_detect(int on)
 		pr_info("%s: headset in --\n",__func__);
 		mutex_unlock(&rt5506_query.mlock);
 		mutex_unlock(&rt5506_query.gpiolock);
-		
+
 		queue_delayed_work(hs_wq,&rt5506_query.hs_imp_detec_work,msecs_to_jiffies(5));
 		pr_info("%s: headset in --2\n",__func__);
 
@@ -200,7 +200,7 @@ static int rt5506_headset_detect(int on)
 				closegpio = 1;
 				msleep(1);
 			}
-			pr_info("%s: reset rt5501\n",__func__);
+			pr_info("%s: reset rt5506\n",__func__);
 			rt5506_write_reg(0x0,0x4);
 			mdelay(1);
 
@@ -258,7 +258,7 @@ static int rt5506_write_reg(u8 reg, u8 val)
 	msg->buf = data;
 	data[0] = reg;
 	data[1] = val;
-        pr_info("%s: write reg 0x%x val 0x%x\n",__func__,data[0],data[1]); 
+        pr_info("%s: write reg 0x%x val 0x%x\n",__func__,data[0],data[1]);
 	err = i2c_transfer(this_client->adapter, msg, 1);
 	if (err >= 0)
 		return 0;
@@ -282,8 +282,8 @@ static int rt5506_i2c_write(struct rt5506_reg_data *txData, int length)
 		},
 	};
 	for (i = 0; i < length; i++) {
-		
-		
+
+
 		buf[0] = txData[i].addr;
 		buf[1] = txData[i].val;
 
@@ -493,7 +493,7 @@ static void hs_imp_detec_func(struct work_struct *work)
 		om = (temp[0] & 0xe) >> 1;
 
 		if(r_channel == 0) {
-			
+
 			hsom = HEADSET_MONO;
 		} else {
 
@@ -583,7 +583,7 @@ static void volume_ramp_func(struct work_struct *work)
 	if(rt5506_query.rt5506_status != STATUS_PLAYBACK) {
 
 		mdelay(1);
-		
+
 		if(high_imp)
 			rt5506_write_reg(0xb1,0x80);
 
@@ -647,7 +647,7 @@ static int set_rt5506_amp(int on, int dsp)
 		rt5506_query.action_on = 0;
 	cancel_delayed_work_sync(&rt5506_query.gpio_off_work);
 	cancel_delayed_work_sync(&rt5506_query.volume_ramp_work);
-	
+
 	mutex_lock(&rt5506_query.gpiolock);
 
 	if(on) {
@@ -780,7 +780,7 @@ static long rt5506_ioctl(struct file *file, unsigned int cmd,
 
 		pr_info("%s: update rt5506 i2c commands #%d success.\n",
 				__func__, rt5506_config_data.mode_num);
-		
+
 		update_amp_parameter(PLAYBACK_MODE_OFF);
 		update_amp_parameter(AMP_MUTE);
 		update_amp_parameter(AMP_INIT);
@@ -913,7 +913,7 @@ static struct file_operations rt5506_fops = {
 
 static struct miscdevice rt5506_device = {
 	.minor = MISC_DYNAMIC_MINOR,
-	.name = "rt5501",
+	.name = "rt5506",
 	.fops = &rt5506_fops,
 };
 
@@ -974,12 +974,12 @@ int rt5506_probe(struct i2c_client *client, const struct i2c_device_id *id)
 		mdelay(5);
 		rt5506_write_reg(0x0,0xc0);
 		rt5506_write_reg(0x81,0x30);
-		
+
 		rt5506_write_reg(0x90,0xd0);
 		rt5506_write_reg(0x93,0x9d);
 		rt5506_write_reg(0x95,0x7b);
 		rt5506_write_reg(0xa4,0x52);
-		
+
 		rt5506_write_reg(0x97,0x00);
 		rt5506_write_reg(0x98,0x22);
 		rt5506_write_reg(0x99,0x33);
@@ -1022,7 +1022,7 @@ int rt5506_probe(struct i2c_client *client, const struct i2c_device_id *id)
 		gpio_wq = create_workqueue("rt5506_gpio_off");
 		INIT_DELAYED_WORK(&rt5506_query.gpio_off_work, hs_imp_gpio_off);
 		rt5506_register_hs_notification();
-		
+
 
 	}
 	return 0;
@@ -1073,7 +1073,7 @@ static void rt5506_shutdown(struct i2c_client *client)
 		rt5506_query.gpiostatus = AMP_GPIO_ON;
 		msleep(1);
 	}
-	pr_info("%s: reset rt5501\n",__func__);
+	pr_info("%s: reset rt5506\n",__func__);
 	rt5506_write_reg(0x0,0x4);
 	mdelay(1);
 

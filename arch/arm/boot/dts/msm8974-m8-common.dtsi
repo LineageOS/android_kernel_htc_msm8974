@@ -347,7 +347,7 @@
                        compatible = "nxp,tfa9887l-amp";
                        reg = <0x35>;
                };
-               richteck_rt5501_amp@52 {
+               richteck_rt5506_amp@52 {
                        compatible = "richtek,rt5506-amp";
                        reg = <0x52>;
                        richtek,enable-gpio = <&msmgpio 62 0x00>;
