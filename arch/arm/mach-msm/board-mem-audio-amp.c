@@ -24,9 +24,6 @@
 #include <linux/gpio.h>
 #include <mach/htc_acoustic_alsa.h>
 
-#define D(fmt, args...) printk(KERN_INFO "[AUD] htc-acoustic: "fmt, ##args)
-#define E(fmt, args...) printk(KERN_ERR "[AUD] htc-acoustic: "fmt, ##args)
-
 #define GPIO_AUD_RT_1V8_EN 120
 static bool power_on = false;
 
@@ -34,19 +31,19 @@ void mem_ul_amp_power_enable(bool enable)
 {
 	if (enable && !power_on)
 	{
-		D("%s: %s\n", __func__, enable?"ture":"false");
+		pr_debug("%s: %s\n", __func__, enable?"ture":"false");
 		gpio_request(GPIO_AUD_RT_1V8_EN, "AUD_RT_1V8_EN");
 		gpio_tlmm_config(GPIO_CFG(GPIO_AUD_RT_1V8_EN, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_UP, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
 		gpio_free(GPIO_AUD_RT_1V8_EN);
 		power_on = true;
 	} else if(!enable && power_on){
-		D("%s: %s\n", __func__, enable?"ture":"false");
+		pr_debug("%s: %s\n", __func__, enable?"ture":"false");
 		gpio_request(GPIO_AUD_RT_1V8_EN, "AUD_RT_1V8_EN");
 		gpio_tlmm_config(GPIO_CFG(GPIO_AUD_RT_1V8_EN, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
 		gpio_free(GPIO_AUD_RT_1V8_EN);
 		power_on = false;
 	} else {
-		D("%s: %s but do nothing\n", __func__, enable?"ture":"false");
+		pr_debug("%s: %s but do nothing\n", __func__, enable?"ture":"false");
 	}
 }
 
@@ -57,7 +54,7 @@ static struct amp_power_ops amp_power = {
 static int __init amp_power_init(void)
 {
 	int ret = 0;
-	D("%s", __func__);
+	pr_debug("%s", __func__);
 	htc_amp_power_register_ops(&amp_power);
 	return ret;
 }

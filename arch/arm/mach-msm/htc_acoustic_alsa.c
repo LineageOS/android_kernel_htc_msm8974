@@ -28,9 +28,6 @@ struct device_info {
 	unsigned sku_id;
 };
 
-#define D(fmt, args...) printk(KERN_INFO "[AUD] htc-acoustic: "fmt, ##args)
-#define E(fmt, args...) printk(KERN_ERR "[AUD] htc-acoustic: "fmt, ##args)
-
 static struct mutex api_lock;
 static struct acoustic_ops default_acoustic_ops;
 static struct acoustic_ops *the_ops = &default_acoustic_ops;
@@ -154,7 +151,7 @@ void htc_acoustic_register_hs_amp(int (*aud_hs_amp_f)(int, int), struct file_ope
 
 void htc_acoustic_register_ops(struct acoustic_ops *ops)
 {
-        D("acoustic_register_ops \n");
+        pr_debug("acoustic_register_ops \n");
 	mutex_lock(&api_lock);
 	the_ops = ops;
 	mutex_unlock(&api_lock);
@@ -183,13 +180,13 @@ int htc_acoustic_query_feature(enum HTC_FEATURE feature)
 
 static int acoustic_open(struct inode *inode, struct file *file)
 {
-	D("open\n");
+	pr_debug("open\n");
 	return 0;
 }
 
 static int acoustic_release(struct inode *inode, struct file *file)
 {
-	D("release\n");
+	pr_debug("release\n");
 	return 0;
 }
 
@@ -207,9 +204,9 @@ acoustic_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			rc = -EFAULT;
 			break;
 		}
-		D("Set Q6 Effect : %d\n", mode);
+		pr_debug("Set Q6 Effect : %d\n", mode);
 		if (mode < -1 || mode > 1) {
-			E("unsupported Q6 mode: %d\n", mode);
+			pr_err("unsupported Q6 mode: %d\n", mode);
 			rc = -EINVAL;
 			break;
 		}
@@ -223,9 +220,9 @@ acoustic_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		else
 			hw_rev = 1;
 
-		D("Audio HW revision:  %u\n", hw_rev);
+		pr_debug("Audio HW revision:  %u\n", hw_rev);
 		if(copy_to_user((void *)arg, &hw_rev, sizeof(hw_rev))) {
-			E("acoustic_ioctl: copy to user failed\n");
+			pr_err("acoustic_ioctl: copy to user failed\n");
 			rc = -EINVAL;
 		}
 		break;
@@ -233,9 +230,9 @@ acoustic_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		if (the_ops->get_hw_component)
 			rc = the_ops->get_hw_component();
 
-		D("support components: 0x%x\n", rc);
+		pr_debug("support components: 0x%x\n", rc);
 		if(copy_to_user((void *)arg, &rc, sizeof(rc))) {
-			E("acoustic_ioctl: copy to user failed\n");
+			pr_err("acoustic_ioctl: copy to user failed\n");
 			rc = -EINVAL;
 		}
 		break;
@@ -243,9 +240,9 @@ acoustic_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		if (the_ops->enable_digital_mic)
 			rc = the_ops->enable_digital_mic();
 
-		D("support components: 0x%x\n", rc);
+		pr_debug("support components: 0x%x\n", rc);
 		if(copy_to_user((void *)arg, &rc, sizeof(rc))) {
-			E("acoustic_ioctl: copy to user failed\n");
+			pr_err("acoustic_ioctl: copy to user failed\n");
 			rc = -EINVAL;
 		}
 		break;
@@ -253,9 +250,9 @@ acoustic_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		if (the_ops->get_mid)
 			mid = the_ops->get_mid();
 
-		D("get mid: %s\n", mid);
+		pr_debug("get mid: %s\n", mid);
 		if(copy_to_user((void *)arg, mid, strlen(mid))) {
-			E("acoustic_ioctl: copy to user failed\n");
+			pr_err("acoustic_ioctl: copy to user failed\n");
 			rc = -EINVAL;
 		}
 		break;
@@ -266,9 +263,9 @@ acoustic_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			rc = -EFAULT;
 			break;
 		}
-		D("Update Beats Status : %d\n", new_state);
+		pr_debug("Update Beats Status : %d\n", new_state);
 		if (new_state < -1 || new_state > 1) {
-			E("Invalid Beats status update");
+			pr_err("Invalid Beats status update");
 			rc = -EINVAL;
 			break;
 		}
@@ -284,9 +281,9 @@ acoustic_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			rc = -EFAULT;
 			break;
 		}
-		D("Update DQ Status : %d\n", new_state);
+		pr_debug("Update DQ Status : %d\n", new_state);
 		if (new_state < -1 || new_state > 1) {
-			E("Invalid Beats status update");
+			pr_err("Invalid Beats status update");
 			rc = -EINVAL;
 			break;
 		}
@@ -302,7 +299,7 @@ acoustic_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			rc = -EFAULT;
 			break;
 		}
-		D("control wakelock : %d\n", new_state);
+		pr_debug("control wakelock : %d\n", new_state);
 		if (new_state == 1) {
 			wake_lock_timeout(&htc_acoustic_wakelock, 60*HZ);
 		} else {
@@ -322,9 +319,9 @@ acoustic_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			rc = -EFAULT;
 			break;
 		}
-		D("Update listen notification : %d\n", new_state);
+		pr_debug("Update listen notification : %d\n", new_state);
 		if (new_state < -1 || new_state > 1) {
-			E("Invalid listen notification state");
+			pr_err("Invalid listen notification state");
 			rc = -EINVAL;
 			break;
 		}
@@ -353,9 +350,9 @@ acoustic_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			struct device_info info;
 			info.pcb_id = system_rev;
 			info.sku_id = 0;
-			D("acoustic pcb_id: 0x%x, sku_id: 0x%x\n", info.pcb_id, info.sku_id);
+			pr_debug("acoustic pcb_id: 0x%x, sku_id: 0x%x\n", info.pcb_id, info.sku_id);
 			if(copy_to_user((void *)arg, &info, sizeof(info))) {
-				E("acoustic_ioctl: copy to user failed\n");
+				pr_err("acoustic_ioctl: copy to user failed\n");
 				rc = -EINVAL;
 			}
 		}
@@ -395,7 +392,7 @@ acoustic_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 				break;
 			}
 
-			D("ACOUSTIC_KILL_PID: %d\n", pid);
+			pr_debug("ACOUSTIC_KILL_PID: %d\n", pid);
 
 			if (pid <= 0)
 				break;
@@ -403,7 +400,7 @@ acoustic_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			pid_struct = find_get_pid(pid);
 			if (pid_struct) {
 				kill_pid(pid_struct, SIGKILL, 1);
-				D("kill pid: %d", pid);
+				pr_debug("kill pid: %d", pid);
 			}
 		}
 		break;
@@ -479,13 +476,13 @@ static long hs_amp_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 void htc_amp_power_register_ops(struct amp_power_ops *ops)
 {
-	D("%s", __func__);
+	pr_debug("%s", __func__);
 	the_amp_power_ops = ops;
 }
 
 void htc_amp_power_enable(bool enable)
 {
-	D("%s", __func__);
+	pr_debug("%s", __func__);
 	if(the_amp_power_ops && the_amp_power_ops->set_amp_power_enable)
 		the_amp_power_ops->set_amp_power_enable(enable);
 }
