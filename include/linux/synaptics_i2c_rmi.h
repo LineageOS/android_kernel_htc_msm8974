@@ -54,6 +54,10 @@
 
 #define SENSOR_ID_CHECKING_EN	1 << 16
 
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_WAKE_GESTURES
+extern unsigned int phone_call_stat;
+#endif
+
 enum {
 	SYNAPTICS_FLIP_X = 1UL << 0,
 	SYNAPTICS_FLIP_Y = 1UL << 1,
