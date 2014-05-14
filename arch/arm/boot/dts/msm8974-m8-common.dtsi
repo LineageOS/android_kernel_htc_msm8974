@@ -373,7 +373,7 @@
 			reg = <0xc000 0x1000>;
 			label = "vibrator";
 			qcom,qpnp-vib-timeout-ms = <15000>;
-			qcom,qpnp-vib-vtg-level-mV = <2700>;
+			qcom,qpnp-vib-vtg-level-mV = <1500>;
 		};
 	};
 
