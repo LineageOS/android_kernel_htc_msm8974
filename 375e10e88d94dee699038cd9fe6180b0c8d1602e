@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "da0c15f0_b8995022",
+        "filename": "drivers/input/misc/hall_sensor.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 362,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-05-15T15:14:03Z",
+      "side": 1,
+      "message": "http://i.imgur.com/nR8wSp4.jpg",
+      "revId": "375e10e88d94dee699038cd9fe6180b0c8d1602e",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
