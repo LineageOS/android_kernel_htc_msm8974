@@ -102,13 +102,29 @@ int ion_heap_map_user(struct ion_heap *heap, struct ion_buffer *buffer,
 
 #define MAX_VMAP_RETRIES 10
 
-int ion_heap_pages_zero(struct page **pages, int num_pages,
-				bool should_invalidate)
+/**
+ * An optimized page-zero'ing function. vmaps arrays of pages in large
+ * chunks to minimize the number of memsets and vmaps/vunmaps.
+ *
+ * Note that the `pages' array should be composed of all 4K pages.
+ */
+int ion_heap_pages_zero(struct page **pages, int num_pages)
 {
 	int i, j, k, npages_to_vmap;
 	void *ptr = NULL;
+	/*
+	 * It's cheaper just to use writecombine memory and skip the
+	 * cache vs. using a cache memory and trying to flush it afterwards
+	 */
 	pgprot_t pgprot = pgprot_writecombine(pgprot_kernel);
 
+	/*
+	 * As an optimization, we manually zero out all of the pages
+	 * in one fell swoop here. To safeguard against insufficient
+	 * vmalloc space, we only vmap `npages_to_vmap' at a time,
+	 * starting with a conservative estimate of 1/8 of the total
+	 * number of vmalloc pages available.
+	 */
 	npages_to_vmap = ((VMALLOC_END - VMALLOC_START)/8)
 			>> PAGE_SHIFT;
 	for (i = 0; i < num_pages; i += npages_to_vmap) {
@@ -125,18 +141,22 @@ int ion_heap_pages_zero(struct page **pages, int num_pages,
 		if (!ptr)
 			return -ENOMEM;
 
-		memset(ptr, 0, npages_to_vmap * PAGE_SIZE);
-		if (should_invalidate) {
-			for (k = 0; k < npages_to_vmap; k++) {
-				void *p = kmap_atomic(pages[i + k]);
-				phys_addr_t phys = page_to_phys(
-							pages[i + k]);
+		/*
+		 * We have to invalidate the cache here because there
+		 * might be dirty lines to these physical pages (which
+		 * we don't care about) that could get written out at
+		 * any moment.
+		 */
+		for (k = 0; k < npages_to_vmap; k++) {
+			void *p = kmap_atomic(pages[i + k]);
+			phys_addr_t phys = page_to_phys(
+				pages[i + k]);
 
-				dmac_inv_range(p, p + PAGE_SIZE);
-				outer_inv_range(phys, phys + PAGE_SIZE);
-				kunmap_atomic(p);
-			}
+			dmac_inv_range(p, p + PAGE_SIZE);
+			outer_inv_range(phys, phys + PAGE_SIZE);
+			kunmap_atomic(p);
 		}
+		memset(ptr, 0, npages_to_vmap * PAGE_SIZE);
 		vunmap(ptr);
 	}
 
@@ -149,6 +169,10 @@ static int ion_heap_alloc_pages_mem(int page_tbl_size,
 	struct page **pages;
 	pages_mem->free_fn = kfree;
 	if (page_tbl_size > SZ_8K) {
+		/*
+		 * Do fallback to ensure we have a balance between
+		 * performance and availability.
+		 */
 		pages = kmalloc(page_tbl_size,
 				__GFP_COMP | __GFP_NORETRY |
 				__GFP_NO_KSWAPD | __GFP_NOWARN);
@@ -172,8 +196,7 @@ static void ion_heap_free_pages_mem(struct pages_mem *pages_mem)
 	pages_mem->free_fn(pages_mem->pages);
 }
 
-int ion_heap_high_order_page_zero(struct page *page,
-				int order, bool should_invalidate)
+int ion_heap_high_order_page_zero(struct page *page, int order)
 {
 	int i, ret;
 	struct pages_mem pages_mem;
@@ -186,8 +209,7 @@ int ion_heap_high_order_page_zero(struct page *page,
 	for (i = 0; i < (1 << order); ++i)
 		pages_mem.pages[i] = page + i;
 
-	ret = ion_heap_pages_zero(pages_mem.pages, npages,
-				should_invalidate);
+	ret = ion_heap_pages_zero(pages_mem.pages, npages);
 	ion_heap_free_pages_mem(&pages_mem);
 	return ret;
 }
@@ -216,46 +238,8 @@ int ion_heap_buffer_zero(struct ion_buffer *buffer)
 			pages_mem.pages[npages++] = page + j;
 	}
 
-	ret = ion_heap_pages_zero(pages_mem.pages, npages,
-				ion_buffer_cached(buffer));
+	ret = ion_heap_pages_zero(pages_mem.pages, npages);
 	ion_heap_free_pages_mem(&pages_mem);
-	return ret;
-}
-
-int ion_heap_buffer_zero_old(struct ion_buffer *buffer)
-{
-	struct sg_table *table = buffer->sg_table;
-	pgprot_t pgprot;
-	struct scatterlist *sg;
-	struct vm_struct *vm_struct;
-	int i, j, ret = 0;
-
-	if (buffer->flags & ION_FLAG_CACHED)
-		pgprot = PAGE_KERNEL;
-	else
-		pgprot = pgprot_writecombine(PAGE_KERNEL);
-
-	vm_struct = get_vm_area(PAGE_SIZE, VM_ALLOC);
-	if (!vm_struct)
-		return -ENOMEM;
-
-	for_each_sg(table->sgl, sg, table->nents, i) {
-		struct page *page = sg_page(sg);
-		unsigned long len = sg_dma_len(sg);
-
-		for (j = 0; j < len / PAGE_SIZE; j++) {
-			struct page *sub_page = page + j;
-			struct page **pages = &sub_page;
-			ret = map_vm_area(vm_struct, pgprot, &pages);
-			if (ret)
-				goto end;
-			memset(vm_struct->addr, 0, PAGE_SIZE);
-			unmap_kernel_range((unsigned long)vm_struct->addr,
-					   PAGE_SIZE);
-		}
-	}
-end:
-	free_vm_area(vm_struct);
 	return ret;
 }
 
