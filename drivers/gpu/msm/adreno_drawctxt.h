@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2007-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2002,2007-2014, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -75,9 +75,49 @@ int adreno_context_restore(struct adreno_device *, struct adreno_context *);
 
 extern const struct adreno_context_ops adreno_preamble_ctx_ops;
 
+/**
+ * struct adreno_context - Adreno GPU draw context
+ * @id: Unique integer ID of the context
+ * @timestamp: Last issued context-specific timestamp
+ * @internal_timestamp: Global timestamp of the last issued command
+ *			NOTE: guarded by device->mutex, not drawctxt->mutex!
+ * @state: Current state of the context
+ * @priv: Internal flags
+ * @type: Context type (GL, CL, RS)
+ * @mutex: Mutex to protect the cmdqueue
+ * @pagetable: Pointer to the GPU pagetable for the context
+ * @gpustate: Pointer to the GPU scratch memory for context save/restore
+ * @reg_restore: Command buffer for restoring context registers
+ * @shader_save: Command buffer for saving shaders
+ * @shader_restore: Command buffer to restore shaders
+ * @context_gmem_shadow: GMEM shadow structure for save/restore
+ * @reg_save: A2XX command buffer to save context registers
+ * @shader_fixup: A2XX command buffer to "fix" shaders on restore
+ * @chicken_restore: A2XX command buffer to "fix" register restore
+ * @bin_base_offset: Saved value of the A2XX BIN_BASE_OFFSET register
+ * @regconstant_save: A3XX command buffer to save some registers
+ * @constant_retore: A3XX command buffer to restore some registers
+ * @hslqcontrol_restore: A3XX command buffer to restore HSLSQ registers
+ * @save_fixup: A3XX command buffer to "fix" register save
+ * @restore_fixup: A3XX cmmand buffer to restore register save fixes
+ * @shader_load_commands: A3XX GPU memory descriptor for shader load IB
+ * @shader_save_commands: A3XX GPU memory descriptor for shader save IB
+ * @constantr_save_commands: A3XX GPU memory descriptor for constant save IB
+ * @constant_load_commands: A3XX GPU memory descriptor for constant load IB
+ * @cond_execs: A3XX GPU memory descriptor for conditional exec IB
+ * @hlsq_restore_commands: A3XX GPU memory descriptor for HLSQ restore IB
+ * @cmdqueue: Queue of command batches waiting to be dispatched for this context
+ * @cmdqueue_head: Head of the cmdqueue queue
+ * @cmdqueue_tail: Tail of the cmdqueue queue
+ * @pending: Priority list node for the dispatcher list of pending contexts
+ * @wq: Workqueue structure for contexts to sleep pending room in the queue
+ * @waiting: Workqueue structure for contexts waiting for a timestamp or event
+ * @queued: Number of commands queued in the cmdqueue
+ * @ops: Context switch functions for this context.
+ * @fault_policy: GFT fault policy set in cmdbatch_skip_cmd();
+ */
 struct adreno_context {
 	struct kgsl_context base;
-	unsigned int ib_gpu_time_used;
 	unsigned int timestamp;
 	unsigned int internal_timestamp;
 	int state;
@@ -122,8 +162,25 @@ struct adreno_context {
 	int queued;
 
 	const struct adreno_context_ops *ops;
+	unsigned int fault_policy;
 };
 
+/**
+ * enum adreno_context_priv - Private flags for an adreno draw context
+ * @ADRENO_CONTEXT_FAULT - set if the context has faulted (and recovered)
+ * @ADRENO_CONTEXT_GMEM_SAVE - gmem must be copied to shadow
+ * @ADRENO_CONTEXT_GMEM_RESTORE - gmem can be restored from shadow
+ * @ADRENO_CONTEXT_SHADER_SAVE - shader must be copied to shadow
+ * @ADRENO_CONTEXT_SHADER_RESTORE - shader can be restored from shadow
+ * @ADRENO_CONTEXT_GPU_HANG - Context has caused a GPU hang
+ * @ADRENO_CONTEXT_GPU_HANG_FT - Context has caused a GPU hang
+ *      and fault tolerance was successful
+ * @ADRENO_CONTEXT_SKIP_EOF - Context skip IBs until the next end of frame
+ *      marker.
+ * @ADRENO_CONTEXT_FORCE_PREAMBLE - Force the preamble for the next submission.
+ * @ADRENO_CONTEXT_SKIP_CMD - Context's command batch is skipped during
+	fault tolerance.
+ */
 enum adreno_context_priv {
 	ADRENO_CONTEXT_FAULT = 0,
 	ADRENO_CONTEXT_GMEM_SAVE,
@@ -134,6 +191,7 @@ enum adreno_context_priv {
 	ADRENO_CONTEXT_GPU_HANG_FT,
 	ADRENO_CONTEXT_SKIP_EOF,
 	ADRENO_CONTEXT_FORCE_PREAMBLE,
+	ADRENO_CONTEXT_SKIP_CMD,
 };
 
 struct kgsl_context *adreno_drawctxt_create(struct kgsl_device_private *,
