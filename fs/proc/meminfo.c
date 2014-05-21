@@ -11,8 +11,6 @@
 #include <linux/swap.h>
 #include <linux/vmstat.h>
 #include <linux/atomic.h>
-#include <linux/msm_kgsl.h>
-#include <linux/msm_ion.h>
 #include <linux/vmalloc.h>
 #include <asm/page.h>
 #include <asm/pgtable.h>
@@ -25,40 +23,8 @@ void __attribute__((weak)) arch_report_meminfo(struct seq_file *m)
 {
 }
 
-static inline unsigned long free_cma_pages(void)
-{
-#ifdef CONFIG_CMA
-	return global_page_state(NR_FREE_CMA_PAGES);
-#else
-	return 0UL;
-#endif
-}
-
-void driver_report_meminfo(struct seq_file *m)
-{
-	unsigned long kgsl_alloc = kgsl_get_alloc_size(false);
-	uintptr_t ion_alloc = msm_ion_heap_meminfo(true);
-	uintptr_t ion_inuse = msm_ion_heap_meminfo(false);
-	unsigned long free_cma = free_cma_pages();
-
-#define K(x) ((x) << (PAGE_SHIFT - 10))
-
-	seq_printf(m,
-		"KgslAlloc:      %8lu kB\n"
-		"IonTotal:       %8lu kB\n"
-		"IonInUse:       %8lu kB\n"
-		"FreeCma:        %8lu kB\n",
-		(kgsl_alloc >> 10),
-		(ion_alloc >> 10),
-		(ion_inuse >> 10),
-		K(free_cma));
-
-#undef K
-}
-
 static unsigned long subtotal_pages(struct sysinfo *i)
 {
-	unsigned long ion_total_pages = msm_ion_heap_meminfo(true) >> PAGE_SHIFT;
 	unsigned long kernel_stack_pages =
 	                (global_page_state(NR_KERNEL_STACK) * THREAD_SIZE) >> PAGE_SHIFT;
 	unsigned long slab_pages = global_page_state(NR_SLAB_RECLAIMABLE) +
@@ -71,10 +37,8 @@ static unsigned long subtotal_pages(struct sysinfo *i)
 	       meminfo_total_pages(NR_DMA_PAGES) +              
 	       meminfo_total_pages(NR_DRIVER_ALLOC_PAGES) +     
 	       0UL +                                            
-	       meminfo_total_pages(NR_IOMMU_PAGETABLES_PAGES) + 
-	       ion_total_pages +                                
-	       kernel_stack_pages +                             
-	       kgsl_unmapped_pages() +                          
+	       meminfo_total_pages(NR_IOMMU_PAGETABLES_PAGES) +                                 
+	       kernel_stack_pages +                                                     
 	       meminfo_total_pages(NR_KMALLOC_PAGES) +          
 	       global_page_state(NR_FILE_MAPPED) +              
 	       i->freeram +                                     
@@ -100,9 +64,6 @@ void show_meminfo(void)
 {
 	struct sysinfo i;
 	long cached;
-	unsigned long kgsl_alloc = kgsl_get_alloc_size(true);
-	uintptr_t ion_alloc = msm_ion_heap_meminfo(true);
-	uintptr_t ion_inuse = msm_ion_heap_meminfo(false);
 	unsigned long vmalloc_alloc = vmalloc_alloc_pages();
 	unsigned long subtotal;
 
@@ -124,9 +85,6 @@ void show_meminfo(void)
 			"KernelStack:    %8lu kB\n"
 			"VmallocAlloc:   %8lu kB\n"
 			"Kmalloc:        %8lu kB\n"
-			"KgslAlloc:      %8lu kB\n"
-			"IonTotal:       %8lu kB\n"
-			"IonInUse:       %8lu kB\n"
 			"Subtotal:       %8lu kB\n",
 			K(i.freeram),
 			K(i.bufferram),
@@ -140,9 +98,6 @@ void show_meminfo(void)
 			global_page_state(NR_KERNEL_STACK) * THREAD_SIZE / 1024,
 			K(vmalloc_alloc),
 			K(meminfo_total_pages(NR_KMALLOC_PAGES)),
-			(kgsl_alloc >> 10),
-			(ion_alloc >> 10),
-			(ion_inuse >> 10),
 			K(subtotal));
 #undef K
 }
@@ -304,8 +259,6 @@ static int meminfo_proc_show(struct seq_file *m, void *v)
 	hugetlb_report_meminfo(m);
 
 	arch_report_meminfo(m);
-
-	driver_report_meminfo(m);
 
 	report_meminfo(m, &i);
 
