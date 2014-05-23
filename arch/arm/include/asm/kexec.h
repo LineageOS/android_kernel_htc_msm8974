@@ -14,6 +14,10 @@
 #define KEXEC_ARM_ATAGS_OFFSET  0x1000
 #define KEXEC_ARM_ZIMAGE_OFFSET 0x8000
 
+#ifdef CONFIG_KEXEC_HARDBOOT
+  #define KEXEC_HB_PAGE_MAGIC 0x4a5db007
+#endif
+
 #ifndef __ASSEMBLY__
 
 static inline void crash_setup_regs(struct pt_regs *newregs,
@@ -41,7 +45,11 @@ static inline void crash_setup_regs(struct pt_regs *newregs,
 
 extern void (*kexec_reinit)(void);
 
-#endif 
+#ifdef CONFIG_KEXEC_HARDBOOT
+extern void (*kexec_hardboot_hook)(void);
+#endif
+
+#endif
 
 #endif 
 
