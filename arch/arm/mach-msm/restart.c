@@ -58,6 +58,10 @@ extern int get_partition_num_by_name(char *name);
 
 #endif
 
+#ifdef CONFIG_KEXEC_HARDBOOT
+#include <asm/kexec.h>
+#endif
+
 #define WDT0_RST	0x38
 #define WDT0_EN		0x40
 #define WDT0_BARK_TIME	0x4C
@@ -510,6 +514,26 @@ static int __init msm_pmic_restart_init(void)
 
 late_initcall(msm_pmic_restart_init);
 
+#ifdef CONFIG_KEXEC_HARDBOOT
+static void msm_kexec_hardboot_hook(void)
+{
+	set_dload_mode(0);
+
+	// Set PMIC to restart-on-poweroff
+	pm8xxx_reset_pwr_off(1);
+
+	// These are executed on normal reboot, but with kexec-hardboot,
+	// they reboot/panic the system immediately.
+#if 0
+	qpnp_pon_system_pwr_off(PON_POWER_OFF_WARM_RESET);
+
+	/* Needed to bypass debug image on some chips */
+	msm_disable_wdog_debug();
+	halt_spmi_pmic_arbiter();
+#endif
+}
+#endif
+
 static int __init msm_restart_init(void)
 {
 	htc_restart_handler_init();
@@ -530,6 +554,10 @@ static int __init msm_restart_init(void)
 
 	if (scm_is_call_available(SCM_SVC_PWR, SCM_IO_DISABLE_PMIC_ARBITER) > 0)
 		scm_pmic_arbiter_disable_supported = true;
+
+#ifdef CONFIG_KEXEC_HARDBOOT
+	kexec_hardboot_hook = msm_kexec_hardboot_hook;
+#endif
 
 	return 0;
 }
