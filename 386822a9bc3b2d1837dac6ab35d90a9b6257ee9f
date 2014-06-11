@@ -1,0 +1,89 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "ba0121b8_d8eb6daf",
+        "filename": "sound/soc/msm/qdsp6v2/msm-pcm-voice-v2.c",
+        "patchSetId": 4
+      },
+      "lineNbr": 481,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-06-11T07:42:45Z",
+      "side": 1,
+      "message": "Use /* */",
+      "revId": "386822a9bc3b2d1837dac6ab35d90a9b6257ee9f",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "ba0121b8_98e1f5d3",
+        "filename": "sound/soc/msm/qdsp6v2/q6voice.c",
+        "patchSetId": 4
+      },
+      "lineNbr": 3958,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-06-11T07:42:45Z",
+      "side": 1,
+      "message": "Would prefer you use /* */ for comments.",
+      "revId": "386822a9bc3b2d1837dac6ab35d90a9b6257ee9f",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "ba0121b8_b8dcb919",
+        "filename": "sound/soc/msm/qdsp6v2/q6voice.c",
+        "patchSetId": 4
+      },
+      "lineNbr": 3963,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-06-11T07:42:45Z",
+      "side": 1,
+      "message": "Remove the commented out line.",
+      "revId": "386822a9bc3b2d1837dac6ab35d90a9b6257ee9f",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "ba0121b8_f8e631e7",
+        "filename": "sound/soc/msm/qdsp6v2/q6voice.c",
+        "patchSetId": 4
+      },
+      "lineNbr": 3990,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-06-11T07:42:45Z",
+      "side": 1,
+      "message": "Use /* */",
+      "revId": "386822a9bc3b2d1837dac6ab35d90a9b6257ee9f",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "ba0121b8_38d1c9fc",
+        "filename": "sound/soc/msm/qdsp6v2/q6voice.h",
+        "patchSetId": 4
+      },
+      "lineNbr": 361,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-06-11T07:42:45Z",
+      "side": 1,
+      "message": "Place comment above the define.",
+      "revId": "386822a9bc3b2d1837dac6ab35d90a9b6257ee9f",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
