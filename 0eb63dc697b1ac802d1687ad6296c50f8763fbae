@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "ba0121b8_10bacae1",
+        "filename": "arch/arm/mach-msm/include/mach/kcal.h",
+        "patchSetId": 2
+      },
+      "lineNbr": 17,
+      "author": {
+        "id": 3671
+      },
+      "writtenOn": "2014-06-23T11:37:12Z",
+      "side": 1,
+      "message": "spacing",
+      "revId": "0eb63dc697b1ac802d1687ad6296c50f8763fbae",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
