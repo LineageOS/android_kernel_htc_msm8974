@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2014, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1136,7 +1136,7 @@ long diagchar_ioctl(struct file *filp,
 			clear_client_dci_cumulative_log_mask(i);
 			
 			result =
-			diag_send_dci_log_mask(driver->smd_cntl[MODEM_DATA].ch);
+			diag_send_dci_log_mask(&driver->smd_cntl[MODEM_DATA]);
 			if (result != DIAG_DCI_NO_ERROR) {
 				mutex_unlock(&driver->dci_mutex);
 				return result;
@@ -1146,7 +1146,7 @@ long diagchar_ioctl(struct file *filp,
 			
 			result =
 			diag_send_dci_event_mask(
-				driver->smd_cntl[MODEM_DATA].ch);
+				&driver->smd_cntl[MODEM_DATA]);
 			if (result != DIAG_DCI_NO_ERROR) {
 				mutex_unlock(&driver->dci_mutex);
 				return result;
@@ -1513,7 +1513,9 @@ drop:
 		goto exit;
 	} else if (driver->data_ready[index] & USER_SPACE_DATA_TYPE) {
 		driver->data_ready[index] ^= USER_SPACE_DATA_TYPE;
-	} else if (mdlog_enable != 0 && driver->data_ready[index] & USERMODE_DIAGFWD && strncmp(current->comm, "diag_mdlog", 10) == 0) {
+	} else if (mdlog_enable != 0 && driver->data_ready[index] & USERMODE_DIAGFWD
+			&& (strncmp(current->comm, "diag_mdlog", 10) == 0
+			|| strncmp(current->comm, "diag_socket_log", 15) == 0)) {
 		remote_token = 0;
 		pr_debug("diag: process woken up\n");
 		
@@ -1871,10 +1873,6 @@ exit:
 			process_lock_on_copy_complete(
 				&driver->smd_data[i].nrt_lock);
 	}
-	
-	uncached_logk(LOGK_CTXID, (void *)driver->smd_data[0].peripheral);
-	uncached_logk(LOGK_CTXID, (void *)driver->smd_data[0].in_busy_1);
-	uncached_logk(LOGK_CTXID, (void *)driver->smd_data[0].in_busy_2);
 
 	mutex_unlock(&driver->diagchar_mutex);
 	return ret;
@@ -2070,7 +2068,7 @@ static int diagchar_write(struct file *file, const char __user *buf,
 			pr_info("diag: user space data %d\n", payload_size);
 			print_hex_dump(KERN_DEBUG, "write packet data"
 					" to modem(first 16 bytes)", 16, 1,
-					DUMP_PREFIX_ADDRESS, user_space_data, 16, 1);
+					DUMP_PREFIX_ADDRESS, driver->user_space_data_buf, 16, 1);
 		}
 		
 		remote_proc =

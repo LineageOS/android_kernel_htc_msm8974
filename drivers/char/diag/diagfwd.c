@@ -24,7 +24,6 @@
 #include <linux/reboot.h>
 #include <linux/of.h>
 #include <linux/kmemleak.h>
-#include <mach/msm_rtb.h>
 #ifdef CONFIG_DIAG_OVER_USB
 #include <mach/usbdiag.h>
 #endif
@@ -456,10 +455,6 @@ int diag_process_smd_read_data(struct diag_smd_info *smd_info, void *buf,
 			DIAGFWD_7K_RAWDATA(buf, "modem", DIAG_DBG_READ);
 #if DIAG_XPST && !defined(CONFIG_DIAGFWD_BRIDGE_CODE)
 			type = checkcmd_modem_epst(buf);
-			if ((smd_info->in_busy_1 == 1) || (smd_info->in_busy_2 == 1))
-				
-				pr_info("%s:type=%d, in_busy_1=%d, in_busy_2=%d\n",
-					__func__, type, smd_info->in_busy_1, smd_info->in_busy_2);
 			if (type) {
 				modem_to_userspace(buf, total_recd, type, 0);
 				return 0;
@@ -619,6 +614,7 @@ void diag_smd_send_req(struct diag_smd_info *smd_info)
 	int buf_size = 0;
 	int resize_success = 0;
 	int buf_full = 0;
+	static unsigned long buf_status_time;
 
 	if (!smd_info) {
 		pr_err("diag: In %s, no smd info. Not able to read.\n",
@@ -626,9 +622,17 @@ void diag_smd_send_req(struct diag_smd_info *smd_info)
 		return;
 	}
 	
-	if (smd_info->in_busy_1 == 1 && smd_info->in_busy_2 ==1)
-		pr_info("%s: All in_busy flags were set, can't receive any packet from SMD\n", __func__);
-
+	if (smd_info->type == SMD_DATA_TYPE) {
+		if (smd_info->in_busy_1 && smd_info->in_busy_2) {
+			smd_info->buf_full++;
+			if (printk_timed_ratelimit(&buf_status_time, 5000)) {
+				printk("%s: buffer status(data_type:full:release)= %d:%d:%d,\n",
+						__func__, smd_info->type, smd_info->buf_full, smd_info->buf_release);
+			}
+		}
+		else if (!smd_info->in_busy_1 || !smd_info->in_busy_2)
+			smd_info->buf_release++;
+	}
 
 	
 	if (smd_info->type == SMD_DATA_TYPE) {
