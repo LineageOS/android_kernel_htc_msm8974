@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2014, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -51,6 +51,7 @@ MODULE_DESCRIPTION("Diag Char Driver");
 MODULE_LICENSE("GPL v2");
 MODULE_VERSION("1.0");
 
+#define MIN_SIZ_ALLOW 4
 #define INIT	1
 #define EXIT	-1
 struct diagchar_dev *driver;
@@ -1136,7 +1137,7 @@ long diagchar_ioctl(struct file *filp,
 			clear_client_dci_cumulative_log_mask(i);
 			
 			result =
-			diag_send_dci_log_mask(driver->smd_cntl[MODEM_DATA].ch);
+			diag_send_dci_log_mask(&driver->smd_cntl[MODEM_DATA]);
 			if (result != DIAG_DCI_NO_ERROR) {
 				mutex_unlock(&driver->dci_mutex);
 				return result;
@@ -1146,7 +1147,7 @@ long diagchar_ioctl(struct file *filp,
 			
 			result =
 			diag_send_dci_event_mask(
-				driver->smd_cntl[MODEM_DATA].ch);
+				&driver->smd_cntl[MODEM_DATA]);
 			if (result != DIAG_DCI_NO_ERROR) {
 				mutex_unlock(&driver->dci_mutex);
 				return result;
@@ -1513,7 +1514,9 @@ drop:
 		goto exit;
 	} else if (driver->data_ready[index] & USER_SPACE_DATA_TYPE) {
 		driver->data_ready[index] ^= USER_SPACE_DATA_TYPE;
-	} else if (mdlog_enable != 0 && driver->data_ready[index] & USERMODE_DIAGFWD && strncmp(current->comm, "diag_mdlog", 10) == 0) {
+	} else if (mdlog_enable != 0 && driver->data_ready[index] & USERMODE_DIAGFWD
+			&& (strncmp(current->comm, "diag_mdlog", 10) == 0
+			|| strncmp(current->comm, "diag_socket_log", 15) == 0)) {
 		remote_token = 0;
 		pr_debug("diag: process woken up\n");
 		
@@ -1871,10 +1874,6 @@ exit:
 			process_lock_on_copy_complete(
 				&driver->smd_data[i].nrt_lock);
 	}
-	
-	uncached_logk(LOGK_CTXID, (void *)driver->smd_data[0].peripheral);
-	uncached_logk(LOGK_CTXID, (void *)driver->smd_data[0].in_busy_1);
-	uncached_logk(LOGK_CTXID, (void *)driver->smd_data[0].in_busy_2);
 
 	mutex_unlock(&driver->diagchar_mutex);
 	return ret;
@@ -1902,6 +1901,10 @@ static int diagchar_write(struct file *file, const char __user *buf,
 	index = 0;
 	
 	err = copy_from_user((&pkt_type), buf, 4);
+	if (err) {
+		pr_alert("diag: copy failed for pkt_type\n");
+		return -EAGAIN;
+	}
 	
 	if (count < 4) {
 		pr_err("diag: Client sending short data\n");
@@ -1944,8 +1947,9 @@ static int diagchar_write(struct file *file, const char __user *buf,
 		return err;
 	}
 	if (pkt_type == CALLBACK_DATA_TYPE) {
-		if (payload_size > driver->itemsize) {
-			pr_err("diag: Dropping packet, packet payload size crosses 4KB limit. Current payload size %d\n",
+		if (payload_size > driver->itemsize ||
+				payload_size <= MIN_SIZ_ALLOW) {
+			pr_err("diag: Dropping packet, invalid packet size. Current payload size %d\n",
 				payload_size);
 			driver->dropped_count++;
 			return -EBADMSG;
@@ -2070,13 +2074,18 @@ static int diagchar_write(struct file *file, const char __user *buf,
 			pr_info("diag: user space data %d\n", payload_size);
 			print_hex_dump(KERN_DEBUG, "write packet data"
 					" to modem(first 16 bytes)", 16, 1,
-					DUMP_PREFIX_ADDRESS, user_space_data, 16, 1);
+					DUMP_PREFIX_ADDRESS, driver->user_space_data_buf, 16, 1);
 		}
 		
 		remote_proc =
 			diag_get_remote(*(int *)driver->user_space_data_buf);
 
 		if (remote_proc) {
+			if (payload_size <= MIN_SIZ_ALLOW) {
+				pr_err("diag: Integer underflow in %s, payload size: %d",
+							__func__, payload_size);
+				return -EBADMSG;
+			}
 			token_offset = 4;
 			payload_size -= 4;
 			buf += 4;
@@ -2407,7 +2416,15 @@ int mask_request_validate(unsigned char mask_buf[])
 		case 0x0C:    
 		case 0x1C:    
 		case 0x1D:    
+		case 0x20:
+		case 0x26:
+		case 0x27:
 		case 0x29:	  
+		case 0x35:
+		case 0x36:
+		case 0x40:
+		case 0x41:
+		case 0x4B:
 		case 0x60:    
 		case 0x63:    
 		case 0x73:    
