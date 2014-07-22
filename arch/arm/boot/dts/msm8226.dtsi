@@ -162,8 +162,8 @@
 		interrupts = <0 44 0>;
 		vdd-supply = <&gdsc_venus>;
 		qcom,load-freq-tbl = <352800 160000000>,
-			<244800 133330000>,
-			<108000  66700000>;
+			<215999 133330000>,
+			<108000  66700000>; /* HTC_VIDEO: 215999 is to let 720p@60 run at 160 MHz */
 		qcom,hfi = "venus";
 		qcom,bus-ports = <1>;
 		qcom,reg-presets = <0xE0024 0x0>,

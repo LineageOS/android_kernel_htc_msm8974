@@ -168,13 +168,18 @@
 					1150000 1140000 1140000 1140000 1140000
 					1140000 1140000 1140000 1140000 1140000
 					1140000 1140000>;
-	qti,pvs-corner-ceiling-slow = <1050000 1200000 1280000>;
-	qti,pvs-corner-ceiling-nom  = <1050000 1200000 1275000>;
-	qti,pvs-corner-ceiling-fast = <1050000 1200000 1275000>;
+	qti,pvs-corner-ceiling-slow = <1050000 1150000 1280000>;
+	qti,pvs-corner-ceiling-nom  = <1050000 1080000 1200000>;
+	qti,pvs-corner-ceiling-fast = <1050000 1050000 1100000>;
 	qti,cpr-step-quotient = <30>;
 	qti,cpr-up-threshold = <0>;
 	qti,cpr-down-threshold = <5>;
 	qti,cpr-apc-volt-step = <10000>;
+
+	htc,pvs-corner-adjust;
+	htc,pvs-corner-adjust-timetick = <30>;
+	htc,pvs-corner-ceiling-8926 = <1140000 1150000 1280000>;
+	htc,pvs-corner-ceiling-8928 = <1140000 1200000 1280000>;
 };
 
 &tsens {
