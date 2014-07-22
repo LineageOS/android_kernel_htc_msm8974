@@ -888,7 +888,7 @@ static int tapan_config_compander(struct snd_soc_dapm_widget *w,
 
 	dev_dbg(codec->dev, "%s: %s event %d compander %d, enabled %d",
 		__func__, w->name, event, comp, tapan->comp_enabled[comp]);
-
+	mdelay(3);
 	if (!tapan->comp_enabled[comp])
 		return 0;
 

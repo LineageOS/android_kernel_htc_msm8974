@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2013, Linux Foundation. All rights reserved.
+/* Copyright (c) 2009-2014, Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -52,6 +52,7 @@
 #include <linux/usb/htc_info.h>
 #include <mach/cable_detect.h>
 #include <mach/devices_cmdline.h>
+#include <mach/socinfo.h>
 
 #define MSM_USB_BASE	(motg->regs)
 #define DRIVER_NAME	"msm_otg"
@@ -2449,6 +2450,8 @@ static void msm_otg_sm_work(struct work_struct *w)
 			otg_state_string(otg->phy->state), (unsigned) motg->inputs);
 	mutex_lock(&smwork_sem);
 	pm_runtime_resume(otg->phy->dev);
+	if (motg->pm_done)
+		pm_runtime_get_sync(otg->phy->dev);
 	pr_debug("%s work\n", otg_state_string(otg->phy->state));
 	switch (otg->phy->state) {
 	case OTG_STATE_UNDEFINED:
@@ -2583,6 +2586,7 @@ static void msm_otg_sm_work(struct work_struct *w)
 			pm_runtime_put_noidle(otg->phy->dev);
 			pm_runtime_mark_last_busy(otg->phy->dev);
 			pm_runtime_autosuspend(otg->phy->dev);
+			motg->pm_done = 1;
 		}
 		break;
 	case OTG_STATE_B_SRP_INIT:
@@ -3875,6 +3879,17 @@ __maybe_unused static int msm_otg_register_power_supply(struct platform_device *
 	return 0;
 }
 
+
+int htc_msm_otg_get_cable_type(void)
+{
+	if (!the_msm_otg) {
+		printk(KERN_INFO "[USB] %s : usb function not ready\n",__func__);
+		return 0;
+	}
+	return the_msm_otg->chg_type;
+}
+
+
 static int msm_otg_ext_chg_open(struct inode *inode, struct file *file)
 {
 	struct msm_otg *motg = the_msm_otg;
@@ -3982,8 +3997,7 @@ static int msm_otg_setup_ext_chg_cdev(struct msm_otg *motg)
 	int ret;
 
 	if (motg->pdata->enable_sec_phy || motg->pdata->mode == USB_HOST ||
-			motg->pdata->otg_control != OTG_PMIC_CONTROL ||
-			psy != &motg->usb_psy) {
+			motg->pdata->otg_control != OTG_PMIC_CONTROL) {
 		pr_debug("usb ext chg is not supported by msm otg\n");
 		return -ENODEV;
 	}
@@ -4061,10 +4075,33 @@ static ssize_t dpdm_pulldown_enable_store(struct device *dev,
 static DEVICE_ATTR(dpdm_pulldown_enable, S_IRUGO | S_IWUSR,
 		dpdm_pulldown_enable_show, dpdm_pulldown_enable_store);
 
+#if defined(CONFIG_MACH_MEM_UL)
+static int usb_phy_setting_MEMUL[9] = {
+	0x44,0x80,
+	0x4f,0x81,
+	0x3c,0x82,
+	0x13,0x83,
+	0xffffffff
+};
+static int usb_phy_setting_MEMUL_PVT[9] = {
+	0x44,0x80,
+	0x3b,0x81,
+	0x3c,0x82,
+	0x13,0x83,
+	0xffffffff
+};
+#endif
+
 int *htc_msm_otg_get_phy_init(int *phy_init)
 {
 	__maybe_unused char *mid;
 	__maybe_unused int i;
+#if defined(CONFIG_MACH_MEM_UL)
+	if (of_machine_pcbid() == 0x80)
+		return usb_phy_setting_MEMUL_PVT;
+	else
+		return usb_phy_setting_MEMUL;
+#endif
 	printk("[USB] use dt phy init\n");
 	return phy_init;
 }
@@ -4744,6 +4781,7 @@ static int msm_otg_runtime_resume(struct device *dev)
 
 	dev_dbg(dev, "OTG runtime resume\n");
 	pm_runtime_get_noresume(dev);
+	motg->pm_done = 0;
 	return msm_otg_resume(motg);
 }
 #endif
@@ -4771,6 +4809,7 @@ static int msm_otg_pm_resume(struct device *dev)
 
 	dev_dbg(dev, "OTG PM resume\n");
 
+	motg->pm_done = 0;
 	atomic_set(&motg->pm_suspended, 0);
 	if (motg->async_int || motg->sm_work_pending) {
 		pm_runtime_get_noresume(dev);
