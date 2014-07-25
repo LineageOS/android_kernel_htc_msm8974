@@ -28,7 +28,6 @@ struct attribute_status {
        u32 cur_value;
        u32 def_value;
 };
-void htc_register_camera_bkl(int level, int level_dua);
 void htc_register_attrs(struct kobject *led_kobj, struct msm_fb_data_type *mfd);
 void htc_set_cabc(struct msm_fb_data_type *mfd);
 void htc_reset_status(void);

@@ -122,7 +122,6 @@ Optional properties:
 					"bl_ctrl_pwm" = Backlight controlled by PWM gpio.
 					"bl_ctrl_wled" = Backlight controlled by WLED.
 					"bl_ctrl_dcs" = Backlight controlled by DCS commands.
-					"bl_ctrl_i2c" = Backlight controlled by I2C.
 					other: Unknown backlight control. (default)
 - qcom,mdss-dsi-bl-pmic-bank-select:	LPG channel for backlight.
 					Requred if blpmiccontroltype is PWM
@@ -256,14 +255,6 @@ Optional properties:
 - qcom,mdss-dsi-default-command-state:	String that specifies the ctrl state for sending commands.
 - qcom,mdss-shrink-pwm:			A array that specifies the pwm_min, pwm_default, pwm_max for
 					brightness shrink function
-- qcom,mdss-pwm-ctl-type:		Specifies pwm ctl type(0:none 1:PMIC(wled with cabc_en)
-					2:external IC(with CABC PWM by DCS))
-
-- htc,mdss-max-brt-level:		Specifies the actual max brightness supported by the panel.
-
-- htc,mdss-camera-blk:			Specifies the brightness of camera
-
-- htc,mdss-camera-dua-blk:		Specifies the brightness of dua camera
 
 - htc,cabc-ui-cmds: 			A byte stream formed by multiple dcs packets base on
 					qcom dsi controller protocol.

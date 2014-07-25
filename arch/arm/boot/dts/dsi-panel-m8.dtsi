@@ -104,8 +104,6 @@
 		qcom,mdss-pan-physical-height-dimension = <109>;
 		qcom,mdss-shrink-pwm = <6 79 255>;
 		qcom,mdss-dsi-lp11-init;
-		htc,mdss-camera-blk = <177>;
-		htc,mdss-camera-dua-blk = <177>;
 		htc,cabc-off-cmds = [39 01 00 00 00 00 02 55 00];
 		htc,cabc-ui-cmds = [39 01 00 00 00 00 02 55 02];
 		htc,cabc-video-cmds = [39 01 00 00 00 00 02 55 03];
@@ -192,8 +190,6 @@
 		qcom,mdss-pan-physical-height-dimension = <109>;
 		qcom,mdss-shrink-pwm = <6 79 255>;
 		qcom,mdss-dsi-lp11-init;
-		htc,mdss-camera-blk = <177>;
-		htc,mdss-camera-dua-blk = <177>;
 		htc,cabc-off-cmds = [39 01 00 00 00 00 02 55 00];
 		htc,cabc-ui-cmds = [39 01 00 00 00 00 02 55 02];
 		htc,cabc-video-cmds = [39 01 00 00 00 00 02 55 03];
@@ -281,8 +277,6 @@
 		qcom,mdss-pan-physical-width-dimension = <64>;
 		qcom,mdss-pan-physical-height-dimension = <114>;
 		qcom,mdss-shrink-pwm = <6 79 255>;
-		htc,mdss-camera-blk = <177>;
-		htc,mdss-camera-dua-blk = <177>;
 		htc,cabc-off-cmds = [39 01 00 00 00 00 02 55 00];
 		htc,cabc-ui-cmds = [39 01 00 00 00 00 02 55 02];
 		htc,dimming-on-cmds = [39 01 00 00 00 00 02 53 0C];
@@ -360,15 +354,11 @@
 		qcom,mdss-pan-physical-height-dimension = <109>;
 		qcom,mdss-shrink-pwm = <6 79 255>;
 		qcom,mdss-dsi-lp11-init;
-		htc,mdss-camera-blk = <177>;
-		htc,mdss-camera-dua-blk = <177>;
 		htc,cabc-off-cmds = [39 01 00 00 00 00 02 55 00];
 		htc,cabc-ui-cmds = [39 01 00 00 00 00 02 55 82];
 		htc,cabc-video-cmds = [39 01 00 00 00 00 02 55 83];
 		htc,dimming-on-cmds = [39 01 00 00 00 00 02 53 2C];
 		htc,mdss-pp-hue = <0xfef>;
-		qcom,mdss-shrink-pwm-power-hack = <6 56 255>;
-		htc,mdss-camera-blk-power-hack = <142>;
 		htc,panel-id=<3>;
 	};
 	qcom,mdss_dsi_m8_sharp_novatek_35595_1080p_cmd {
@@ -541,27 +531,12 @@
 		qcom,mdss-pan-physical-height-dimension = <109>;
 		qcom,mdss-shrink-pwm = <6 79 255>;
 		qcom,mdss-dsi-lp11-init;
-		htc,mdss-camera-blk = <177>;
-		htc,mdss-camera-dua-blk = <177>;
 		htc,cabc-off-cmds = [39 01 00 00 00 00 02 55 00];
 		htc,cabc-ui-cmds = [39 01 00 00 00 00 02 55 82];
 		htc,cabc-video-cmds = [39 01 00 00 00 00 02 55 83];
 		htc,dimming-on-cmds = [39 01 00 00 00 00 02 53 2C];
 		htc,mdss-pp-hue = <0xfef>;
-		qcom,mdss-shrink-pwm-power-hack = <6 56 255>;
-		htc,mdss-camera-blk-power-hack = <142>;
-		htc,cabc-ui-cmds-power-hack = [
-					39 01 00 00 00 00 02 55 82
-					39 01 00 00 01 00 02 FF 24 /* Enter Page2 CMD4 */
-					39 01 00 00 01 00 02 90 78 /* fps 60 */
-					39 01 00 00 01 00 02 92 78 /* fps 60 */
-					39 01 00 00 01 00 02 FF 01 /* Enter CMD1 */];
-		htc,cabc-video-cmds-power-hack = [
-					39 01 00 00 00 00 02 55 83
-					39 01 00 00 01 00 02 FF 24 /* Enter Page2 CMD4 */
-					39 01 00 00 01 00 02 90 E1 /* fps 30 */
-					39 01 00 00 01 00 02 92 E1 /* fps 30 */
-					39 01 00 00 01 00 02 FF 01 /* Enter CMD1 */];
+
 		htc,panel-id=<1>;
 	};
 
@@ -753,8 +728,6 @@
 		qcom,mdss-pan-physical-height-dimension = <109>;
 		qcom,mdss-shrink-pwm = <6 79 255>;
 		qcom,mdss-dsi-lp11-init;
-		htc,mdss-camera-blk = <177>;
-		htc,mdss-camera-dua-blk = <177>;
 		htc,cabc-off-cmds = [39 01 00 00 00 00 02 55 00];
 		htc,cabc-ui-cmds = [39 01 00 00 00 00 02 55 82];
 		htc,cabc-video-cmds = [39 01 00 00 00 00 02 55 83];
@@ -1459,8 +1432,6 @@
 		qcom,mdss-pan-physical-height-dimension = <109>;
 		qcom,mdss-shrink-pwm = <6 79 255>;
 		qcom,mdss-dsi-lp11-init;
-		htc,mdss-camera-blk = <177>;
-		htc,mdss-camera-dua-blk = <177>;
 		htc,cabc-off-cmds = [39 01 00 00 00 00 02 55 00];
 		htc,cabc-ui-cmds = [39 01 00 00 00 00 02 55 82];
 		htc,cabc-video-cmds = [39 01 00 00 00 00 02 55 83];
@@ -2135,27 +2106,11 @@
 		qcom,mdss-pan-physical-height-dimension = <109>;
 		qcom,mdss-shrink-pwm = <6 79 255>;
 		qcom,mdss-dsi-lp11-init;
-		htc,mdss-camera-blk = <177>;
-		htc,mdss-camera-dua-blk = <177>;
 		htc,cabc-off-cmds = [39 01 00 00 00 00 02 55 00];
 		htc,cabc-ui-cmds = [39 01 00 00 00 00 02 55 82];
 		htc,cabc-video-cmds = [39 01 00 00 00 00 02 55 83];
 		htc,dimming-on-cmds = [39 01 00 00 00 00 02 53 2C];
 		htc,mdss-pp-hue = <0xfef>;
-		qcom,mdss-shrink-pwm-power-hack = <6 56 255>;
-		htc,mdss-camera-blk-power-hack = <142>;
-		htc,cabc-ui-cmds-power-hack = [
-					39 01 00 00 00 00 02 55 82
-					39 01 00 00 01 00 02 FF 24 /* Enter Page2 CMD4 */
-					39 01 00 00 01 00 02 90 78 /* fps 60 */
-					39 01 00 00 01 00 02 92 78 /* fps 60 */
-					39 01 00 00 01 00 02 FF 01 /* Enter CMD1 */];
-		htc,cabc-video-cmds-power-hack = [
-					39 01 00 00 00 00 02 55 83
-					39 01 00 00 01 00 02 FF 24 /* Enter Page2 CMD4 */
-					39 01 00 00 01 00 02 90 E1 /* fps 30 */
-					39 01 00 00 01 00 02 92 E1 /* fps 30 */
-					39 01 00 00 01 00 02 FF 01 /* Enter CMD1 */];
 
 		htc,panel-id=<6>;
 	};

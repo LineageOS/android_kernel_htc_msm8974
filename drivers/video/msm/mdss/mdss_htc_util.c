@@ -138,17 +138,6 @@ void htc_debugfs_init(struct msm_fb_data_type *mfd)
 	return;
 }
 
-static unsigned backlightvalue = 0;
-static unsigned dua_backlightvalue = 0;
-static ssize_t camera_bl_show(struct device *dev,
-        struct device_attribute *attr, char *buf)
-{
-	ssize_t ret =0;
-	sprintf(buf,"%s%u\n%s%u\n", "BL_CAM_MIN=", backlightvalue, "BL_CAM_DUA_MIN=", dua_backlightvalue);
-	ret = strlen(buf) + 1;
-	return ret;
-}
-
 static ssize_t attrs_show(struct device *dev,
         struct device_attribute *attr, char *buf)
 {
@@ -203,11 +192,9 @@ err_out:
 	return count;
 }
 
-static DEVICE_ATTR(backlight_info, S_IRUGO, camera_bl_show, NULL);
 static DEVICE_ATTR(cabc_level_ctl, S_IRUGO | S_IWUSR, attrs_show, attr_store);
 static DEVICE_ATTR(mdss_pp_hue, S_IRUGO | S_IWUSR, attrs_show, attr_store);
 static struct attribute *htc_extend_attrs[] = {
-	&dev_attr_backlight_info.attr,
 	&dev_attr_cabc_level_ctl.attr,
 	&dev_attr_mdss_pp_hue.attr,
 	NULL,
@@ -248,12 +235,6 @@ void htc_reset_status(void)
 	cancel_delayed_work_sync(&dimming_work);
 
 	return;
-}
-
-void htc_register_camera_bkl(int level, int dua_level)
-{
-	backlightvalue = level;
-	dua_backlightvalue = dua_level;
 }
 
 void htc_set_cabc(struct msm_fb_data_type *mfd)

@@ -99,7 +99,6 @@
 		qcom,mdss-pan-physical-width-dimension = <53>;
 		qcom,mdss-pan-physical-height-dimension = <94>;
 		qcom,mdss-shrink-pwm = <12 79 255>;
-		htc,mdss-camera-blk = <185>;
 		htc,panel-id=<0>;
 	};
 };

@@ -264,18 +264,10 @@ struct mdss_panel_info {
 	struct mipi_panel_info mipi;
 	struct lvds_panel_info lvds;
 
-	int camera_blk;
-	int camera_dua_blk;
 	int panel_id;
 	int first_power_on;
 	u32 mdss_pp_hue;
 
-	uint32_t pcc_r;
-	uint32_t pcc_g;
-	uint32_t pcc_b;
-
-	int max_brt;
-	int act_max_brt;
 	bool act_brt;
 };
 

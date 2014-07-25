@@ -30,7 +30,6 @@
 #define WLED_MAX_LEVEL	4095
 
 DEFINE_LED_TRIGGER(bl_led_trigger);
-DEFINE_LED_TRIGGER(bl_led_i2c_trigger);
 
 void mdss_dsi_panel_pwm_cfg(struct mdss_dsi_ctrl_pdata *ctrl)
 {
@@ -168,11 +167,11 @@ static unsigned char shrink_pwm(int val, int pwm_min, int pwm_default, int pwm_m
 
         return shrink_br;
 }
-static unsigned char linear_pwm(int val, int max_brt, int bl_max)
+static unsigned char linear_pwm(int val, int bl_max)
 {
 	unsigned char bl_pwm  = BRI_SETTING_MAX;
 
-	bl_pwm = val * bl_max / max_brt;
+	bl_pwm = val * bl_max / MDSS_MAX_BL_BRIGHTNESS;
 
 	PR_DISP_INFO("%s:brightness=%d, bl_pwm=%d\n", __func__,val, bl_pwm);
 	return bl_pwm;
@@ -194,7 +193,7 @@ static void mdss_dsi_panel_bklt_dcs(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 	if (!pinfo->act_brt)
 		led_pwm1[1] = (unsigned char)shrink_pwm(level, ctrl->pwm_min, ctrl->pwm_default, ctrl->pwm_max);
 	else
-		led_pwm1[1] = (unsigned char)linear_pwm(level, pinfo->max_brt, pinfo->bl_max);
+		led_pwm1[1] = (unsigned char)linear_pwm(level, pinfo->bl_max);
 
 	led_pwm1[2] = led_pwm1[1];
 	memset(&cmdreq, 0, sizeof(cmdreq));
@@ -334,24 +333,6 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 
-#ifdef CONFIG_HTC_POWER_HACK
-	
-	if (bl_level == 0) {
-		if (ctrl_pdata->cabc_ui_cmds.cmds) {
-			struct dcs_cmd_req cmdreq;
-			cmdreq.cmds = ctrl_pdata->cabc_ui_cmds.cmds;
-			cmdreq.cmds_cnt = ctrl_pdata->cabc_ui_cmds.cmd_cnt;
-			cmdreq.flags = CMD_REQ_COMMIT | CMD_CLK_CTRL;
-			cmdreq.rlen = 0;
-			cmdreq.cb = NULL;
-
-			mdss_dsi_cmdlist_put(ctrl_pdata, &cmdreq);
-		}
-	}
-#endif
-	if(pwrctrl_pdata.bkl_config)
-		pwrctrl_pdata.bkl_config(&ctrl_pdata->panel_data, ((bl_level == 0) ? 0 : 1));
-
 	switch (ctrl_pdata->bklt_ctrl) {
 	case BL_WLED:
 		led_trigger_event(bl_led_trigger, bl_level);
@@ -362,10 +343,6 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 	case BL_DCS_CMD:
 		mdss_dsi_panel_bklt_dcs(ctrl_pdata, bl_level);
 		break;
-	case BL_I2C:
-		led_trigger_event(bl_led_i2c_trigger, bl_level);
-		break;
-
 	default:
 		pr_err("%s: Unknown bl_ctrl configuration\n",
 			__func__);
@@ -409,11 +386,6 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 		mdss_dsi_panel_cmds_send(ctrl, &ctrl->on_cmds);
 	}
 
-	if (ctrl->pwm_ctl_type == PWM_PMIC)
-		led_trigger_event(bl_led_trigger, WLED_MAX_LEVEL);
-	else if (ctrl->pwm_ctl_type == PWM_EXT)
-		mdss_dsi_panel_bklt_dcs(ctrl, BRI_SETTING_MAX);
-
 	PR_DISP_INFO("%s:-\n", __func__);
 	return 0;
 }
@@ -435,14 +407,8 @@ static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 
 	mipi  = &pdata->panel_info.mipi;
 
-	if(pwrctrl_pdata.bkl_config)
-		pwrctrl_pdata.bkl_config(&ctrl->panel_data, 0);
-
 	if (ctrl->off_cmds.cmd_cnt)
 		mdss_dsi_panel_cmds_send(ctrl, &ctrl->off_cmds);
-
-	if (ctrl->pwm_ctl_type == PWM_PMIC)
-		led_trigger_event(bl_led_trigger, 0);
 
 	PR_DISP_INFO("%s:-\n", __func__);
 	return 0;
@@ -819,9 +785,6 @@ static int mdss_panel_parse_dt(struct device_node *np,
 			ctrl_pdata->pwm_pmic_gpio = tmp;
 		} else if (!strncmp(data, "bl_ctrl_dcs", 11)) {
 			ctrl_pdata->bklt_ctrl = BL_DCS_CMD;
-		} else if (!strncmp(data, "bl_ctrl_i2c", 11)) {
-			led_trigger_register_simple("bl-led-i2c-trigger", &bl_led_i2c_trigger);
-			ctrl_pdata->bklt_ctrl = BL_I2C;
 		}
 	}
 	rc = of_property_read_u32(np, "qcom,mdss-dsi-bl-min-level", &tmp);
@@ -969,19 +932,6 @@ static int mdss_panel_parse_dt(struct device_node *np,
 	ctrl_pdata->pwm_default = (!rc ? res[1] : BRI_SETTING_DEF);
 	ctrl_pdata->pwm_max = (!rc ? res[2] : BRI_SETTING_MAX);
 
-	rc = of_property_read_u32(np, "qcom,mdss-pwm-ctl-type", &tmp);
-	ctrl_pdata->pwm_ctl_type = (!rc ? tmp : 0);
-	if(ctrl_pdata->pwm_ctl_type == PWM_PMIC) {
-		led_trigger_register_simple("bkl-trigger", &bl_led_trigger);
-		PR_DISP_INFO("%s: PWM type is PMIC\n", __func__);
-	}
-
-	rc = of_property_read_u32(np, "htc,mdss-camera-blk", &tmp);
-	pinfo->camera_blk = (!rc ? tmp : BRI_SETTING_DEF);
-
-	rc = of_property_read_u32(np, "htc,mdss-camera-dua-blk", &tmp);
-	pinfo->camera_dua_blk = (!rc ? tmp : pinfo->camera_blk);
-
 	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->cabc_off_cmds,
 		"htc,cabc-off-cmds", "qcom,mdss-dsi-default-command-state");
 
@@ -1000,44 +950,6 @@ static int mdss_panel_parse_dt(struct device_node *np,
 	rc = of_property_read_u32(np, "htc,mdss-pp-hue", &tmp);
 	pinfo->mdss_pp_hue = (!rc ? tmp : 0);
 
-	rc = of_property_read_u32(np, "htc,mdp-pcc-r", &tmp);
-	pinfo->pcc_r = (!rc ? tmp : 0);
-
-	rc = of_property_read_u32(np, "htc,mdp-pcc-g", &tmp);
-	pinfo->pcc_g = (!rc ? tmp : 0);
-
-	rc = of_property_read_u32(np, "htc,mdp-pcc-b", &tmp);
-	pinfo->pcc_b = (!rc ? tmp : 0);
-
-	rc = of_property_read_u32(np, "htc,mdss-max-brt-level", &tmp);
-	pinfo->act_max_brt = (!rc ? tmp : MDSS_MAX_BL_BRIGHTNESS);
-	pinfo->max_brt = pinfo->act_max_brt;
-
-#ifdef CONFIG_HTC_POWER_HACK
-	rc = of_property_read_u32_array(np, "qcom,mdss-shrink-pwm-power-hack", res, 3);
-	if (rc) {
-		pr_err("%s:%d, qcom,mdss-shrink-pwm-cmcc not specified\n",
-						 __func__, __LINE__);
-	} else {
-		ctrl_pdata->pwm_min  = res[0];
-		ctrl_pdata->pwm_default = res[1];
-		ctrl_pdata->pwm_max = res[2];
-	}
-
-	rc = of_property_read_u32(np, "htc,mdss-camera-blk-power-hack", &tmp);
-	if (rc) {
-		pr_err("%s:%d, htc,mdss-camera-blk-cmcc not specified\n",
-						__func__, __LINE__);
-	} else {
-		pinfo->camera_blk = tmp;
-	}
-
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->cabc_ui_cmds,
-		"htc,cabc-ui-cmds-power-hack", "qcom,mdss-dsi-default-command-state");
-
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->cabc_video_cmds,
-		"htc,cabc-video-cmds-power-hack", "qcom,mdss-dsi-default-command-state");
-#endif
 	return 0;
 
 error:
