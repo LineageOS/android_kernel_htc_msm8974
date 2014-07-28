@@ -42,4 +42,4 @@ static inline int mdss_misr_crc_get(struct mdss_data_type *mdata,
 static inline void mdss_misr_crc_collect(struct mdss_data_type *mdata,
 			   int block_id) { }
 #endif
-#endif 
+#endif /* MDSS_DEBUG_H */

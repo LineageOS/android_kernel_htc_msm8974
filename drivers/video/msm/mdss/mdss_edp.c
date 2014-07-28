@@ -39,12 +39,15 @@
 #include "mdss_debug.h"
 
 #define RGB_COMPONENTS		3
-#define VDDA_MIN_UV			1800000	
-#define VDDA_MAX_UV			1800000	
-#define VDDA_UA_ON_LOAD		100000	
-#define VDDA_UA_OFF_LOAD	100		
+#define VDDA_MIN_UV			1800000	/* uV units */
+#define VDDA_MAX_UV			1800000	/* uV units */
+#define VDDA_UA_ON_LOAD		100000	/* uA units */
+#define VDDA_UA_OFF_LOAD	100		/* uA units */
 
 static int mdss_edp_regulator_on(struct mdss_edp_drv_pdata *edp_drv);
+/*
+ * Init regulator needed for edp, 8974_l12
+ */
 static int mdss_edp_regulator_init(struct mdss_edp_drv_pdata *edp_drv)
 {
 	int ret;
@@ -71,6 +74,9 @@ static int mdss_edp_regulator_init(struct mdss_edp_drv_pdata *edp_drv)
 	return 0;
 }
 
+/*
+ * Set uA and enable vdda
+ */
 static int mdss_edp_regulator_on(struct mdss_edp_drv_pdata *edp_drv)
 {
 	int ret;
@@ -90,6 +96,9 @@ static int mdss_edp_regulator_on(struct mdss_edp_drv_pdata *edp_drv)
 	return 0;
 }
 
+/*
+ * Disable vdda and set uA
+ */
 static int mdss_edp_regulator_off(struct mdss_edp_drv_pdata *edp_drv)
 {
 	int ret;
@@ -111,6 +120,9 @@ static int mdss_edp_regulator_off(struct mdss_edp_drv_pdata *edp_drv)
 	return 0;
 }
 
+/*
+ * Enables the gpio that supply power to the panel and enable the backlight
+ */
 static int mdss_edp_gpio_panel_en(struct mdss_edp_drv_pdata *edp_drv)
 {
 	int ret = 0;
@@ -220,34 +232,34 @@ void mdss_edp_config_sync(unsigned char *base)
 {
 	int ret = 0;
 
-	ret = edp_read(base + 0xc); 
+	ret = edp_read(base + 0xc); /* EDP_CONFIGURATION_CTRL */
 	ret &= ~0x733;
 	ret |= (0x55 & 0x733);
 	edp_write(base + 0xc, ret);
-	edp_write(base + 0xc, 0x55); 
+	edp_write(base + 0xc, 0x55); /* EDP_CONFIGURATION_CTRL */
 }
 
 static void mdss_edp_config_sw_div(unsigned char *base)
 {
-	edp_write(base + 0x14, 0x13b); 
-	edp_write(base + 0x18, 0x266); 
+	edp_write(base + 0x14, 0x13b); /* EDP_SOFTWARE_MVID */
+	edp_write(base + 0x18, 0x266); /* EDP_SOFTWARE_NVID */
 }
 
 static void mdss_edp_config_static_mdiv(unsigned char *base)
 {
 	int ret = 0;
 
-	ret = edp_read(base + 0xc); 
-	edp_write(base + 0xc, ret | 0x2); 
-	edp_write(base + 0xc, 0x57); 
+	ret = edp_read(base + 0xc); /* EDP_CONFIGURATION_CTRL */
+	edp_write(base + 0xc, ret | 0x2); /* EDP_CONFIGURATION_CTRL */
+	edp_write(base + 0xc, 0x57); /* EDP_CONFIGURATION_CTRL */
 }
 
 static void mdss_edp_enable(unsigned char *base, int enable)
 {
-	edp_write(base + 0x8, 0x0); 
-	edp_write(base + 0x8, 0x40); 
-	edp_write(base + 0x94, enable); 
-	edp_write(base + 0x4, enable); 
+	edp_write(base + 0x8, 0x0); /* EDP_STATE_CTRL */
+	edp_write(base + 0x8, 0x40); /* EDP_STATE_CTRL */
+	edp_write(base + 0x94, enable); /* EDP_TIMING_ENGINE_EN */
+	edp_write(base + 0x4, enable); /* EDP_MAINLINK_CTRL */
 }
 
 static void mdss_edp_irq_enable(struct mdss_edp_drv_pdata *edp_drv);
@@ -391,6 +403,9 @@ static int mdss_edp_event_handler(struct mdss_panel_data *pdata,
 	return rc;
 }
 
+/*
+ * Converts from EDID struct to mdss_panel_info
+ */
 static void mdss_edp_edid2pinfo(struct mdss_edp_drv_pdata *edp_drv)
 {
 	struct display_timing_desc *dp;
@@ -431,8 +446,8 @@ static void mdss_edp_edid2pinfo(struct mdss_edp_drv_pdata *edp_drv)
 	pinfo->bpp = edp_drv->edid.color_depth * RGB_COMPONENTS;
 	pinfo->fb_num = 2;
 
-	pinfo->lcdc.border_clr = 0;	 
-	pinfo->lcdc.underflow_clr = 0xff; 
+	pinfo->lcdc.border_clr = 0;	 /* black */
+	pinfo->lcdc.underflow_clr = 0xff; /* blue */
 	pinfo->lcdc.hsync_skew = 0;
 }
 
@@ -473,6 +488,9 @@ static int mdss_edp_device_register(struct mdss_edp_drv_pdata *edp_drv)
 	return 0;
 }
 
+/*
+ * Retrieve edp base address
+ */
 static int mdss_edp_get_base_address(struct mdss_edp_drv_pdata *edp_drv)
 {
 	struct resource *res;
@@ -595,24 +613,24 @@ irqreturn_t edp_isr(int irq, void *ptr)
 	mask1 = isr1 & EDP_INTR_MASK1;
 	mask2 = isr2 & EDP_INTR_MASK2;
 
-	isr1 &= ~mask1;	
+	isr1 &= ~mask1;	/* remove masks bit */
 	isr2 &= ~mask2;
 
 	pr_debug("%s: isr=%x mask=%x isr2=%x mask2=%x\n",
 			__func__, isr1, mask1, isr2, mask2);
 
 	ack = isr1 & EDP_INTR_STATUS1;
-	ack <<= 1;	
+	ack <<= 1;	/* ack bits */
 	ack |= mask1;
 	edp_write(base + 0x308, ack);
 
 	ack = isr2 & EDP_INTR_STATUS2;
-	ack <<= 1;	
+	ack <<= 1;	/* ack bits */
 	ack |= mask2;
 	edp_write(base + 0x30c, ack);
 
 	if (isr1 & EDP_INTR_HPD) {
-		isr1 &= ~EDP_INTR_HPD;	
+		isr1 &= ~EDP_INTR_HPD;	/* clear */
 		if (ep->train_start)
 			edp_send_events(ep, EV_LINK_TRAIN);
 	}
@@ -621,9 +639,9 @@ irqreturn_t edp_isr(int irq, void *ptr)
 		edp_send_events(ep, EV_VIDEO_READY);
 
 	if (isr1 && ep->aux_cmd_busy) {
-		
+		/* clear EDP_AUX_TRANS_CTRL */
 		edp_write(base + 0x318, 0);
-		
+		/* read EDP_INTERRUPT_TRANS_NUM */
 		ep->aux_trans_num = edp_read(base + 0x310);
 
 		if (ep->aux_cmd_i2c)
@@ -751,7 +769,7 @@ static int __devinit mdss_edp_probe(struct platform_device *pdev)
 	edp_drv->pdev = pdev;
 	edp_drv->pdev->id = 1;
 	edp_drv->clk_on = 0;
-	edp_drv->train_start = 0; 
+	edp_drv->train_start = 0; /* no link train yet */
 
 	ret = mdss_edp_get_base_address(edp_drv);
 	if (ret)
@@ -783,10 +801,10 @@ static int __devinit mdss_edp_probe(struct platform_device *pdev)
 
 	mdss_edp_event_setup(edp_drv);
 
-	
+	/* need mdss clock to receive irq */
 	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON, false);
 
-	
+	/* only need aux and ahb clock for aux channel */
 	mdss_edp_prepare_aux_clocks(edp_drv);
 	mdss_edp_aux_clk_enable(edp_drv);
 	mdss_edp_phy_pll_reset(edp_drv->base);

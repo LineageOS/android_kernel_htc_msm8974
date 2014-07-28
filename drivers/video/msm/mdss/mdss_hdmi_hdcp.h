@@ -41,4 +41,4 @@ int hdmi_hdcp_isr(void *ptr);
 int hdmi_hdcp_reauthenticate(void *input);
 int hdmi_hdcp_authenticate(void *hdcp_ctrl);
 void hdmi_hdcp_off(void *hdcp_ctrl);
-#endif 
+#endif /* __MDSS_HDMI_HDCP_H__ */

@@ -16,6 +16,7 @@
 
 #include <linux/bitops.h>
 
+/*synchronization*/
 #define MDP3_REG_SYNC_CONFIG_0				0x0300
 #define MDP3_REG_SYNC_CONFIG_1				0x0304
 #define MDP3_REG_SYNC_CONFIG_2				0x0308
@@ -37,6 +38,7 @@
 #define MDP3_REG_SECONDARY_START_POS			0x0214
 #define MDP3_REG_EXTERNAL_START_POS			0x0218
 
+/*interrupt*/
 #define MDP3_REG_INTR_ENABLE				0x0020
 #define MDP3_REG_INTR_STATUS				0x0024
 #define MDP3_REG_INTR_CLEAR				0x0028
@@ -44,6 +46,7 @@
 #define MDP3_REG_PRIMARY_RD_PTR_IRQ			0x021C
 #define MDP3_REG_SECONDARY_RD_PTR_IRQ			0x0220
 
+/*operation control*/
 #define MDP3_REG_DMA_P_START				0x0044
 #define MDP3_REG_DMA_S_START				0x0048
 #define MDP3_REG_DMA_E_START				0x004c
@@ -53,11 +56,14 @@
 #define MDP3_REG_HW_VERSION				0x0070
 #define MDP3_REG_SW_RESET				0x0074
 
+/*EBI*/
 #define MDP3_REG_EBI2_LCD0				0x003c
 #define MDP3_REG_EBI2_LCD0_YSTRIDE			0x0050
 
+/*clock control*/
 #define MDP3_REG_CGC_EN					0x0100
 
+/*DMA_P*/
 #define MDP3_REG_DMA_P_CONFIG				0x90000
 #define MDP3_REG_DMA_P_SIZE				0x90004
 #define MDP3_REG_DMA_P_IBUF_ADDR			0x90008
@@ -104,12 +110,14 @@
 #define MDP3_REG_DMA_P_DCVS_CTRL			0x90080
 #define MDP3_REG_DMA_P_DCVS_STATUS			0x90084
 
+/*DMA_S*/
 #define MDP3_REG_DMA_S_CONFIG				0xA0000
 #define MDP3_REG_DMA_S_SIZE				0xA0004
 #define MDP3_REG_DMA_S_IBUF_ADDR			0xA0008
 #define MDP3_REG_DMA_S_IBUF_Y_STRIDE			0xA000C
 #define MDP3_REG_DMA_S_OUT_XY				0xA0010
 
+/*interface*/
 #define MDP3_REG_LCDC_EN				0xE0000
 #define MDP3_REG_LCDC_HSYNC_CTL				0xE0004
 #define MDP3_REG_LCDC_VSYNC_PERIOD			0xE0008
@@ -217,6 +225,7 @@
 
 #define MDP3_PPP_BLEND_BG_ALPHA_SEL	0x70010
 
+/*interrupt mask*/
 
 #define MDP3_INTR_DP0_ROI_DONE_BIT			BIT(0)
 #define MDP3_INTR_DP1_ROI_DONE_BIT			BIT(1)
@@ -282,4 +291,4 @@ enum {
 #define MDP3_DMA_P_HIST_INTR_HIST_DONE_BIT		BIT(1)
 #define MDP3_PPP_DONE MDP3_INTR_DP0_ROI_DONE
 
-#endif 
+#endif /* MDP3_HWIO_H */

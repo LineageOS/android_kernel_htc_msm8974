@@ -21,7 +21,7 @@
 #include "mdss_panel.h"
 
 #define DSI_BUF_SIZE	1024
-#define DSI_MRPS	0x04  
+#define DSI_MRPS	0x04  /* Maximum Return Packet Size */
 
 struct dsi_interface {
 	int (*on)(struct mdss_panel_data *pdata);
@@ -78,4 +78,4 @@ struct mdss_panel_cfg *mdp3_panel_intf_type(int intf_val);
 
 int mdp3_panel_get_boot_cfg(void);
 
-#endif 
+#endif /* DSI_V2_H */

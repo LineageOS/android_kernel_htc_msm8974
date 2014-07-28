@@ -374,7 +374,7 @@ int mdp3_bus_scale_set_quota(int client, u64 ab_quota, u64 ib_quota)
 
 		bus_idx = (cur_bus_idx % (num_cases - 1)) + 1;
 
-		
+		/* aligning to avoid performing updates for small changes */
 		ab_quota = ALIGN(ab_quota, SZ_64M);
 		ib_quota = ALIGN(ib_quota, SZ_64M);
 
@@ -883,13 +883,13 @@ static int mdp3_get_pan_cfg(struct mdss_panel_cfg *pan_cfg)
 	} else if (pan_name[0] == '1') {
 		pan_cfg->lk_cfg = true;
 	} else {
-		
+		/* read from dt */
 		pan_cfg->lk_cfg = true;
 		pan_cfg->pan_intf = MDSS_PANEL_INTF_INVALID;
 		return -EINVAL;
 	}
 
-	
+	/* skip lk cfg and delimiter; ex: "0:" */
 	strlcpy(pan_name, &pan_name[2], MDSS_MAX_PANEL_LEN);
 	t = strnstr(pan_name, ":", MDSS_MAX_PANEL_LEN);
 	if (!t) {
@@ -903,7 +903,7 @@ static int mdp3_get_pan_cfg(struct mdss_panel_cfg *pan_cfg)
 		pan_intf_str[i] = *(pan_name + i);
 	pan_intf_str[i] = 0;
 	pr_debug("%s:%d panel intf %s\n", __func__, __LINE__, pan_intf_str);
-	
+	/* point to the start of panel name */
 	t = t + 1;
 	strlcpy(&pan_cfg->arg_cfg[0], t, sizeof(pan_cfg->arg_cfg));
 	pr_debug("%s:%d: t=[%s] panel name=[%s]\n", __func__, __LINE__,
@@ -929,7 +929,7 @@ static int mdp3_parse_bootarg(struct platform_device *pdev)
 	panel_name = &pan_cfg->arg_cfg[0];
 	intf_type = &pan_cfg->pan_intf;
 
-	
+	/* reads from dt by default */
 	pan_cfg->lk_cfg = true;
 
 	chosen_node = of_find_node_by_name(NULL, "chosen");
@@ -998,7 +998,7 @@ static int mdp3_parse_bootarg(struct platform_device *pdev)
 
 get_dt_pan:
 	rc = mdp3_parse_dt_pan_intf(pdev);
-	
+	/* if pref pan intf is not present */
 	if (rc)
 		pr_err("%s:unable to parse device tree for pan intf\n",
 			__func__);
@@ -1084,7 +1084,7 @@ static void mdp3_iommu_meta_destroy(struct kref *kref)
 
 static void mdp3_iommu_meta_put(struct mdp3_iommu_meta *meta)
 {
-	
+	/* Need to lock here to prevent race against map/unmap */
 	mutex_lock(&mdp3_res->iommu_lock);
 	kref_put(&meta->ref, mdp3_iommu_meta_destroy);
 	mutex_unlock(&mdp3_res->iommu_lock);
@@ -1176,6 +1176,11 @@ static int mdp3_iommu_map_iommu(struct mdp3_iommu_meta *meta,
 	size = meta->size;
 	table = meta->table;
 
+	/* Use the biggest alignment to allow bigger IOMMU mappings.
+	 * Use the first entry since the first entry will always be the
+	 * biggest entry. To take advantage of bigger mapping sizes both the
+	 * VA and PA addresses have to be aligned to the biggest size.
+	 */
 	if (sg_dma_len(table->sgl) > align)
 		align = sg_dma_len(table->sgl);
 
@@ -1192,7 +1197,7 @@ static int mdp3_iommu_map_iommu(struct mdp3_iommu_meta *meta,
 		goto out1;
 	}
 
-	
+	/* Adding padding to before buffer */
 	if (padding) {
 		unsigned long phys_addr = sg_phys(table->sgl);
 		ret = msm_iommu_map_extra(domain, meta->iova_addr, phys_addr,
@@ -1201,7 +1206,7 @@ static int mdp3_iommu_map_iommu(struct mdp3_iommu_meta *meta,
 			goto out1;
 	}
 
-	
+	/* Mapping actual buffer */
 	ret = iommu_map_range(domain, meta->iova_addr + padding,
 			table->sgl, size, prot);
 	if (ret) {
@@ -1211,7 +1216,7 @@ static int mdp3_iommu_map_iommu(struct mdp3_iommu_meta *meta,
 		goto out2;
 	}
 
-	
+	/* Adding padding to end of buffer */
 	if (padding) {
 		unsigned long phys_addr = sg_phys(table->sgl);
 		unsigned long extra_iova_addr = meta->iova_addr +
@@ -1271,6 +1276,10 @@ out:
 	return ERR_PTR(ret);
 }
 
+/*
+ * PPP hw reads in tiles of 16 which might be outside mapped region
+ * need to map buffers ourseleve to add extra padding
+ */
 int mdp3_self_map_iommu(struct ion_client *client, struct ion_handle *handle,
 	unsigned long align, unsigned long padding, unsigned long *iova,
 	unsigned long *buffer_size, unsigned long flags,
@@ -1292,7 +1301,7 @@ int mdp3_self_map_iommu(struct ion_client *client, struct ion_handle *handle,
 
 	padding = PAGE_ALIGN(padding);
 
-	
+	/* Adding 16 lines padding before and after buffer */
 	iova_length = size + 2 * padding;
 
 	if (size & ~PAGE_MASK) {
@@ -1503,6 +1512,7 @@ int mdp3_iommu_is_attached(int client)
 static int mdp3_init(struct msm_fb_data_type *mfd)
 {
 	int rc;
+
 	rc = mdp3_ctrl_init(mfd);
 	rc |= mdp3_ppp_res_init(mfd);
 	return rc;
@@ -1510,6 +1520,12 @@ static int mdp3_init(struct msm_fb_data_type *mfd)
 
 u32 mdp3_fb_stride(u32 fb_index, u32 xres, int bpp)
 {
+	/*
+	 * The adreno GPU hardware requires that the pitch be aligned to
+	 * 32 pixels for color buffers, so for the cases where the GPU
+	 * is writing directly to fb0, the framebuffer pitch
+	 * also needs to be 32 pixel aligned
+	 */
 
 	if (fb_index == 0)
 		return ALIGN(xres, 32) * bpp;
@@ -1610,7 +1626,7 @@ int mdp3_parse_dt_splash(struct msm_fb_data_type *mfd)
 
 void mdp3_release_splash_memory(void)
 {
-	
+	/* Give back the reserved memory to the system */
 	if (mdp3_res->splash_mem_addr) {
 		pr_debug("mdp3_release_splash_memory\n");
 		memblock_free(mdp3_res->splash_mem_addr,

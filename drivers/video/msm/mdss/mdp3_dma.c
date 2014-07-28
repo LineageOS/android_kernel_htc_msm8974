@@ -402,6 +402,8 @@ static void mdp3_ccs_update(struct mdp3_dma *dma)
 	if (updated) {
 		MDP3_REG_WRITE(MDP3_REG_DMA_P_COLOR_CORRECT_CONFIG, cc_config);
 
+		/* Make sure ccs configuration update is done before continuing
+		with the DMA transfer */
 		wmb();
 	}
 }

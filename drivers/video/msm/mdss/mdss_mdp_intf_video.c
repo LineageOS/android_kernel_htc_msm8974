@@ -24,11 +24,13 @@
 #include "mdss_panel.h"
 #include "xlog.h"
 
+/* wait for at least 2 vsyncs for lowest refresh rate (24hz) */
 #define VSYNC_TIMEOUT_US 100000
 
 #define MDP_INTR_MASK_INTF_VSYNC(intf_num) \
 	(1 << (2 * (intf_num - MDSS_MDP_INTF0) + MDSS_MDP_IRQ_INTF_VSYNC))
 
+/* intf timing settings */
 struct intf_timing_params {
 	u32 width;
 	u32 height;
@@ -163,13 +165,13 @@ static int mdss_mdp_video_timegen_setup(struct mdss_mdp_ctl *ctl,
 
 	if (active_h_end) {
 		active_hctl = (active_h_end << 16) | active_h_start;
-		active_hctl |= BIT(31);	
+		active_hctl |= BIT(31);	/* ACTIVE_H_ENABLE */
 	} else {
 		active_hctl = 0;
 	}
 
 	if (active_v_end)
-		active_v_start |= BIT(31); 
+		active_v_start |= BIT(31); /* ACTIVE_V_ENABLE */
 
 	hsync_ctl = (hsync_period << 16) | p->hsync_pulse_width;
 	display_hctl = (hsync_end_x << 16) | hsync_start_x;
@@ -182,9 +184,9 @@ static int mdss_mdp_video_timegen_setup(struct mdss_mdp_ctl *ctl,
 		hsync_polarity = 0;
 		vsync_polarity = 0;
 	}
-	polarity_ctl = (den_polarity << 2)   | 
-		       (vsync_polarity << 1) | 
-		       (hsync_polarity << 0);  
+	polarity_ctl = (den_polarity << 2)   | /*  DEN Polarity  */
+		       (vsync_polarity << 1) | /* VSYNC Polarity */
+		       (hsync_polarity << 0);  /* HSYNC Polarity */
 
 	mdp_video_write(ctx, MDSS_MDP_REG_INTF_HSYNC_CTL, hsync_ctl);
 	mdp_video_write(ctx, MDSS_MDP_REG_INTF_VSYNC_PERIOD_F0,
@@ -317,7 +319,7 @@ static int mdss_mdp_video_stop(struct mdss_mdp_ctl *ctl)
 		WARN(rc, "intf %d blank error (%d)\n", ctl->intf_num, rc);
 
 		mdp_video_write(ctx, MDSS_MDP_REG_INTF_TIMING_ENGINE_EN, 0);
-		
+		/* wait for at least one VSYNC on HDMI intf for proper TG OFF */
 		if (MDSS_INTF_HDMI == ctx->intf_type) {
 			frame_rate = mdss_panel_get_framerate
 					(&(ctl->panel_data->panel_info));
@@ -519,6 +521,10 @@ static int mdss_mdp_video_config_fps(struct mdss_mdp_ctl *ctl, int new_fps)
 			mdss_mdp_display_wait4comp(ctl);
 			mdp_video_write(ctx,
 					MDSS_MDP_REG_INTF_TIMING_ENGINE_EN, 0);
+			/*
+			 * Need to wait for atleast one vsync time for proper
+			 * TG OFF before doing changes on interfaces
+			 */
 			msleep(20);
 			rc = mdss_mdp_ctl_intf_event(ctl,
 						MDSS_EVENT_PANEL_UPDATE_FPS,
@@ -527,6 +533,10 @@ static int mdss_mdp_video_config_fps(struct mdss_mdp_ctl *ctl, int new_fps)
 							ctl->intf_num, rc);
 			mdp_video_write(ctx,
 					MDSS_MDP_REG_INTF_TIMING_ENGINE_EN, 1);
+			/*
+			 * Add memory barrier to make sure the MDP Video
+			 * mode engine is enabled before next frame is sent
+			 */
 			mb();
 			ctl->force_screen_state = MDSS_SCREEN_DEFAULT;
 			mdss_mdp_display_commit(ctl, NULL);
@@ -635,7 +645,7 @@ int mdss_mdp_video_reconfigure_splash_done(struct mdss_mdp_ctl *ctl,
 		mdss_mdp_ctl_write(ctl, 0, MDSS_MDP_LM_BORDER_COLOR);
 		mdp_video_write(ctx, MDSS_MDP_REG_INTF_TIMING_ENGINE_EN, 0);
 
-		
+		/* wait for 1 VSYNC for the pipe to be unstaged */
 		msleep(20);
 
 		ret = mdss_mdp_ctl_intf_event(ctl,
@@ -645,7 +655,7 @@ int mdss_mdp_video_reconfigure_splash_done(struct mdss_mdp_ctl *ctl,
 error:
 	pdata->panel_info.cont_splash_enabled = 0;
 
-	
+	/* Give back the reserved memory to the system */
 	memblock_free(mdp5_data->splash_mem_addr, mdp5_data->splash_mem_size);
 	free_bootmem_late(mdp5_data->splash_mem_addr,
 				 mdp5_data->splash_mem_size);

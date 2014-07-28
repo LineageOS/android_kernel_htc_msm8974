@@ -477,7 +477,7 @@ int mdss_mdp_rotator_setup(struct msm_fb_data_type *mfd,
 		goto rot_err;
 	}
 
-	
+	/* keep only flags of interest to rotator */
 	rot->flags = req->flags & (MDP_ROT_90 | MDP_FLIP_LR | MDP_FLIP_UD |
 				   MDP_SECURE_OVERLAY_SESSION);
 
@@ -506,6 +506,10 @@ int mdss_mdp_rotator_setup(struct msm_fb_data_type *mfd,
 
 	rot->dst = rot->src_rect;
 
+	/*
+	 * by default, rotator output should be placed directly on
+	 * output buffer address without any offset.
+	 */
 	rot->dst.x = 0;
 	rot->dst.y = 0;
 
@@ -559,11 +563,19 @@ int mdss_mdp_rotator_setup(struct msm_fb_data_type *mfd,
 		rot->src_rect.w = width;
 
 		if (rot->flags & MDP_ROT_90) {
+			/*
+			 * If rotated by 90 first half should be on top.
+			 * But if horizontally flipped should be on bottom.
+			 */
 			if (rot->flags & MDP_FLIP_LR)
 				rot->dst.y = tmp->src_rect.w;
 			else
 				tmp->dst.y = rot->src_rect.w;
 		} else {
+			/*
+			 * If not rotated, first half should be the left part
+			 * of the frame, unless horizontally flipped
+			 */
 			if (rot->flags & MDP_FLIP_LR)
 				rot->dst.x = tmp->src_rect.w;
 			else

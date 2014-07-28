@@ -132,13 +132,19 @@ static void mdss_mdp_smp_set_wm_levels(struct mdss_mdp_pipe *pipe, int mb_cnt)
 
 	fetch_size = mb_cnt * SMP_MB_SIZE;
 
+	/*
+	 * when doing hflip, one line is reserved to be consumed down the
+	 * pipeline. This line will always be marked as full even if it doesn't
+	 * have any data. In order to generate proper priority levels ignore
+	 * this region while setting up watermark levels
+	 */
 	if (pipe->flags & MDP_FLIP_LR) {
 		u8 bpp = pipe->src_fmt->is_yuv ? 1 :
 			pipe->src_fmt->bpp;
 		fetch_size -= (pipe->src.w * bpp);
 	}
 
-	
+	/* 1/4 of SMP pool that is being fetched */
 	val = (fetch_size / SMP_MB_ENTRY_SIZE) >> 2;
 
 	wm[0] = val;
@@ -205,11 +211,20 @@ int mdss_mdp_smp_reserve(struct mdss_mdp_pipe *pipe)
 			ps.ystride[0] = MAX_BPP *
 				max(pipe->mixer->width, width);
 		} else if (mdata->has_decimation) {
+			/*
+			 * when decimation block is used, all chroma planes
+			 * are fetched on a single SMP plane for chroma pixels
+			 */
 			if (ps.num_planes == 3) {
 				ps.num_planes = 2;
 				ps.ystride[1] += ps.ystride[2];
 			}
 
+			/*
+			 * To avoid quailty loss, MDP does one less decimation
+			 * on chroma components if they are subsampled.
+			 * Account for this to have enough SMPs for latency
+			 */
 			switch (pipe->src_fmt->chroma_sample) {
 			case MDSS_MDP_CHROMA_H2V1:
 			case MDSS_MDP_CHROMA_420:
@@ -266,6 +281,21 @@ int mdss_mdp_smp_reserve(struct mdss_mdp_pipe *pipe)
 
 	return rc;
 }
+/*
+ * mdss_mdp_smp_alloc() -- set smp mmb and and wm levels for a staged pipe
+ * @pipe: pointer to a pipe
+ *
+ * Function amends reserved smp mmbs to allocated bitmap and ties respective
+ * mmbs to their pipe fetch_ids. Based on the number of total allocated mmbs
+ * for a staged pipe, it also sets the watermark levels (wm).
+ *
+ * This function will be called on every commit where pipe params might not
+ * have changed. In such cases, we need to ensure that wm levels are not
+ * wiped out. Also in some rare situations hw might have reset and wiped out
+ * smp mmb programming but new smp reservation is not done. In such cases we
+ * need to ensure that for a staged pipes, mmbs are set properly based on
+ * allocated bitmap.
+ */
 static int mdss_mdp_smp_alloc(struct mdss_mdp_pipe *pipe)
 {
 	int i;
@@ -309,6 +339,19 @@ int mdss_mdp_smp_setup(struct mdss_data_type *mdata, u32 cnt, u32 size)
 	return 0;
 }
 
+/**
+ * mdss_mdp_smp_handoff() - Handoff SMP MMBs in use by staged pipes
+ * @mdata: pointer to the global mdss data structure.
+ *
+ * Iterate through the list of all SMP MMBs and check to see if any
+ * of them are assigned to a pipe being marked as being handed-off.
+ * If so, update the corresponding software allocation map to reflect
+ * this.
+ *
+ * This function would typically be called during MDP probe for the case
+ * when certain pipes might be programmed in the bootloader to display
+ * the splash screen.
+ */
 int mdss_mdp_smp_handoff(struct mdss_data_type *mdata)
 {
 	int rc = 0;
@@ -316,12 +359,22 @@ int mdss_mdp_smp_handoff(struct mdss_data_type *mdata)
 	u32 off, s, data;
 	struct mdss_mdp_pipe *pipe = NULL;
 
+	/*
+	 * figure out what SMP MMBs are allocated for each of the pipes
+	 * that need to be handed off.
+	 */
 	for (i = 0; i < SMP_MB_CNT; i++) {
 		off = (i / 3) * 4;
 		s = (i % 3) * 8;
 		data = MDSS_MDP_REG_READ(MDSS_MDP_REG_SMP_ALLOC_W0 + off);
 		client_id = (data >> s) & 0xFF;
 		if (test_bit(i, mdata->mmb_alloc_map)) {
+			/*
+			 * Certain pipes may have a dedicated set of
+			 * SMP MMBs statically allocated to them. In
+			 * such cases, we do not need to do anything
+			 * here.
+			 */
 			pr_debug("smp mmb %d already assigned to pipe %d (client_id %d)"
 				, i, pipe->num, client_id);
 			continue;
@@ -346,6 +399,10 @@ int mdss_mdp_smp_handoff(struct mdss_data_type *mdata)
 				continue;
 			}
 
+			/*
+			 * Assume that the source format only has
+			 * one plane
+			 */
 			pr_debug("Assigning smp mmb %d to pipe %d (client_id %d)\n"
 				, i, pipe->num, client_id);
 			set_bit(i, pipe->smp_map[0].allocated);
@@ -430,6 +487,10 @@ static struct mdss_mdp_pipe *mdss_mdp_pipe_init(struct mdss_mdp_mixer *mixer,
 		mutex_init(&pipe->pp_res.hist.hist_mutex);
 		spin_lock_init(&pipe->pp_res.hist.hist_lock);
 	} else if (pipe_share) {
+		/*
+		 * when there is no dedicated wfd blk, DMA pipe can be
+		 * shared as long as its attached to a writeback mixer
+		 */
 		pipe = mdata->dma_pipes + mixer->num;
 		mdss_mdp_pipe_map(pipe);
 		pr_debug("pipe sharing for pipe=%d\n", pipe->num);
@@ -572,11 +633,29 @@ int mdss_mdp_pipe_destroy(struct mdss_mdp_pipe *pipe)
 
 }
 
+/**
+ * mdss_mdp_pipe_handoff() - Handoff staged pipes during bootup
+ * @pipe: pointer to the pipe to be handed-off
+ *
+ * Populate the software structures for the pipe based on the current
+ * configuration of the hardware pipe by the reading the appropriate MDP
+ * registers.
+ *
+ * This function would typically be called during MDP probe for the case
+ * when certain pipes might be programmed in the bootloader to display
+ * the splash screen.
+ */
 int mdss_mdp_pipe_handoff(struct mdss_mdp_pipe *pipe)
 {
 	int rc = 0;
 	u32 src_fmt, reg = 0, bpp = 0;
 
+	/*
+	 * todo: for now, only reading pipe src and dest size details
+	 * from the registers. This is needed for appropriately
+	 * calculating perf metrics for the handed off pipes.
+	 * We may need to parse some more details at a later date.
+	 */
 	reg = mdss_mdp_pipe_read(pipe, MDSS_MDP_REG_SSPP_SRC_SIZE);
 	pipe->src.h = reg >> 16;
 	pipe->src.w = reg & 0xFFFF;
@@ -584,7 +663,7 @@ int mdss_mdp_pipe_handoff(struct mdss_mdp_pipe *pipe)
 	pipe->dst.h = reg >> 16;
 	pipe->dst.w = reg & 0xFFFF;
 
-	
+	/* Assume that the source format is RGB */
 	reg = mdss_mdp_pipe_read(pipe, MDSS_MDP_REG_SSPP_SRC_FORMAT);
 	bpp = ((reg >> 9) & 0x3) + 1;
 	switch (bpp) {
@@ -692,6 +771,10 @@ static int mdss_mdp_image_setup(struct mdss_mdp_pipe *pipe,
 	ystride1 =  (pipe->src_planes.ystride[2]) |
 			(pipe->src_planes.ystride[3] << 16);
 
+	/*
+	 * Software overfetch is used when scalar pixel extension is
+	 * not enabled
+	 */
 	if (pipe->overfetch_disable) {
 		if (pipe->overfetch_disable & OVERFETCH_DISABLE_BOTTOM) {
 			height = pipe->src.h;
@@ -763,11 +846,11 @@ static int mdss_mdp_format_setup(struct mdss_mdp_pipe *pipe)
 		     (fmt->bits[C0_G_Y] << 0);
 
 	if (pipe->flags & MDP_ROT_90)
-		src_format |= BIT(11); 
+		src_format |= BIT(11); /* ROT90 */
 
 	if (fmt->alpha_enable &&
 			fmt->fetch_planes != MDSS_MDP_PLANE_INTERLEAVED)
-		src_format |= BIT(8); 
+		src_format |= BIT(8); /* SRCC3_EN */
 
 	unpack = (fmt->element[3] << 24) | (fmt->element[2] << 16) |
 			(fmt->element[1] << 8) | (fmt->element[0] << 0);
@@ -834,7 +917,7 @@ static int mdss_mdp_src_addr_setup(struct mdss_mdp_pipe *pipe,
 			&pipe->src_planes, pipe->src_fmt);
 	}
 
-	
+	/* planar format expects YCbCr, swap chroma planes if YCrCb */
 	if (mdata->mdp_rev < MDSS_MDP_HW_REV_102 &&
 			(pipe->src_fmt->fetch_planes == MDSS_MDP_PLANE_PLANAR)
 				&& (pipe->src_fmt->element[0] == C1_B_Cb))
@@ -905,6 +988,11 @@ int mdss_mdp_pipe_queue_data(struct mdss_mdp_pipe *pipe,
 
 	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON, false);
 	ctl = pipe->mixer->ctl;
+	/*
+	 * Reprogram the pipe when there is no dedicated wfd blk and
+	 * virtual mixer is allocated for the DMA pipe during concurrent
+	 * line and block mode operations
+	 */
 	params_changed = (pipe->params_changed) ||
 			 ((pipe->type == MDSS_MDP_PIPE_TYPE_DMA) &&
 			 (pipe->mixer->type == MDSS_MDP_MIXER_TYPE_WRITEBACK)

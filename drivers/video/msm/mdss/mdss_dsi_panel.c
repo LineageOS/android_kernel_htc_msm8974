@@ -103,7 +103,7 @@ static void mdss_dsi_panel_bklt_pwm(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 	ctrl->pwm_enabled = 1;
 }
 
-static char dcs_cmd[2] = {0x54, 0x00}; 
+static char dcs_cmd[2] = {0x54, 0x00}; /* DTYPE_DCS_READ */
 static struct dsi_cmd_desc dcs_read_cmd = {
 	{DTYPE_DCS_READ, 1, 0, 1, 5, sizeof(dcs_cmd)},
 	dcs_cmd
@@ -122,8 +122,11 @@ u32 mdss_dsi_panel_cmd_read(struct mdss_dsi_ctrl_pdata *ctrl, char cmd0,
 	cmdreq.flags = CMD_REQ_RX | CMD_REQ_COMMIT;
 	cmdreq.rlen = len;
 	cmdreq.rbuf = rbuf;
-	cmdreq.cb = fxn; 
+	cmdreq.cb = fxn; /* call back */
 	mdss_dsi_cmdlist_put(ctrl, &cmdreq);
+	/*
+	 * blocked here, until call back called
+	 */
 
 	return 0;
 }
@@ -177,7 +180,7 @@ static unsigned char linear_pwm(int val, int bl_max)
 	return bl_pwm;
 }
 
-static char led_pwm1[3] = {0x51, 0x0, 0x0};	
+static char led_pwm1[3] = {0x51, 0x0, 0x0}; /* DTYPE_DCS_LWRITE */
 static struct dsi_cmd_desc backlight_cmd = {
 	{DTYPE_DCS_LWRITE, 1, 0, 0, 1, sizeof(led_pwm1)},
 	led_pwm1
@@ -264,8 +267,8 @@ void mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 	}
 }
 
-static char caset[] = {0x2a, 0x00, 0x00, 0x03, 0x00};	
-static char paset[] = {0x2b, 0x00, 0x00, 0x05, 0x00};	
+static char caset[] = {0x2a, 0x00, 0x00, 0x03, 0x00};	/* DTYPE_DCS_LWRITE */
+static char paset[] = {0x2b, 0x00, 0x00, 0x05, 0x00};	/* DTYPE_DCS_LWRITE */
 
 static struct dsi_cmd_desc partial_update_enable_cmd[] = {
 	{{DTYPE_DCS_LWRITE, 1, 0, 0, 1, sizeof(caset)}, caset},
@@ -436,7 +439,7 @@ static int mdss_dsi_parse_dcs_cmds(struct device_node *np,
 
 	memcpy(buf, data, blen);
 
-	
+	/* scan dcs commands */
 	bp = buf;
 	len = blen;
 	cnt = 0;

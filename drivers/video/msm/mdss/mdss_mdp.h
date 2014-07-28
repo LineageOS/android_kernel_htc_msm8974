@@ -44,11 +44,12 @@
 #define MDP_MIN_VBP		4
 #define MAX_FREE_LIST_SIZE	12
 
-#define C3_ALPHA	3	
-#define C2_R_Cr		2	
-#define C1_B_Cb		1	
-#define C0_G_Y		0	
+#define C3_ALPHA	3	/* alpha */
+#define C2_R_Cr		2	/* R/Cr */
+#define C1_B_Cb		1	/* B/Cb */
+#define C0_G_Y		0	/* G/luma */
 
+/* wait for at most 2 vsync for lowest refresh rate (24hz) */
 #define KOFF_TIMEOUT msecs_to_jiffies(84)
 
 #define OVERFETCH_DISABLE_TOP		BIT(0)
@@ -237,11 +238,11 @@ struct mdss_mdp_format_params {
 	u8 chroma_sample;
 	u8 solid_fill;
 	u8 fetch_planes;
-	u8 unpack_align_msb;	
-	u8 unpack_tight;	
-	u8 unpack_count;	
+	u8 unpack_align_msb;	/* 0 to LSB, 1 to MSB */
+	u8 unpack_tight;	/* 0 for loose, 1 for tight */
+	u8 unpack_count;	/* 0 = 1 component, 1 = 2 component ... */
 	u8 bpp;
-	u8 alpha_enable;	
+	u8 alpha_enable;	/*  source has alpha */
 
 	u8 bits[MAX_PLANES];
 	u8 element[MAX_PLANES];
@@ -427,6 +428,12 @@ struct mdss_overlay_private {
 	int retire_cnt;
 };
 
+/**
+ * enum mdss_screen_state - Screen states that MDP can be forced into
+ *
+ * @MDSS_SCREEN_DEFAULT:	Do not force MDP into any screen state.
+ * @MDSS_SCREEN_FORCE_BLANK:	Force MDP to generate blank color fill screen.
+ */
 enum mdss_screen_state {
 	MDSS_SCREEN_DEFAULT,
 	MDSS_SCREEN_FORCE_BLANK,
@@ -651,4 +658,4 @@ int mdss_mdp_wb_get_secure(struct msm_fb_data_type *mfd, uint8_t *enable);
 				(mfd->mdp.private1))->wb)
 
 int  mdss_mdp_ctl_reset(struct mdss_mdp_ctl *ctl);
-#endif 
+#endif /* MDSS_MDP_H */

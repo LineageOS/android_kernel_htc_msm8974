@@ -56,4 +56,4 @@ struct mdp3_session_data {
 
 int mdp3_ctrl_init(struct msm_fb_data_type *mfd);
 
-#endif 
+#endif /* MDP3_CTRL_H */

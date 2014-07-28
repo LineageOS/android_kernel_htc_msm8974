@@ -166,4 +166,4 @@
 #define DSI_DSIPHY_BIST_CTRL4			0x049C
 #define DSI_DSIPHY_BIST_CTRL5			0x04A0
 
-#endif 
+#endif /* DSI_HOST_V2_H */
