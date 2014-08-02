@@ -475,7 +475,7 @@ static void allocate_co_memory(struct ion_platform_heap *heap,
 		if (shared_heap) {
 			struct ion_cp_heap_pdata *cp_data =
 			   (struct ion_cp_heap_pdata *) shared_heap->extra_data;
-			if (cp_data->fixed_position == FIXED_MIDDLE) {
+			if (cp_data->mem_is_fmem && cp_data->fixed_position == FIXED_MIDDLE) {
 				if (!cp_data->secure_base) {
 					cp_data->secure_base = heap->base;
 					cp_data->secure_size =
