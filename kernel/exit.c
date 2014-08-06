@@ -690,6 +690,7 @@ static void exit_mm(struct task_struct * tsk)
 	mm_released = mmput(mm);
 	if (mm_released)
 		set_tsk_thread_flag(tsk, TIF_MM_RELEASED);
+	clear_thread_flag(TIF_MEMDIE);
 }
 
 /*
