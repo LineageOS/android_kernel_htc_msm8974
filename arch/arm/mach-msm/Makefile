@@ -315,6 +315,7 @@ ifdef CONFIG_BT
 endif #CONFIG_BT
 obj-$(CONFIG_ARCH_MSM8226) += board-htc-8x26.o htc_acoustic_alsa.o
 obj-$(CONFIG_ARCH_MSM8226) += board-8226-audio.o
+obj-$(CONFIG_MACH_A5) += board-afe-audio-amp.o
 obj-$(CONFIG_ARCH_MSM8226) += board-8226.o board-8226-gpiomux.o
 obj-$(CONFIG_ARCH_MSM8226) += clock-local2.o clock-pll.o clock-8226.o clock-rpm.o clock-voter.o clock-mdss-8974.o
 obj-$(CONFIG_ARCH_MSM8226) += acpuclock-8226.o acpuclock-cortex.o
@@ -460,6 +461,8 @@ obj-$(CONFIG_ARCH_MSM8226) += htc_acoustic_alsa.o
 obj-$(CONFIG_MACH_M8) += board-m8-gpiomux.o board-m8-audio.o
 obj-$(CONFIG_MACH_M8_WHL) += board-m8-gpiomux.o board-m8-audio.o
 obj-$(CONFIG_MACH_M8_WL) += board-m8-gpiomux.o board-m8-audio.o
+
+obj-$(CONFIG_MACH_A5) += board-a5-gpiomux.o
 
 obj-$(CONFIG_HTC_HEADSET_PMIC) += htc_headset_pmic.o
 obj-$(CONFIG_HTC_HEADSET_GPIO) += htc_headset_gpio.o
