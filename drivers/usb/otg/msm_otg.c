@@ -4061,11 +4061,24 @@ static ssize_t dpdm_pulldown_enable_store(struct device *dev,
 static DEVICE_ATTR(dpdm_pulldown_enable, S_IRUGO | S_IWUSR,
 		dpdm_pulldown_enable_show, dpdm_pulldown_enable_store);
 
+#if defined(CONFIG_MACH_A5)
+static int usb_phy_setting_A5[9] = {
+	0x44,0x80,
+	0x3c,0x81,
+	0x3d,0x82,
+	0x13,0x83,
+	0xffffffff
+};
+#endif
+
 int *htc_msm_otg_get_phy_init(int *phy_init)
 {
 	__maybe_unused char *mid;
 	__maybe_unused int i;
 	printk("[USB] use dt phy init\n");
+#if defined(CONFIG_MACH_A5)
+	return usb_phy_setting_A5;
+#endif
 	return phy_init;
 }
 

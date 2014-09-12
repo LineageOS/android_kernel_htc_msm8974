@@ -179,6 +179,7 @@ struct qpnp_bms_chip {
 	bool				done_charging;
 	bool				last_soc_invalid;
 	
+	int				enable_sw_ocv_in_eoc;
 	int				store_batt_data_soc_thre;
 	int 				batt_stored_magic_num;
 	int 				batt_stored_soc;
@@ -395,6 +396,7 @@ static int ocv_update_stop_active_mask = OCV_UPDATE_STOP_BIT_CABLE_IN |
 											OCV_UPDATE_STOP_BIT_BOOT_UP;
 static int ocv_update_stop_reason;
 static int is_ocv_update_start = 0;
+static int is_do_sw_ocv_in_eoc = 0;
 struct mutex ocv_update_lock;
 static int batt_level = 0;
 
@@ -1670,7 +1672,7 @@ static int pm8941_bms_estimate_ocv(void)
 	}
 
 	
-	if (ibatt_ua > 60000) {
+	if (ibatt_ua > 60000 && !is_do_sw_ocv_in_eoc) {
 		pr_debug("[EST]ibatt_ua=%d uA exceed 60mA, "
 			       "no_hw_ocv_ms=%lu, return!\n", ibatt_ua,
 				htc_batt_bms_timer.no_ocv_update_period_ms);
@@ -1713,6 +1715,7 @@ static int pm8941_bms_estimate_ocv(void)
 
 	
 	if (estimated_ocv_uv > 0) {
+		is_do_sw_ocv_in_eoc = 0;
 		
 		store_emmc.store_ocv_uv = the_chip->last_ocv_uv = estimated_ocv_uv;
 		the_chip->cc_backup_uah = bms_dbg.ori_cc_uah = calculate_cc(the_chip, raw.cc, CC, NORESET);
@@ -4637,6 +4640,7 @@ static inline int bms_read_properties(struct qpnp_bms_chip *chip)
 	SPMI_PROP_READ(batt_stored_soc, "stored-batt-soc", rc, true);
 	SPMI_PROP_READ(batt_stored_update_time, "stored-batt-update-time", rc, true);
 	SPMI_PROP_READ(store_batt_data_soc_thre, "store-batt-data-soc-thre", rc, true);
+	SPMI_PROP_READ(enable_sw_ocv_in_eoc, "enable-sw-ocv-in-eoc", rc, true);
 	SPMI_PROP_READ(enable_batt_full_fake_ocv, "enable-batt-full-fake-ocv", rc, true);
 
 	chip->use_external_rsense = of_property_read_bool(
@@ -5309,6 +5313,30 @@ error_setup:
 error_resource:
 error_read:
 	return rc;
+}
+
+int pm8941_check_soc_for_sw_ocv(void)
+{
+	int is_full_eoc = 0;
+
+	if (!the_chip) {
+		pr_warn("called before init\n");
+		return -EINVAL;
+	}
+
+	if (!the_chip->enable_sw_ocv_in_eoc)
+		return 0;
+
+	pm8941_is_batt_full_eoc_stop(&is_full_eoc);
+	if (is_full_eoc) {
+		pr_info("is_full_eoc=%d, store_soc_ui=%d, raw_soc=%d\n",
+					is_full_eoc, store_soc_ui, bms_dbg.raw_soc);
+		if (abs(store_soc_ui - bms_dbg.raw_soc) >= 5) {
+			is_do_sw_ocv_in_eoc = 1;
+			pm8941_bms_estimate_ocv();
+		}
+	}
+	return 0;
 }
 
 static int qpnp_bms_remove(struct spmi_device *spmi)
