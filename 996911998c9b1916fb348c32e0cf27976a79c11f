@@ -1,0 +1,123 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "7a1b2928_c3822700",
+        "filename": "arch/arm/mach-msm/cpr-regulator.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 213,
+      "author": {
+        "id": 3671
+      },
+      "writtenOn": "2014-09-18T04:10:08Z",
+      "side": 1,
+      "message": "eww",
+      "revId": "996911998c9b1916fb348c32e0cf27976a79c11f",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_a3872b0e",
+        "filename": "arch/arm/mach-msm/cpr-regulator.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 1880,
+      "author": {
+        "id": 3671
+      },
+      "writtenOn": "2014-09-18T04:10:08Z",
+      "side": 1,
+      "message": "more eww",
+      "revId": "996911998c9b1916fb348c32e0cf27976a79c11f",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_037d3f1c",
+        "filename": "arch/arm/mach-msm/cpr-regulator.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 1890,
+      "author": {
+        "id": 3671
+      },
+      "writtenOn": "2014-09-18T04:10:08Z",
+      "side": 1,
+      "message": "mmhmm",
+      "revId": "996911998c9b1916fb348c32e0cf27976a79c11f",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_e3792331",
+        "filename": "arch/arm/mach-msm/cpr-regulator.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 1900,
+      "author": {
+        "id": 3671
+      },
+      "writtenOn": "2014-09-18T04:10:08Z",
+      "side": 1,
+      "message": "somewhere there is an intervigil is crying in the corner",
+      "revId": "996911998c9b1916fb348c32e0cf27976a79c11f",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_c3998770",
+        "filename": "arch/arm/mach-msm/msm_watchdog.h",
+        "patchSetId": 2
+      },
+      "lineNbr": 84,
+      "author": {
+        "id": 3671
+      },
+      "writtenOn": "2014-09-18T04:10:08Z",
+      "side": 1,
+      "message": "should probably wrap a CONFIG_ARCH_MSM8226 ifdef around this as its wrapped in one in restart.c",
+      "revId": "996911998c9b1916fb348c32e0cf27976a79c11f",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_6394f336",
+        "filename": "arch/arm/mach-msm/msm_watchdog_v2.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 146,
+      "author": {
+        "id": 3671
+      },
+      "writtenOn": "2014-09-18T04:10:08Z",
+      "side": 1,
+      "message": "should probably wrap a CONFIG_ARCH_MSM8226 ifdef around this as its wrapped in one in restart.c",
+      "revId": "996911998c9b1916fb348c32e0cf27976a79c11f",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_2374bb33",
+        "filename": "arch/arm/mach-msm/msm_watchdog_v2.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 479,
+      "author": {
+        "id": 3671
+      },
+      "writtenOn": "2014-09-18T04:10:08Z",
+      "side": 1,
+      "message": "^",
+      "revId": "996911998c9b1916fb348c32e0cf27976a79c11f",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
