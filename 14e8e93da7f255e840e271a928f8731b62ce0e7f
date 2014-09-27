@@ -1,0 +1,174 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "7a1b2928_b830f1e9",
+        "filename": "arch/arm/boot/compressed/head.S",
+        "patchSetId": 2
+      },
+      "lineNbr": 14,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-09-27T10:54:45Z",
+      "side": 1,
+      "message": "leading whitespace",
+      "revId": "14e8e93da7f255e840e271a928f8731b62ce0e7f",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_184e456f",
+        "filename": "arch/arm/configs/cm_m8_defconfig",
+        "patchSetId": 2
+      },
+      "lineNbr": 1273,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-09-27T10:54:45Z",
+      "side": 1,
+      "message": "Is this connected to KEXEC?",
+      "revId": "14e8e93da7f255e840e271a928f8731b62ce0e7f",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_f850a90c",
+        "filename": "arch/arm/include/asm/kexec.h",
+        "patchSetId": 2
+      },
+      "lineNbr": 18,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-09-27T10:54:45Z",
+      "side": 1,
+      "message": "leading whitespace",
+      "revId": "14e8e93da7f255e840e271a928f8731b62ce0e7f",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_385b4130",
+        "filename": "arch/arm/kernel/machine_kexec.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 38,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-09-27T10:54:45Z",
+      "side": 1,
+      "message": "How come this function is filled out but not under the KEXEC_HARDBOOT ifdef? It looks like you either want to remove the non-KEXEC_HARDBOOT code, or figure out why the other code is there.",
+      "revId": "14e8e93da7f255e840e271a928f8731b62ce0e7f",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_9842553d",
+        "filename": "arch/arm/kernel/machine_kexec.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 154,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-09-27T10:54:45Z",
+      "side": 1,
+      "message": "Same as above.",
+      "revId": "14e8e93da7f255e840e271a928f8731b62ce0e7f",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_d84ccd72",
+        "filename": "arch/arm/mach-msm/board-htc-8974.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 806,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-09-27T10:54:45Z",
+      "side": 1,
+      "message": "if (!ret)",
+      "revId": "14e8e93da7f255e840e271a928f8731b62ce0e7f",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_783db9ba",
+        "filename": "arch/arm/mach-msm/board-htc-8974.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 810,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-09-27T10:54:45Z",
+      "side": 1,
+      "message": "Trailing whitespace",
+      "revId": "14e8e93da7f255e840e271a928f8731b62ce0e7f",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_b847514a",
+        "filename": "arch/arm/mach-msm/include/mach/memory.h",
+        "patchSetId": 2
+      },
+      "lineNbr": 25,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-09-27T10:54:45Z",
+      "side": 1,
+      "message": "Useless line",
+      "revId": "14e8e93da7f255e840e271a928f8731b62ce0e7f",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_1875a597",
+        "filename": "arch/arm/mach-msm/include/mach/memory.h",
+        "patchSetId": 2
+      },
+      "lineNbr": 28,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-09-27T10:54:45Z",
+      "side": 1,
+      "message": "Doesn\u0027t this cause a compile failure if CONFIG_KEXEC_HARDBOOT isn\u0027t set?",
+      "revId": "14e8e93da7f255e840e271a928f8731b62ce0e7f",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_f877099d",
+        "filename": "arch/arm/mach-msm/restart.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 528,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-09-27T10:54:45Z",
+      "side": 1,
+      "message": "Useless code block.",
+      "revId": "14e8e93da7f255e840e271a928f8731b62ce0e7f",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
