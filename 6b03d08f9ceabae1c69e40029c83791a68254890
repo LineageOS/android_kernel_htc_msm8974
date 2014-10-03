@@ -1,0 +1,123 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "7a1b2928_f4042dc1",
+        "filename": "arch/arm/Kconfig",
+        "patchSetId": 5
+      },
+      "lineNbr": 217,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-10-03T09:56:57Z",
+      "side": 1,
+      "message": "Does this go with this commit?",
+      "revId": "6b03d08f9ceabae1c69e40029c83791a68254890",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_d4ff71a8",
+        "filename": "arch/arm/boot/dts/msm8226-camera-sensor-evm.dtsi",
+        "patchSetId": 5
+      },
+      "lineNbr": 88,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-10-03T09:56:57Z",
+      "side": 1,
+      "message": "Tabs, not spaces.",
+      "revId": "6b03d08f9ceabae1c69e40029c83791a68254890",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_342d0547",
+        "filename": "arch/arm/boot/dts/msm8926-ax-soc-mem.dtsi",
+        "patchSetId": 5
+      },
+      "lineNbr": 1,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-10-03T09:56:57Z",
+      "side": 1,
+      "message": "Indentation for this file is off too.",
+      "revId": "6b03d08f9ceabae1c69e40029c83791a68254890",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_1430c99d",
+        "filename": "arch/arm/mach-msm/board-htc-8x26.c",
+        "patchSetId": 5
+      },
+      "lineNbr": 72,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-10-03T09:56:57Z",
+      "side": 1,
+      "message": "Trailing whitespace.",
+      "revId": "6b03d08f9ceabae1c69e40029c83791a68254890",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_74277d64",
+        "filename": "arch/arm/mach-msm/board-htc-8x26.c",
+        "patchSetId": 5
+      },
+      "lineNbr": 396,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-10-03T09:56:57Z",
+      "side": 1,
+      "message": "Dead code, not used, or not yet ready?",
+      "revId": "6b03d08f9ceabae1c69e40029c83791a68254890",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_542a412d",
+        "filename": "arch/arm/mach-msm/board-htc-8x26.c",
+        "patchSetId": 5
+      },
+      "lineNbr": 606,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-10-03T09:56:57Z",
+      "side": 1,
+      "message": "Is this ifdef correct?",
+      "revId": "6b03d08f9ceabae1c69e40029c83791a68254890",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_b4211550",
+        "filename": "arch/arm/mach-msm/msm_iomap-8226.h",
+        "patchSetId": 5
+      },
+      "lineNbr": 18,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-10-03T09:56:57Z",
+      "side": 1,
+      "message": "This file didn\u0027t exist already? Careful with the memory map, HTC sometimes likes to add extra stuff here, esp for footprint debugging.",
+      "revId": "6b03d08f9ceabae1c69e40029c83791a68254890",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
