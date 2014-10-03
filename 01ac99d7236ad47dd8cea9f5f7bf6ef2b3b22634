@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "7a1b2928_34d4e51e",
+        "filename": "drivers/i2c/chips/cm3629.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 2369,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-10-03T09:58:54Z",
+      "side": 1,
+      "message": "This change doesn\u0027t do anything for us, it just adds a sysfs node.",
+      "revId": "01ac99d7236ad47dd8cea9f5f7bf6ef2b3b22634",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
