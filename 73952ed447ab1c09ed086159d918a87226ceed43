@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "7a1b2928_f4bf0df9",
+        "filename": "drivers/usb/otg/msm_otg.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 4120,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-10-03T09:41:59Z",
+      "side": 1,
+      "message": "This may be for a preproduction model.",
+      "revId": "73952ed447ab1c09ed086159d918a87226ceed43",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
