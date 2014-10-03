@@ -1,0 +1,157 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "7a1b2928_946e9994",
+        "filename": "arch/arm/boot/dts/msm8226-camera-sensor-A5.dtsi",
+        "patchSetId": 4
+      },
+      "lineNbr": 78,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-10-03T09:51:51Z",
+      "side": 1,
+      "message": "weird comment in device tree",
+      "revId": "9a9b4bf993d16223796a8047148881801c9338bc",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_b473d57f",
+        "filename": "arch/arm/boot/dts/msm8226-camera-sensor-A5.dtsi",
+        "patchSetId": 4
+      },
+      "lineNbr": 126,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-10-03T09:51:51Z",
+      "side": 1,
+      "message": "weird comment in device tree",
+      "revId": "9a9b4bf993d16223796a8047148881801c9338bc",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_f46d4d99",
+        "filename": "arch/arm/boot/dts/msm8926-a5dwg.dts",
+        "patchSetId": 4
+      },
+      "lineNbr": 174,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-10-03T09:51:51Z",
+      "side": 1,
+      "message": "weird comment here too",
+      "revId": "9a9b4bf993d16223796a8047148881801c9338bc",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_d468118a",
+        "filename": "arch/arm/boot/dts/msm8926-a5ul.dts",
+        "patchSetId": 4
+      },
+      "lineNbr": 137,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-10-03T09:51:51Z",
+      "side": 1,
+      "message": "weird comments",
+      "revId": "9a9b4bf993d16223796a8047148881801c9338bc",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_3406a5ce",
+        "filename": "arch/arm/boot/dts/msm8926-ax-soc-common.dtsi",
+        "patchSetId": 4
+      },
+      "lineNbr": 1,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-10-03T09:51:51Z",
+      "side": 1,
+      "message": "Indentation in this file has one more tab than it needs to have.",
+      "revId": "9a9b4bf993d16223796a8047148881801c9338bc",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_1409e9dd",
+        "filename": "arch/arm/mach-msm/Kconfig",
+        "patchSetId": 4
+      },
+      "lineNbr": 3210,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-10-03T09:51:51Z",
+      "side": 1,
+      "message": "This is going to cause a merge conflict with MEMUL",
+      "revId": "9a9b4bf993d16223796a8047148881801c9338bc",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_74101d02",
+        "filename": "arch/arm/mach-msm/board-a5-gpiomux.c",
+        "patchSetId": 4
+      },
+      "lineNbr": 37,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-10-03T09:51:51Z",
+      "side": 1,
+      "message": "Trailing whitespace.",
+      "revId": "9a9b4bf993d16223796a8047148881801c9338bc",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_5413610d",
+        "filename": "arch/arm/mach-msm/board-a5-gpiomux.c",
+        "patchSetId": 4
+      },
+      "lineNbr": 77,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-10-03T09:51:51Z",
+      "side": 1,
+      "message": "Dead code.",
+      "revId": "9a9b4bf993d16223796a8047148881801c9338bc",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_b4fab5bb",
+        "filename": "arch/arm/mach-msm/display/htc_a5-panel.c",
+        "patchSetId": 4
+      },
+      "lineNbr": 15,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-10-03T09:51:51Z",
+      "side": 1,
+      "message": "Trailing whitespace.",
+      "revId": "9a9b4bf993d16223796a8047148881801c9338bc",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
