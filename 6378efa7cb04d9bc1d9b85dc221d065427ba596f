@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "7a1b2928_54e1a1fd",
+        "filename": "drivers/power/qpnp-charger.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 6706,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-10-03T10:01:28Z",
+      "side": 1,
+      "message": "Whitespace.",
+      "revId": "6378efa7cb04d9bc1d9b85dc221d065427ba596f",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_74de5d40",
+        "filename": "drivers/power/qpnp-charger.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 7162,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-10-03T10:01:28Z",
+      "side": 1,
+      "message": "This stuff can remain debug.",
+      "revId": "6378efa7cb04d9bc1d9b85dc221d065427ba596f",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
