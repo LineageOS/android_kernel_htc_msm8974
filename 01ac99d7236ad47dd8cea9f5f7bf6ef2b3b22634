@@ -16,6 +16,24 @@
       "revId": "01ac99d7236ad47dd8cea9f5f7bf6ef2b3b22634",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
       "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_54ba416f",
+        "filename": "drivers/i2c/chips/cm3629.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 2369,
+      "author": {
+        "id": 8657
+      },
+      "writtenOn": "2014-10-03T20:28:20Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "7a1b2928_34d4e51e",
+      "revId": "01ac99d7236ad47dd8cea9f5f7bf6ef2b3b22634",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
     }
   ]
 }
