@@ -16,6 +16,24 @@
       "revId": "73952ed447ab1c09ed086159d918a87226ceed43",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
       "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_1499e91f",
+        "filename": "drivers/usb/otg/msm_otg.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 4120,
+      "author": {
+        "id": 8657
+      },
+      "writtenOn": "2014-10-03T20:19:12Z",
+      "side": 1,
+      "message": "Deleted.",
+      "parentUuid": "7a1b2928_f4bf0df9",
+      "revId": "73952ed447ab1c09ed086159d918a87226ceed43",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
     }
   ]
 }
