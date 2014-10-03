@@ -19,6 +19,24 @@
     },
     {
       "key": {
+        "uuid": "7a1b2928_74e93d80",
+        "filename": "arch/arm/boot/dts/batterydata-mem-id1.dtsi",
+        "patchSetId": 2
+      },
+      "lineNbr": 1,
+      "author": {
+        "id": 8657
+      },
+      "writtenOn": "2014-10-03T20:18:17Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "7a1b2928_9447b91c",
+      "revId": "721c9b1f68d5c68c4dd10e1e2cc152a022d37c6d",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "7a1b2928_f456edd0",
         "filename": "arch/arm/boot/dts/batterydata-mem-id1.dtsi",
         "patchSetId": 2
@@ -30,6 +48,24 @@
       "writtenOn": "2014-10-03T09:48:06Z",
       "side": 1,
       "message": "This file appears to be missing a closing brace...?",
+      "revId": "721c9b1f68d5c68c4dd10e1e2cc152a022d37c6d",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_54ec018f",
+        "filename": "arch/arm/boot/dts/batterydata-mem-id1.dtsi",
+        "patchSetId": 2
+      },
+      "lineNbr": 88,
+      "author": {
+        "id": 8657
+      },
+      "writtenOn": "2014-10-03T20:18:17Z",
+      "side": 1,
+      "message": "Nah, just stupid formating. % is your friend :)",
+      "parentUuid": "7a1b2928_f456edd0",
       "revId": "721c9b1f68d5c68c4dd10e1e2cc152a022d37c6d",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
       "unresolved": false
@@ -53,6 +89,24 @@
     },
     {
       "key": {
+        "uuid": "7a1b2928_b403d541",
+        "filename": "arch/arm/boot/dts/batterydata-mem-unknown-id.dtsi",
+        "patchSetId": 2
+      },
+      "lineNbr": 1,
+      "author": {
+        "id": 8657
+      },
+      "writtenOn": "2014-10-03T20:18:17Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "7a1b2928_d45131da",
+      "revId": "721c9b1f68d5c68c4dd10e1e2cc152a022d37c6d",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "7a1b2928_345fc5e6",
         "filename": "arch/arm/mach-msm/board-mem-gpiomux.c",
         "patchSetId": 2
@@ -64,6 +118,24 @@
       "writtenOn": "2014-10-03T09:48:06Z",
       "side": 1,
       "message": "Trailing whitespace, and throughout the rest of the file.",
+      "revId": "721c9b1f68d5c68c4dd10e1e2cc152a022d37c6d",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_94fe9936",
+        "filename": "arch/arm/mach-msm/board-mem-gpiomux.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 37,
+      "author": {
+        "id": 8657
+      },
+      "writtenOn": "2014-10-03T20:18:17Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "7a1b2928_345fc5e6",
       "revId": "721c9b1f68d5c68c4dd10e1e2cc152a022d37c6d",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
       "unresolved": false
@@ -87,6 +159,24 @@
     },
     {
       "key": {
+        "uuid": "7a1b2928_f4fd4d3b",
+        "filename": "arch/arm/mach-msm/board-mem-gpiomux.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 769,
+      "author": {
+        "id": 8657
+      },
+      "writtenOn": "2014-10-03T20:18:17Z",
+      "side": 1,
+      "message": "Deleted.",
+      "parentUuid": "7a1b2928_146289ad",
+      "revId": "721c9b1f68d5c68c4dd10e1e2cc152a022d37c6d",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "7a1b2928_74593dfe",
         "filename": "arch/arm/mach-msm/display/htc_mem-panel.c",
         "patchSetId": 2
@@ -98,6 +188,24 @@
       "writtenOn": "2014-10-03T09:48:06Z",
       "side": 1,
       "message": "Trailing whitespace.",
+      "revId": "721c9b1f68d5c68c4dd10e1e2cc152a022d37c6d",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_d4f8114c",
+        "filename": "arch/arm/mach-msm/display/htc_mem-panel.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 16,
+      "author": {
+        "id": 8657
+      },
+      "writtenOn": "2014-10-03T20:18:17Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "7a1b2928_74593dfe",
       "revId": "721c9b1f68d5c68c4dd10e1e2cc152a022d37c6d",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
       "unresolved": false
