@@ -1,0 +1,106 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "7a1b2928_9447b91c",
+        "filename": "arch/arm/boot/dts/batterydata-mem-id1.dtsi",
+        "patchSetId": 2
+      },
+      "lineNbr": 1,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-10-03T09:48:06Z",
+      "side": 1,
+      "message": "This line shouldn\u0027t be indented.",
+      "revId": "721c9b1f68d5c68c4dd10e1e2cc152a022d37c6d",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_f456edd0",
+        "filename": "arch/arm/boot/dts/batterydata-mem-id1.dtsi",
+        "patchSetId": 2
+      },
+      "lineNbr": 88,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-10-03T09:48:06Z",
+      "side": 1,
+      "message": "This file appears to be missing a closing brace...?",
+      "revId": "721c9b1f68d5c68c4dd10e1e2cc152a022d37c6d",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_d45131da",
+        "filename": "arch/arm/boot/dts/batterydata-mem-unknown-id.dtsi",
+        "patchSetId": 2
+      },
+      "lineNbr": 1,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-10-03T09:48:06Z",
+      "side": 1,
+      "message": "Same comments as previous file",
+      "revId": "721c9b1f68d5c68c4dd10e1e2cc152a022d37c6d",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_345fc5e6",
+        "filename": "arch/arm/mach-msm/board-mem-gpiomux.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 37,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-10-03T09:48:06Z",
+      "side": 1,
+      "message": "Trailing whitespace, and throughout the rest of the file.",
+      "revId": "721c9b1f68d5c68c4dd10e1e2cc152a022d37c6d",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_146289ad",
+        "filename": "arch/arm/mach-msm/board-mem-gpiomux.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 769,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-10-03T09:48:06Z",
+      "side": 1,
+      "message": "Dead code.",
+      "revId": "721c9b1f68d5c68c4dd10e1e2cc152a022d37c6d",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7a1b2928_74593dfe",
+        "filename": "arch/arm/mach-msm/display/htc_mem-panel.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 16,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-10-03T09:48:06Z",
+      "side": 1,
+      "message": "Trailing whitespace.",
+      "revId": "721c9b1f68d5c68c4dd10e1e2cc152a022d37c6d",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
