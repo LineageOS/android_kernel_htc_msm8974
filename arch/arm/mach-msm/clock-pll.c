@@ -57,7 +57,7 @@ static DEFINE_SPINLOCK(pll_reg_lock);
 #define ENABLE_WAIT_MAX_LOOPS 200
 #define PLL_LOCKED_BIT BIT(16)
 
-#ifdef CONFIG_ARCH_MSM8226
+#ifdef CONFIG_ARCH_DUMMY
 int pming = 0;
 #endif
 
@@ -334,7 +334,7 @@ static int local_pll_clk_set_rate(struct clk *c, unsigned long rate)
 		BUG_ON(1);
 	}
 
-#ifdef CONFIG_ARCH_MSM8226
+#ifdef CONFIG_ARCH_DUMMY
 	
 	if (!strcmp(c->dbg_name, "a7sspll") && pming)
 		pr_info("[PP2] %s: Prevent from performing a7sspll clock disable, pll count = %d\n", __func__, c->count);
@@ -351,7 +351,7 @@ static int local_pll_clk_set_rate(struct clk *c, unsigned long rate)
 
 	__pll_config_reg(PLL_CONFIG_REG(pll), nf, &pll->masks);
 
-#ifdef CONFIG_ARCH_MSM8226
+#ifdef CONFIG_ARCH_DUMMY
 	
 	if (!strcmp(c->dbg_name, "a7sspll") && pming)
 		pr_info("[PP2] %s: Prevent from performing a7sspll enable, pll count = %d\n", __func__, c->count);
