@@ -13,11 +13,11 @@
 #define PANEL_ID_A5_JDI_NT35521_C3      1
 
 struct dsi_power_data {
-	uint32_t sysrev;
-	struct regulator *vddio;
-	struct regulator *vdda;
-	struct regulator *vdd;
-	struct regulator *vddpll;
+	uint32_t sysrev;         
+	struct regulator *vddio; 
+	struct regulator *vdda;  
+	struct regulator *vdd;  
+	struct regulator *vddpll; 
 	int lcmio;
 	int lcmp5v;
 	int lcmn5v;
@@ -31,11 +31,11 @@ extern struct module __this_module;
 #define THIS_MODULE ((struct module *)0)
 #endif
 
-static struct i2c_adapter *i2c_bus_adapter = NULL;
+static struct i2c_adapter	*i2c_bus_adapter = NULL;
 
 struct i2c_dev_info {
-	uint8_t dev_addr;
-	struct i2c_client *client;
+	uint8_t				dev_addr;
+	struct i2c_client	*client;
 };
 
 #define I2C_DEV_INFO(addr) \
@@ -46,10 +46,11 @@ static struct i2c_dev_info device_addresses[] = {
 };
 
 static inline int platform_write_i2c_block(struct i2c_adapter *i2c_bus
-						, u8 page
-						, u8 offset
-						, u16 count
-						, u8 *values)
+								, u8 page
+								, u8 offset
+								, u16 count
+								, u8 *values
+								)
 {
 	struct i2c_msg msg;
 	u8 *buffer;
@@ -90,6 +91,7 @@ static int tps_65132_add_i2c(struct i2c_client *client)
 	struct i2c_adapter *adapter = client->adapter;
 	int idx;
 
+	
 	i2c_bus_adapter = adapter;
 	if (i2c_bus_adapter == NULL) {
 		PR_DISP_ERR("%s() failed to get i2c adapter\n", __func__);
@@ -101,7 +103,7 @@ static int tps_65132_add_i2c(struct i2c_client *client)
 			device_addresses[idx].client = client;
 		else {
 			device_addresses[idx].client = i2c_new_dummy(i2c_bus_adapter,
-									device_addresses[idx].dev_addr);
+											device_addresses[idx].dev_addr);
 			if (device_addresses[idx].client == NULL){
 				return ENODEV;
 			}
@@ -111,8 +113,9 @@ static int tps_65132_add_i2c(struct i2c_client *client)
 	return 0;
 }
 
+
 static int __devinit tps_65132_tx_i2c_probe(struct i2c_client *client,
-						const struct i2c_device_id *id)
+					      const struct i2c_device_id *id)
 {
 	struct i2c_adapter *adapter = to_i2c_adapter(client->dev.parent);
 	int ret;
@@ -121,6 +124,7 @@ static int __devinit tps_65132_tx_i2c_probe(struct i2c_client *client,
 		PR_DISP_ERR("%s: Failed to i2c_check_functionality \n", __func__);
 		return -EIO;
 	}
+
 
 	if (!client->dev.of_node) {
 		PR_DISP_ERR("%s: client->dev.of_node = NULL\n", __func__);
@@ -136,6 +140,7 @@ static int __devinit tps_65132_tx_i2c_probe(struct i2c_client *client,
 
 	return 0;
 }
+
 
 static const struct i2c_device_id tps_65132_tx_id[] = {
 	{"tps65132", 0}
@@ -250,16 +255,17 @@ static int htc_mem_regulator_init(struct platform_device *pdev)
 
 static int htc_mem_regulator_deinit(struct platform_device *pdev)
 {
+	
 	return 0;
 }
 
-void htc_mem_panel_reset(struct mdss_panel_data *pdata, int enable)
+int htc_mem_panel_reset(struct mdss_panel_data *pdata, int enable)
 {
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
 
 	if (pdata == NULL) {
 		PR_DISP_ERR("%s: Invalid input data\n", __func__);
-		return;
+		return -EINVAL;
 	}
 
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
@@ -269,7 +275,7 @@ void htc_mem_panel_reset(struct mdss_panel_data *pdata, int enable)
 	if (!gpio_is_valid(ctrl_pdata->rst_gpio)) {
 		PR_DISP_DEBUG("%s:%d, reset line not configured\n",
 			   __func__, __LINE__);
-		return;
+		return -EINVAL;
 	}
 
 	PR_DISP_DEBUG("%s: enable = %d\n", __func__, enable);
@@ -277,7 +283,7 @@ void htc_mem_panel_reset(struct mdss_panel_data *pdata, int enable)
 	if (enable) {
 		if (pdata->panel_info.first_power_on == 1) {
 			PR_DISP_INFO("reset already on in first time\n");
-			return;
+			return 0;
 		}
 		if (pdata->panel_info.panel_id == PANEL_ID_KIWI_SHARP_HX) {
 			gpio_set_value((ctrl_pdata->rst_gpio), 1);
@@ -306,6 +312,7 @@ void htc_mem_panel_reset(struct mdss_panel_data *pdata, int enable)
 		gpio_set_value((ctrl_pdata->rst_gpio), 0);
 	}
 
+	return 0;
 }
 
 static int htc_mem_panel_power_on(struct mdss_panel_data *pdata, int enable)
@@ -314,7 +321,7 @@ static int htc_mem_panel_power_on(struct mdss_panel_data *pdata, int enable)
 
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
 	struct dsi_power_data *pwrdata = NULL;
-	u8 avdd_level = 0x0F;
+	u8 avdd_level = 0x0F; 
 
 	PR_DISP_INFO("%s: en=%d\n", __func__, enable);
 	if (pdata == NULL) {
@@ -361,6 +368,7 @@ static int htc_mem_panel_power_on(struct mdss_panel_data *pdata, int enable)
 				return ret;
 			}
 
+			
 			ret = regulator_enable(pwrdata->vddio);
 			if (ret) {
 				PR_DISP_ERR("%s: Failed to enable regulator.\n",
@@ -369,6 +377,7 @@ static int htc_mem_panel_power_on(struct mdss_panel_data *pdata, int enable)
 			}
 
 			usleep_range(1000,2000);
+			
 			ret = regulator_enable(pwrdata->vdd);
 			if (ret) {
 				PR_DISP_ERR("%s: Failed to enable regulator.\n",
@@ -378,6 +387,7 @@ static int htc_mem_panel_power_on(struct mdss_panel_data *pdata, int enable)
 
 			usleep_range(12000,13000);
 
+			
 			ret = regulator_enable(pwrdata->vddpll);
 			if (ret) {
 				PR_DISP_ERR("%s: Failed to enable regulator.\n",
@@ -385,6 +395,7 @@ static int htc_mem_panel_power_on(struct mdss_panel_data *pdata, int enable)
 				return ret;
 			}
 
+			
 			ret = regulator_enable(pwrdata->vdda);
 			if (ret) {
 				PR_DISP_ERR("%s: Failed to enable regulator.\n",
@@ -415,6 +426,7 @@ static int htc_mem_panel_power_on(struct mdss_panel_data *pdata, int enable)
 				return ret;
 			}
 
+			
 			ret = regulator_enable(pwrdata->vddio);
 			if (ret) {
 				PR_DISP_ERR("%s: Failed to enable regulator.\n",
@@ -429,8 +441,10 @@ static int htc_mem_panel_power_on(struct mdss_panel_data *pdata, int enable)
 			usleep_range(4000,4100);
 			gpio_set_value(pwrdata->lcmn5v, 1);
 
+
 			usleep_range(12000,13000);
 
+			
 			ret = regulator_enable(pwrdata->vddpll);
 			if (ret) {
 				PR_DISP_ERR("%s: Failed to enable regulator.\n",
@@ -438,6 +452,7 @@ static int htc_mem_panel_power_on(struct mdss_panel_data *pdata, int enable)
 				return ret;
 			}
 
+			
 			ret = regulator_enable(pwrdata->vdda);
 			if (ret) {
 				PR_DISP_ERR("%s: Failed to enable regulator.\n",
