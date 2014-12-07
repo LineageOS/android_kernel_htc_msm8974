@@ -47,6 +47,7 @@
 #endif
 
 #if 0
+/* this is more aggressive but may cause other problems? */
 #define ZCACHE_GFP_MASK	(GFP_ATOMIC | __GFP_NORETRY | __GFP_NOWARN)
 #else
 #define ZCACHE_GFP_MASK \
@@ -92,6 +93,7 @@ static inline bool is_local_client(struct zcache_client *cli)
 	return cli == &zcache_host;
 }
 
+/* crypto API for zcache  */
 #define ZCACHE_COMP_NAME_SZ CRYPTO_MAX_ALG_NAME
 static char zcache_comp_name[ZCACHE_COMP_NAME_SZ];
 static struct crypto_comp * __percpu *zcache_comp_pcpu_tfms;
@@ -152,7 +154,7 @@ struct zbud_hdr {
 	uint16_t pool_id;
 	struct tmem_oid oid;
 	uint32_t index;
-	uint16_t size; 
+	uint16_t size; /* compressed size in bytes, zero means unused */
 	DECL_SENTINEL
 };
 
@@ -161,7 +163,7 @@ struct zbud_page {
 	spinlock_t lock;
 	struct zbud_hdr buddy[ZBUD_MAX_BUDS];
 	DECL_SENTINEL
-	
+	/* followed by NUM_CHUNK aligned CHUNK_SIZE-byte chunks */
 };
 
 #define CHUNK_SHIFT	6
@@ -175,16 +177,20 @@ static struct {
 	struct list_head list;
 	unsigned count;
 } zbud_unbuddied[NCHUNKS];
+/* list N contains pages with N chunks USED and NCHUNKS-N unused */
+/* element 0 is never used but optimizing that isn't worth it */
 static unsigned long zbud_cumul_chunk_counts[NCHUNKS];
 
 struct list_head zbud_buddied_list;
 static unsigned long zcache_zbud_buddied_count;
 
+/* protects the buddied list and all unbuddied lists */
 static DEFINE_SPINLOCK(zbud_budlists_spinlock);
 
 static LIST_HEAD(zbpg_unused_list);
 static unsigned long zcache_zbpg_unused_list_count;
 
+/* protects the unused page list */
 static DEFINE_SPINLOCK(zbpg_unused_list_spinlock);
 
 static atomic_t zcache_zbud_curr_raw_pages;
@@ -195,9 +201,13 @@ static unsigned long zcache_zbud_cumul_zbytes;
 static unsigned long zcache_compress_poor;
 static unsigned long zcache_mean_compress_poor;
 
+/* forward references */
 static void *zcache_get_free_page(void);
 static void zcache_free_page(void *p);
 
+/*
+ * zbud helper functions
+ */
 
 static inline unsigned zbud_max_buddy_size(void)
 {
@@ -246,6 +256,9 @@ static char *zbud_data(struct zbud_hdr *zh, unsigned size)
 	return p;
 }
 
+/*
+ * zbud raw page management
+ */
 
 static struct zbud_page *zbud_alloc_raw_page(void)
 {
@@ -253,7 +266,7 @@ static struct zbud_page *zbud_alloc_raw_page(void)
 	struct zbud_hdr *zh0, *zh1;
 	bool recycled = 0;
 
-	
+	/* if any pages on the zbpg list, use one */
 	spin_lock(&zbpg_unused_list_spinlock);
 	if (!list_empty(&zbpg_unused_list)) {
 		zbpg = list_first_entry(&zbpg_unused_list,
@@ -264,7 +277,7 @@ static struct zbud_page *zbud_alloc_raw_page(void)
 	}
 	spin_unlock(&zbpg_unused_list_spinlock);
 	if (zbpg == NULL)
-		
+		/* none on zbpg list, try to get a kernel page */
 		zbpg = zcache_get_free_page();
 	if (likely(zbpg != NULL)) {
 		INIT_LIST_HEAD(&zbpg->bud_list);
@@ -304,6 +317,9 @@ static void zbud_free_raw_page(struct zbud_page *zbpg)
 	spin_unlock(&zbpg_unused_list_spinlock);
 }
 
+/*
+ * core zbud handling routines
+ */
 
 static unsigned zbud_free(struct zbud_hdr *zh)
 {
@@ -332,7 +348,7 @@ static void zbud_free_and_delist(struct zbud_hdr *zh)
 	spin_lock(&zbud_budlists_spinlock);
 	spin_lock(&zbpg->lock);
 	if (list_empty(&zbpg->bud_list)) {
-		
+		/* ignore zombie page... see zbud_evict_pages() */
 		spin_unlock(&zbpg->lock);
 		spin_unlock(&zbud_budlists_spinlock);
 		return;
@@ -340,14 +356,14 @@ static void zbud_free_and_delist(struct zbud_hdr *zh)
 	size = zbud_free(zh);
 	ASSERT_SPINLOCK(&zbpg->lock);
 	zh_other = &zbpg->buddy[(budnum == 0) ? 1 : 0];
-	if (zh_other->size == 0) { 
+	if (zh_other->size == 0) { /* was unbuddied: unlist and free */
 		chunks = zbud_size_to_chunks(size) ;
 		BUG_ON(list_empty(&zbud_unbuddied[chunks].list));
 		list_del_init(&zbpg->bud_list);
 		zbud_unbuddied[chunks].count--;
 		spin_unlock(&zbud_budlists_spinlock);
 		zbud_free_raw_page(zbpg);
-	} else { 
+	} else { /* was buddied: move remaining buddy to unbuddied list */
 		chunks = zbud_size_to_chunks(zh_other->size) ;
 		list_del_init(&zbpg->bud_list);
 		zcache_zbud_buddied_count--;
@@ -383,11 +399,11 @@ static struct zbud_hdr *zbud_create(uint16_t client_id, uint16_t pool_id,
 		}
 		spin_unlock(&zbud_budlists_spinlock);
 	}
-	
+	/* didn't find a good buddy, try allocating a new page */
 	zbpg = zbud_alloc_raw_page();
 	if (unlikely(zbpg == NULL))
 		goto out;
-	
+	/* ok, have a page, now compress the data before taking locks */
 	spin_lock(&zbud_budlists_spinlock);
 	spin_lock(&zbpg->lock);
 	list_add_tail(&zbpg->bud_list, &zbud_unbuddied[nchunks].list);
@@ -399,10 +415,10 @@ found_unbuddied:
 	ASSERT_SPINLOCK(&zbpg->lock);
 	zh0 = &zbpg->buddy[0]; zh1 = &zbpg->buddy[1];
 	BUG_ON(!((zh0->size == 0) ^ (zh1->size == 0)));
-	if (zh0->size != 0) { 
+	if (zh0->size != 0) { /* buddy0 in use, buddy1 is vacant */
 		ASSERT_SENTINEL(zh0, ZBH);
 		zh = zh1;
-	} else if (zh1->size != 0) { 
+	} else if (zh1->size != 0) { /* buddy1 in use, buddy0 is vacant */
 		ASSERT_SENTINEL(zh1, ZBH);
 		zh = zh0;
 	} else
@@ -445,7 +461,7 @@ static int zbud_decompress(struct page *page, struct zbud_hdr *zh)
 	zbpg = container_of(zh, struct zbud_page, buddy[budnum]);
 	spin_lock(&zbpg->lock);
 	if (list_empty(&zbpg->bud_list)) {
-		
+		/* ignore zombie page... see zbud_evict_pages() */
 		ret = -EINVAL;
 		goto out;
 	}
@@ -464,6 +480,10 @@ out:
 	return ret;
 }
 
+/*
+ * The following routines handle shrinking of ephemeral pages by evicting
+ * pages "least valuable" first.
+ */
 
 static unsigned long zcache_evicted_raw_pages;
 static unsigned long zcache_evicted_buddied_pages;
@@ -473,6 +493,9 @@ static struct tmem_pool *zcache_get_pool_by_id(uint16_t cli_id,
 						uint16_t poolid);
 static void zcache_put_pool(struct tmem_pool *pool);
 
+/*
+ * Flush and free all zbuds in a zbpg, then free the pageframe
+ */
 static void zbud_evict_zbpg(struct zbud_page *zbpg)
 {
 	struct zbud_hdr *zh;
@@ -508,16 +531,24 @@ static void zbud_evict_zbpg(struct zbud_page *zbpg)
 	zbud_free_raw_page(zbpg);
 }
 
+/*
+ * Free nr pages.  This code is funky because we want to hold the locks
+ * protecting various lists for as short a time as possible, and in some
+ * circumstances the list may change asynchronously when the list lock is
+ * not held.  In some cases we also trylock not only to avoid waiting on a
+ * page in use by another cpu, but also to avoid potential deadlock due to
+ * lock inversion.
+ */
 static void zbud_evict_pages(int nr)
 {
 	struct zbud_page *zbpg;
 	int i;
 
-	
+	/* first try freeing any pages on unused list */
 retry_unused_list:
 	spin_lock_bh(&zbpg_unused_list_spinlock);
 	if (!list_empty(&zbpg_unused_list)) {
-		
+		/* can't walk list here, since it may change when unlocked */
 		zbpg = list_first_entry(&zbpg_unused_list,
 				struct zbud_page, bud_list);
 		list_del_init(&zbpg->bud_list);
@@ -532,7 +563,7 @@ retry_unused_list:
 	}
 	spin_unlock_bh(&zbpg_unused_list_spinlock);
 
-	
+	/* now try freeing unbuddied pages, starting with least space avail */
 	for (i = 0; i < MAX_CHUNK; i++) {
 retry_unbud_list_i:
 		spin_lock_bh(&zbud_budlists_spinlock);
@@ -547,7 +578,7 @@ retry_unbud_list_i:
 			zbud_unbuddied[i].count--;
 			spin_unlock(&zbud_budlists_spinlock);
 			zcache_evicted_unbuddied_pages++;
-			
+			/* want budlists unlocked when doing zbpg eviction */
 			zbud_evict_zbpg(zbpg);
 			local_bh_enable();
 			if (--nr <= 0)
@@ -557,7 +588,7 @@ retry_unbud_list_i:
 		spin_unlock_bh(&zbud_budlists_spinlock);
 	}
 
-	
+	/* as a last resort, free buddied pages */
 retry_bud_list:
 	spin_lock_bh(&zbud_budlists_spinlock);
 	if (list_empty(&zbud_buddied_list)) {
@@ -571,7 +602,7 @@ retry_bud_list:
 		zcache_zbud_buddied_count--;
 		spin_unlock(&zbud_budlists_spinlock);
 		zcache_evicted_buddied_pages++;
-		
+		/* want budlists unlocked when doing zbpg eviction */
 		zbud_evict_zbpg(zbpg);
 		local_bh_enable();
 		if (--nr <= 0)
@@ -594,6 +625,11 @@ static void __init zbud_init(void)
 }
 
 #ifdef CONFIG_SYSFS
+/*
+ * These sysfs routines show a nice distribution of how many zbpg's are
+ * currently (and have ever been placed) in each unbuddied list.  It's fun
+ * to watch but can probably go away before final merge.
+ */
 static int zbud_show_unbuddied_list_counts(char *buf)
 {
 	int i;
@@ -630,6 +666,14 @@ static int zbud_show_cumul_chunk_counts(char *buf)
 }
 #endif
 
+/**********
+ * This "zv" PAM implementation combines the slab-based zsmalloc
+ * with the crypto compression API to maximize the amount of data that can
+ * be packed into a physical page.
+ *
+ * Zv represents a PAM page with the index and object (plus a "size" value
+ * necessary for decompression) immediately preceding the compressed data.
+ */
 
 #define ZVH_SENTINEL  0x43214321
 
@@ -641,8 +685,19 @@ struct zv_hdr {
 	DECL_SENTINEL
 };
 
+/* rudimentary policy limits */
+/* total number of persistent pages may not exceed this percentage */
 static unsigned int zv_page_count_policy_percent = 75;
+/*
+ * byte count defining poor compression; pages with greater zsize will be
+ * rejected
+ */
 static unsigned int zv_max_zsize = (PAGE_SIZE / 8) * 7;
+/*
+ * byte count defining poor *mean* compression; pages with greater zsize
+ * will be rejected until sufficient better-compressed pages are accepted
+ * driving the mean below this threshold
+ */
 static unsigned int zv_max_mean_zsize = (PAGE_SIZE / 8) * 5;
 
 static atomic_t zv_curr_dist_counts[NCHUNKS];
@@ -718,6 +773,9 @@ static void zv_decompress(struct page *page, void *handle)
 }
 
 #ifdef CONFIG_SYSFS
+/*
+ * show a distribution of compression stats for zv pages.
+ */
 
 static int zv_curr_dist_counts_show(char *buf)
 {
@@ -751,6 +809,12 @@ static int zv_cumul_dist_counts_show(char *buf)
 	return p - buf;
 }
 
+/*
+ * setting zv_max_zsize via sysfs causes all persistent (e.g. swap)
+ * pages that don't compress to less than this value (including metadata
+ * overhead) to be rejected.  We don't allow the value to get too close
+ * to PAGE_SIZE.
+ */
 static ssize_t zv_max_zsize_show(struct kobject *kobj,
 				    struct kobj_attribute *attr,
 				    char *buf)
@@ -775,6 +839,14 @@ static ssize_t zv_max_zsize_store(struct kobject *kobj,
 	return count;
 }
 
+/*
+ * setting zv_max_mean_zsize via sysfs causes all persistent (e.g. swap)
+ * pages that don't compress to less than this value (including metadata
+ * overhead) to be rejected UNLESS the mean compression is also smaller
+ * than this value.  In other words, we are load-balancing-by-zsize the
+ * accepted pages.  Again, we don't allow the value to get too close
+ * to PAGE_SIZE.
+ */
 static ssize_t zv_max_mean_zsize_show(struct kobject *kobj,
 				    struct kobj_attribute *attr,
 				    char *buf)
@@ -799,6 +871,16 @@ static ssize_t zv_max_mean_zsize_store(struct kobject *kobj,
 	return count;
 }
 
+/*
+ * setting zv_page_count_policy_percent via sysfs sets an upper bound of
+ * persistent (e.g. swap) pages that will be retained according to:
+ *     (zv_page_count_policy_percent * totalram_pages) / 100)
+ * when that limit is reached, further puts will be rejected (until
+ * some pages have been flushed).  Note that, due to compression,
+ * this number may exceed 100; it defaults to 75 and we set an
+ * arbitary limit of 150.  A poor choice will almost certainly result
+ * in OOM's, so this value should only be changed prudently.
+ */
 static ssize_t zv_page_count_policy_percent_show(struct kobject *kobj,
 						 struct kobj_attribute *attr,
 						 char *buf)
@@ -843,7 +925,11 @@ static struct kobj_attribute zcache_zv_page_count_policy_percent_attr = {
 };
 #endif
 
+/*
+ * zcache core code starts here
+ */
 
+/* useful stats not collected by cleancache or frontswap */
 static unsigned long zcache_flush_total;
 static unsigned long zcache_flush_found;
 static unsigned long zcache_flobj_total;
@@ -851,6 +937,13 @@ static unsigned long zcache_flobj_found;
 static unsigned long zcache_failed_eph_puts;
 static unsigned long zcache_failed_pers_puts;
 
+/*
+ * Tmem operations assume the poolid implies the invoking client.
+ * Zcache only has one client (the kernel itself): LOCAL_CLIENT.
+ * RAMster has each client numbered by cluster node, and a KVM version
+ * of zcache would have one client per guest and each client might
+ * have a poolid==N.
+ */
 static struct tmem_pool *zcache_get_pool_by_id(uint16_t cli_id, uint16_t poolid)
 {
 	struct tmem_pool *pool = NULL;
@@ -902,10 +995,16 @@ out:
 	return ret;
 }
 
+/* counters for debugging */
 static unsigned long zcache_failed_get_free_pages;
 static unsigned long zcache_failed_alloc;
 static unsigned long zcache_put_to_flush;
 
+/*
+ * for now, used named slabs so can easily track usage; later can
+ * either just use kmalloc, or perhaps add a slab-like allocator
+ * to more carefully manage total memory utilization
+ */
 static struct kmem_cache *zcache_objnode_cache;
 static struct kmem_cache *zcache_obj_cache;
 static atomic_t zcache_curr_obj_count = ATOMIC_INIT(0);
@@ -913,6 +1012,11 @@ static unsigned long zcache_curr_obj_count_max;
 static atomic_t zcache_curr_objnode_count = ATOMIC_INIT(0);
 static unsigned long zcache_curr_objnode_count_max;
 
+/*
+ * to avoid memory allocation recursion (e.g. due to direct reclaim), we
+ * preload all necessary data structures so the hostops callbacks never
+ * actually do a malloc
+ */
 struct zcache_preload {
 	void *page;
 	struct tmem_obj *obj;
@@ -987,6 +1091,9 @@ static void zcache_free_page(void *p)
 	free_page((unsigned long)p);
 }
 
+/*
+ * zcache implementation for tmem host ops
+ */
 
 static struct tmem_objnode *zcache_objnode_alloc(struct tmem_pool *pool)
 {
@@ -1046,12 +1153,16 @@ static struct tmem_hostops zcache_hostops = {
 	.objnode_free = zcache_objnode_free,
 };
 
+/*
+ * zcache implementations for PAM page descriptor ops
+ */
 
 static atomic_t zcache_curr_eph_pampd_count = ATOMIC_INIT(0);
 static unsigned long zcache_curr_eph_pampd_count_max;
 static atomic_t zcache_curr_pers_pampd_count = ATOMIC_INIT(0);
 static unsigned long zcache_curr_pers_pampd_count_max;
 
+/* forward reference */
 static int zcache_compress(struct page *from, void **out_va, unsigned *out_len);
 
 static void *zcache_pampd_create(char *data, size_t size, bool raw, int eph,
@@ -1093,12 +1204,12 @@ static void *zcache_pampd_create(char *data, size_t size, bool raw, int eph,
 		ret = zcache_compress(page, &cdata, &clen);
 		if (ret == 0)
 			goto out;
-		
+		/* reject if compression is too poor */
 		if (clen > zv_max_zsize) {
 			zcache_compress_poor++;
 			goto out;
 		}
-		
+		/* reject if mean compression is too poor */
 		if ((clen > zv_max_mean_zsize) && (curr_pers_pampd_count > 0)) {
 			total_zsize = zs_get_total_size_bytes(cli->zspool);
 			zv_mean_zsize = div_u64(total_zsize,
@@ -1120,6 +1231,10 @@ out:
 	return pampd;
 }
 
+/*
+ * fill the pageframe corresponding to the struct page with the data
+ * from the passed pampd
+ */
 static int zcache_pampd_get_data(char *data, size_t *bufsize, bool raw,
 					void *pampd, struct tmem_pool *pool,
 					struct tmem_oid *oid, uint32_t index)
@@ -1131,6 +1246,10 @@ static int zcache_pampd_get_data(char *data, size_t *bufsize, bool raw,
 	return ret;
 }
 
+/*
+ * fill the pageframe corresponding to the struct page with the data
+ * from the passed pampd
+ */
 static int zcache_pampd_get_data_and_free(char *data, size_t *bufsize, bool raw,
 					void *pampd, struct tmem_pool *pool,
 					struct tmem_oid *oid, uint32_t index)
@@ -1143,6 +1262,10 @@ static int zcache_pampd_get_data_and_free(char *data, size_t *bufsize, bool raw,
 	return 0;
 }
 
+/*
+ * free the pampd and remove it from any zcache lists
+ * pampd must no longer be pointed to from any tmem data structures!
+ */
 static void zcache_pampd_free(void *pampd, struct tmem_pool *pool,
 				struct tmem_oid *oid, uint32_t index)
 {
@@ -1188,6 +1311,9 @@ static struct tmem_pamops zcache_pamops = {
 	.is_remote = zcache_pampd_is_remote,
 };
 
+/*
+ * zcache compression/decompression and related per-cpu stuff
+ */
 
 static DEFINE_PER_CPU(unsigned char *, zcache_dstmem);
 #define ZCACHE_DSTMEM_ORDER 1
@@ -1200,7 +1326,7 @@ static int zcache_compress(struct page *from, void **out_va, unsigned *out_len)
 
 	BUG_ON(!irqs_disabled());
 	if (unlikely(dmem == NULL))
-		goto out;  
+		goto out;  /* no buffer or no compressor so can't compress */
 	*out_len = PAGE_SIZE << ZCACHE_DSTMEM_ORDER;
 	from_va = kmap_atomic(from);
 	mb();
@@ -1391,9 +1517,19 @@ static struct attribute_group zcache_attr_group = {
 	.name = "zcache",
 };
 
-#endif 
+#endif /* CONFIG_SYSFS */
+/*
+ * When zcache is disabled ("frozen"), pools can be created and destroyed,
+ * but all puts (and thus all other operations that require memory allocation)
+ * must fail.  If zcache is unfrozen, accepts puts, then frozen again,
+ * data consistency requires all puts while frozen to be converted into
+ * flushes.
+ */
 static bool zcache_freeze;
 
+/*
+ * zcache shrinker interface (only useful for ephemeral pages, so zbud only)
+ */
 static int shrink_zcache_memory(struct shrinker *shrink,
 				struct shrink_control *sc)
 {
@@ -1403,7 +1539,7 @@ static int shrink_zcache_memory(struct shrinker *shrink,
 
 	if (nr >= 0) {
 		if (!(gfp_mask & __GFP_FS))
-			
+			/* does this case really need to be skipped? */
 			goto out;
 		zbud_evict_pages(nr);
 	}
@@ -1417,6 +1553,9 @@ static struct shrinker zcache_shrinker = {
 	.seeks = DEFAULT_SEEKS,
 };
 
+/*
+ * zcache shims between cleancache/frontswap ops and tmem
+ */
 
 static int zcache_put_page(int cli_id, int pool_id, struct tmem_oid *oidp,
 				uint32_t index, struct page *page)
@@ -1429,7 +1568,7 @@ static int zcache_put_page(int cli_id, int pool_id, struct tmem_oid *oidp,
 	if (unlikely(pool == NULL))
 		goto out;
 	if (!zcache_freeze && zcache_do_preload(pool) == 0) {
-		
+		/* preload does preempt_disable on success */
 		ret = tmem_put(pool, oidp, index, (char *)(page),
 				PAGE_SIZE, 0, is_ephemeral(pool));
 		if (ret < 0) {
@@ -1441,7 +1580,7 @@ static int zcache_put_page(int cli_id, int pool_id, struct tmem_oid *oidp,
 	} else {
 		zcache_put_to_flush++;
 		if (atomic_read(&pool->obj_count) > 0)
-			
+			/* the put fails whether the flush succeeds or not */
 			(void)tmem_flush_page(pool, oidp, index);
 	}
 
@@ -1529,7 +1668,7 @@ static int zcache_destroy_pool(int cli_id, int pool_id)
 	pool = idr_find(&cli->tmem_pools, pool_id);
 	if (pool == NULL)
 		goto out;
-	idr_remove(&cli->tmem_pools, pool_id);
+	cli->tmem_pools[pool_id] = NULL;
 	/* wait for pool activity on other cpus to quiesce */
 	while (atomic_read(&pool->refcount) != 0)
 		;
@@ -1590,6 +1729,13 @@ out:
 	return poolid;
 }
 
+/**********
+ * Two kernel functionalities currently can be layered on top of tmem.
+ * These are "cleancache" which is used as a second-chance cache for clean
+ * page cache pages; and "frontswap" which is used for swap pages
+ * to avoid writes to disk.  A generic "shim" is provided here for each
+ * to translate in-kernel semantics to zcache semantics.
+ */
 
 #ifdef CONFIG_CLEANCACHE
 static void zcache_cleancache_put_page(int pool_id,
@@ -1651,7 +1797,7 @@ static int zcache_cleancache_init_fs(size_t pagesize)
 
 static int zcache_cleancache_init_shared_fs(char *uuid, size_t pagesize)
 {
-	
+	/* shared pools are unsupported and map to private */
 	BUG_ON(sizeof(struct cleancache_filekey) !=
 				sizeof(struct tmem_oid));
 	BUG_ON(pagesize != PAGE_SIZE);
@@ -1678,8 +1824,15 @@ struct cleancache_ops zcache_cleancache_register_ops(void)
 #endif
 
 #ifdef CONFIG_FRONTSWAP
+/* a single tmem poolid is used for all frontswap "types" (swapfiles) */
 static int zcache_frontswap_poolid = -1;
 
+/*
+ * Swizzling increases objects per swaptype, increasing tmem concurrency
+ * for heavy swaploads.  Later, larger nr_cpus -> larger SWIZ_BITS
+ * Setting SWIZ_BITS to 27 basically reconstructs the swap entry from
+ * frontswap_get_page(), but has side-effects. Hence using 8.
+ */
 #define SWIZ_BITS		8
 #define SWIZ_MASK		((1 << SWIZ_BITS) - 1)
 #define _oswiz(_type, _ind)	((_type << SWIZ_BITS) | (_ind & SWIZ_MASK))
@@ -1711,6 +1864,8 @@ static int zcache_frontswap_put_page(unsigned type, pgoff_t offset,
 	return ret;
 }
 
+/* returns 0 if the page was successfully gotten from frontswap, -1 if
+ * was not present (should never happen!) */
 static int zcache_frontswap_get_page(unsigned type, pgoff_t offset,
 				   struct page *page)
 {
@@ -1726,6 +1881,7 @@ static int zcache_frontswap_get_page(unsigned type, pgoff_t offset,
 	return ret;
 }
 
+/* flush a single page from frontswap */
 static void zcache_frontswap_flush_page(unsigned type, pgoff_t offset)
 {
 	u64 ind64 = (u64)offset;
@@ -1737,6 +1893,7 @@ static void zcache_frontswap_flush_page(unsigned type, pgoff_t offset)
 					&oid, iswiz(ind));
 }
 
+/* flush all pages from the passed swaptype */
 static void zcache_frontswap_flush_area(unsigned type)
 {
 	struct tmem_oid oid;
@@ -1751,7 +1908,7 @@ static void zcache_frontswap_flush_area(unsigned type)
 
 static void zcache_frontswap_init(unsigned ignored)
 {
-	
+	/* a single tmem poolid is used for all frontswap "types" (swapfiles) */
 	if (zcache_frontswap_poolid < 0)
 		zcache_frontswap_poolid =
 			zcache_new_pool(LOCAL_CLIENT, TMEM_POOL_PERSIST);
@@ -1774,6 +1931,11 @@ struct frontswap_ops zcache_frontswap_register_ops(void)
 }
 #endif
 
+/*
+ * zcache initialization
+ * NOTE FOR NOW zcache MUST BE PROVIDED AS A KERNEL BOOT PARAMETER OR
+ * NOTHING HAPPENS!
+ */
 
 static int zcache_enabled;
 
@@ -1784,6 +1946,7 @@ static int __init enable_zcache(char *s)
 }
 __setup("zcache", enable_zcache);
 
+/* allow independent dynamic disabling of cleancache and frontswap */
 
 static int use_cleancache = 1;
 
@@ -1818,7 +1981,7 @@ static int __init zcache_comp_init(void)
 {
 	int ret = 0;
 
-	
+	/* check crypto algorithm */
 	if (*zcache_comp_name != '\0') {
 		ret = crypto_has_comp(zcache_comp_name, 0, 0);
 		if (!ret)
@@ -1834,7 +1997,7 @@ static int __init zcache_comp_init(void)
 	}
 	pr_info("zcache: using %s compressor\n", zcache_comp_name);
 
-	
+	/* alloc percpu transforms */
 	ret = 0;
 	zcache_comp_pcpu_tfms = alloc_percpu(struct crypto_comp *);
 	if (!zcache_comp_pcpu_tfms)
@@ -1853,7 +2016,7 @@ static int __init zcache_init(void)
 		pr_err("zcache: can't create sysfs\n");
 		goto out;
 	}
-#endif 
+#endif /* CONFIG_SYSFS */
 #if defined(CONFIG_CLEANCACHE) || defined(CONFIG_FRONTSWAP)
 	if (zcache_enabled) {
 		unsigned int cpu;

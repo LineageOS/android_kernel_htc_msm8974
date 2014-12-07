@@ -218,6 +218,11 @@ struct v4l2_capability {
 	__u32	reserved[3];
 };
 
+struct htc_callingpid_data {
+        pid_t call_pid;
+        const char *process_name;
+};
+
 #define V4L2_CAP_VIDEO_CAPTURE		0x00000001  
 #define V4L2_CAP_VIDEO_OUTPUT		0x00000002  
 #define V4L2_CAP_VIDEO_OVERLAY		0x00000004  
@@ -518,7 +523,7 @@ struct v4l2_plane {
 };
 
 struct v4l2_buffer {
-	__u32			index;
+	int			index;
 	enum v4l2_buf_type      type;
 	__u32			bytesused;
 	__u32			flags;
@@ -1662,6 +1667,27 @@ enum v4l2_mpeg_vidc_video_ltrmode {
 #define V4L2_CID_MPEG_VIDC_VIDEO_HIER_P_NUM_LAYERS \
 		(V4L2_CID_MPEG_MSM_VIDC_BASE + 43)
 
+#define V4L2_CID_MPEG_VIDC_VIDEO_LTRMODE \
+		(V4L2_CID_MPEG_MSM_VIDC_BASE + 39)
+
+enum v4l2_mpeg_vidc_video_ltrmode {
+	V4L2_MPEG_VIDC_VIDEO_LTR_MODE_DISABLE = 0,
+	V4L2_MPEG_VIDC_VIDEO_LTR_MODE_MANUAL = 1,
+	V4L2_MPEG_VIDC_VIDEO_LTR_MODE_PERIODIC = 2
+};
+
+#define V4L2_CID_MPEG_VIDC_VIDEO_LTRCOUNT \
+		(V4L2_CID_MPEG_MSM_VIDC_BASE + 40)
+
+#define V4L2_CID_MPEG_VIDC_VIDEO_USELTRFRAME \
+		(V4L2_CID_MPEG_MSM_VIDC_BASE + 41)
+
+#define V4L2_CID_MPEG_VIDC_VIDEO_MARKLTRFRAME \
+		(V4L2_CID_MPEG_MSM_VIDC_BASE + 42)
+
+#define V4L2_CID_MPEG_VIDC_VIDEO_HIER_P_NUM_LAYERS \
+		(V4L2_CID_MPEG_MSM_VIDC_BASE + 43)
+
 #define V4L2_CID_MPEG_VIDC_VIDEO_ENABLE_INITIAL_QP \
 		(V4L2_CID_MPEG_MSM_VIDC_BASE + 44)
 
@@ -2307,6 +2333,8 @@ struct v4l2_create_buffers {
 
 #define VIDIOC_DECODER_CMD	_IOWR('V', 96, struct v4l2_decoder_cmd)
 #define VIDIOC_TRY_DECODER_CMD	_IOWR('V', 97, struct v4l2_decoder_cmd)
+
+#define VIDIOC_HTC_SET_CALLPIDNAME _IOW('V', 99, struct htc_callingpid_data)
 
 
 #define BASE_VIDIOC_PRIVATE	192		
