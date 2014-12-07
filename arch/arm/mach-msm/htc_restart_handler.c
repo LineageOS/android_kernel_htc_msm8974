@@ -30,7 +30,7 @@
 
 #define RESTART_REASON_ADDR	0x65C
 #define MSM_REBOOT_REASON_BASE	(MSM_IMEM_BASE + RESTART_REASON_ADDR)
-#if defined(CONFIG_ARCH_MSM8974) || defined(CONFIG_ARCH_MSM8226)
+#if defined(CONFIG_ARCH_MSM8974) || defined(CONFIG_ARCH_DUMMY)
 #define SZ_DIAG_ERR_MSG 	0x7C 
 #else
 #define SZ_DIAG_ERR_MSG 	0xC8
@@ -39,7 +39,7 @@
 struct htc_reboot_params {
 	unsigned reboot_reason;
 	unsigned radio_flag;
-#if defined(CONFIG_ARCH_MSM8974) || defined(CONFIG_ARCH_MSM8226)
+#if defined(CONFIG_ARCH_MSM8974) || defined(CONFIG_ARCH_DUMMY)
  
 	char reserved[0x40];
 #else
