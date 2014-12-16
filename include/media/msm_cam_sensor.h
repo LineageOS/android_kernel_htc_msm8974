@@ -88,7 +88,9 @@ enum msm_sensor_power_seq_type_t {
 	SENSOR_VREG,
 	SENSOR_VREG_NCP6924,	
 	SENSOR_I2C_MUX,
+#if (CONFIG_HTC_CAMERA_HAL_VERSION > 1)
 	SENSOR_CHECK_CAMID,
+#endif
 };
 
 enum msm_sensor_clk_type_t {
@@ -106,9 +108,11 @@ enum msm_sensor_power_seq_gpio_t {
 	SENSOR_GPIO_VANA,
 	SENSOR_GPIO_VDIG,
 	SENSOR_GPIO_VAF,
+//#if (CONFIG_HTC_CAMERA_HAL_VERSION > 1)
 	SENSOR_GPIO_FL_EN,
 	SENSOR_GPIO_FL_NOW,
 	SENSOR_GPIO_CAMID,
+//#endif
 	SENSOR_GPIO_MAX,
 };
 
@@ -244,14 +248,34 @@ struct msm_sensor_power_setting {
 struct msm_sensor_power_setting_array {
 	struct msm_sensor_power_setting *power_setting;
 	uint16_t size;
+#if (CONFIG_HTC_CAMERA_HAL_VERSION > 1)
 	struct msm_sensor_power_setting *power_down_setting;
 	uint16_t size_down;
+#endif
 };
 
 struct msm_sensor_id_info_t {
 	uint16_t sensor_id_reg_addr;
 	uint16_t sensor_id;
 };
+
+struct msm_camera_sensor_slave_info {
+#if (CONFIG_HTC_CAMERA_HAL_VERSION > 1)
+	char sensor_name[32];
+	char eeprom_name[32];
+	char actuator_name[32];
+	enum msm_sensor_camera_id_t camera_id;
+#endif
+	uint16_t slave_addr;
+	enum msm_camera_i2c_reg_addr_type addr_type;
+	struct msm_sensor_id_info_t sensor_id_info;
+	struct msm_sensor_power_setting_array power_setting_array;
+#if (CONFIG_HTC_CAMERA_HAL_VERSION > 1)
+	uint8_t  is_init_params_valid;
+	struct msm_sensor_init_params sensor_init_params;
+#endif
+};
+
 
 enum msm_sensor_camera_id_t {
 	CAMERA_0,
@@ -365,6 +389,7 @@ struct msm_sensor_info_t {
 	char     sensor_name[MAX_SENSOR_NAME];
 	int32_t  session_id;
 	int32_t  subdev_id[SUB_MODULE_MAX];
+#if (CONFIG_HTC_CAMERA_HAL_VERSION > 1)
 	uint8_t  is_mount_angle_valid;
 	uint32_t sensor_mount_angle;
 	int modes_supported;
@@ -373,7 +398,7 @@ struct msm_sensor_info_t {
 	uint32_t  sensor_mirror_flip; 
 	uint8_t  OTP_INFO[5];
 	uint8_t  fuse_id[4];
-	
+#endif
 };
 
 struct camera_vreg_t {
@@ -389,15 +414,17 @@ struct camera_vreg_t {
 enum camerab_mode_t {
 	CAMERA_MODE_2D_B = (1<<0),
 	CAMERA_MODE_3D_B = (1<<1),
+#if (CONFIG_HTC_CAMERA_HAL_VERSION > 1)
 	CAMERA_MODE_INVALID = (1<<2),
+#endif
 };
 
 struct msm_sensor_init_params {
-	
+	/* mask of modes supported: 2D, 3D */
 	int                 modes_supported;
-	
+	/* sensor position: front, back */
 	enum camb_position_t position;
-	
+	/* sensor mount angle */
 	uint32_t            sensor_mount_angle;
 };
 
@@ -426,26 +453,17 @@ typedef struct{
 	uint8_t VCM_VENDOR;
 	uint8_t ACT_ID;
 	uint32_t MODULE_ID_AB;
+#if (CONFIG_HTC_CAMERA_HAL_VERSION > 1)
 	uint8_t LENS_ID;
+#endif
 }af_value_t;
-
-struct msm_camera_sensor_slave_info {
-	char sensor_name[32];
-	char eeprom_name[32];
-	char actuator_name[32];
-	enum msm_sensor_camera_id_t camera_id;
-	uint16_t slave_addr;
-	enum msm_camera_i2c_reg_addr_type addr_type;
-	struct msm_sensor_id_info_t sensor_id_info;
-	struct msm_sensor_power_setting_array power_setting_array;
-	uint8_t  is_init_params_valid;
-	struct msm_sensor_init_params sensor_init_params;
-};
 
 struct sensorb_cfg_data {
 	int cfgtype;
 	int8_t sensor_ver;
+#if (CONFIG_HTC_CAMERA_HAL_VERSION > 1)
 	int8_t lens_id;
+#endif
 	af_value_t af_value;
 	union {
 		struct msm_sensor_info_t      sensor_info;
@@ -478,7 +496,9 @@ enum eeprom_cfg_type_t {
 	CFG_EEPROM_GET_CAL_DATA,
 	CFG_EEPROM_READ_CAL_DATA,
 	CFG_EEPROM_WRITE_DATA,
+#if (CONFIG_HTC_CAMERA_HAL_VERSION > 1)
 	CFG_EEPROM_GET_MM_INFO,
+#endif
 };
 
 struct eeprom_get_t {
@@ -509,7 +529,9 @@ struct msm_eeprom_cfg_data {
 		struct eeprom_get_t get_data;
 		struct eeprom_read_t read_data;
 		struct eeprom_write_t write_data;
+#if (CONFIG_HTC_CAMERA_HAL_VERSION > 1)
 		struct eeprom_get_mm_t get_mm_data;
+#endif
 	} cfg;
 };
 
@@ -591,15 +613,18 @@ enum msm_actuator_cfg_type_t {
 	CFG_SET_ACTUATOR_INFO,
 	CFG_SET_DEFAULT_FOCUS,
 	CFG_MOVE_FOCUS,
+#if (CONFIG_HTC_CAMERA_HAL_VERSION > 1)
 	CFG_SET_POSITION,
-
+#endif
 	CFG_ACTUATOR_STOP,
 	CFG_SET_OIS_MODE,
 	CFG_UPDATE_OIS_TBL,
 	CFG_IAF_MOVE_FOCUS,
 	CFG_GET_VCM_SORTING,
 	CFG_GET_VCM_LOOP_GAIN_SORTING,
+#if (CONFIG_HTC_CAMERA_HAL_VERSION > 1)
 	CFG_GET_ACT_STABLE_INFO, 
+#endif
 };
 
 enum actuator_type {
@@ -738,14 +763,14 @@ enum ois_cal_mode_type_t {
 };
 
 struct msm_actuator_get_ois_cal_info_t {
-	
+	/* calibration data */
 	int16_t x_offset;
 	int16_t y_offset;
 	int16_t temperature;
 	int8_t x_slope;
 	int8_t y_slope;
 
-	
+	/* Extra param */
 	enum ois_cal_mode_type_t ois_cal_mode;
 	int16_t cal_collect_interval;
 	int16_t lens_position;
@@ -787,13 +812,16 @@ struct msm_actuator_cfg_data {
 	uint8_t medium_step_damping;
 	uint8_t big_step_damping;
 	uint8_t is_af_infinity_supported;
+#if (CONFIG_HTC_CAMERA_HAL_VERSION > 1)
 	int32_t is_act_unstable;
-	
+#endif
 	union {
 		struct msm_actuator_move_params_t move;
 		struct msm_actuator_set_info_t set_info;
 		struct msm_actuator_get_info_t get_info;
+#if (CONFIG_HTC_CAMERA_HAL_VERSION > 1)
 		struct msm_actuator_set_position_t setpos;
+#endif
 		enum af_camera_name cam_name;
 	
 		af_value_t af_value;
@@ -883,6 +911,6 @@ struct sensor_init_cfg_data {
 #define VIDIOC_MSM_SENSOR_INIT_CFG \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 10, struct sensor_init_cfg_data)
 
-#define MSM_V4L2_PIX_FMT_META v4l2_fourcc('M', 'E', 'T', 'A') 
+#define MSM_V4L2_PIX_FMT_META v4l2_fourcc('M', 'E', 'T', 'A') /* META */
 
-#endif 
+#endif /* __LINUX_MSM_CAM_SENSOR_H */
