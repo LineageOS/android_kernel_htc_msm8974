@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "7aa08908_f0046ac7",
+        "filename": "include/media/msm_cam_sensor.h",
+        "patchSetId": 2
+      },
+      "lineNbr": 111,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-12-19T12:52:50Z",
+      "side": 1,
+      "message": "This ifdef looks dead",
+      "revId": "ca94646ae2ae8c93c4564cce266df7c2751245d4",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7aa08908_300f12e3",
+        "filename": "include/media/msmb_isp.h",
+        "patchSetId": 2
+      },
+      "lineNbr": 119,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2014-12-19T12:52:50Z",
+      "side": 1,
+      "message": "Gotta love re-adding HTC\u0027s comments.",
+      "revId": "ca94646ae2ae8c93c4564cce266df7c2751245d4",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
