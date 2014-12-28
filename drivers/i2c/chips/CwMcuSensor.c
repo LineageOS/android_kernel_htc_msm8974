@@ -2980,16 +2980,16 @@ static void cwmcu_irq_work_func(struct work_struct *work)
 				if (tap2wake == 1) {
 					D("[CWMCU] Tap to wake - waking device\n");
 					vib_trigger_event(vib_trigger, VIB_TIME);
+					sensor->sensors_time[Gesture_Motion_HIDI] = 0;
 					input_report_rel(sensor->input, HTC_Gesture_Motion_HIDI, data_event);
+					input_sync(sensor->input);
+					power_key_pressed = 0;
 				} else {
 					D("[CWMCU] Tap to wake disabled, ignoring\n");
 				}
 			} else {
 				D("[CWMCU] Discard gesture wake\n");
 			}
-			sensor->sensors_time[Gesture_Motion_HIDI] = 0;
-			input_sync(sensor->input);
- 			power_key_pressed = 0;
 		}
 		clear_intr = CW_MCU_INT_BIT_HTC_GESTURE_MOTION_HIDI;
 		ret = CWMCU_i2c_write(sensor, CWSTM32_INT_ST4, &clear_intr, 1);
