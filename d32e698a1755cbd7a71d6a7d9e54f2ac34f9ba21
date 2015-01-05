@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "7aa08908_47911f99",
+        "filename": "drivers/i2c/chips/CwMcuSensor.c",
+        "patchSetId": 4
+      },
+      "lineNbr": 2507,
+      "author": {
+        "id": 3671
+      },
+      "writtenOn": "2015-01-05T12:59:05Z",
+      "side": 0,
+      "message": "you sure we want to remove the above block?",
+      "revId": "d32e698a1755cbd7a71d6a7d9e54f2ac34f9ba21",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
