@@ -158,12 +158,7 @@ err:
 drop:
 	rcu_read_unlock();
 
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-	if (!IS_ERR(skb) && (skb))
-		kfree_skb(skb);
-#else
 	kfree_skb(skb);
-#endif
 	return NET_RX_DROP;
 }
 

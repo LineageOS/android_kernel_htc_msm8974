@@ -320,16 +320,6 @@ config NET_DROP_MONITOR
 	just checking the various proc files and other utilities for
 	drop statistics, say N here.
 
-config HTC_METRICO_TP
-    tristate "METRICO_TP"
-        ---help---
-        METRICO_TP
-
-config HTC_NETWORK_MODIFY
-        bool "select default enable HTC_NETWORK_MODIFY config"
-        default y
-        ---help---
-        HTC_NETWORK_MODIFY
 endmenu
 
 endmenu

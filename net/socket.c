@@ -380,11 +380,6 @@ static int sock_alloc_file(struct socket *sock, struct file **f, int flags)
 	file = alloc_file(&path, FMODE_READ | FMODE_WRITE,
 		  &socket_file_ops);
 
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-		if (IS_ERR(file) || (!file))
-			printk(KERN_ERR "[NET] file is NULL in %s!\n", __func__);
-#endif
-
 	if (unlikely(!file)) {
 		/* drop dentry, keep inode */
 		ihold(path.dentry->d_inode);

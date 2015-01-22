@@ -533,11 +533,6 @@ static int rawv6_push_pending_frames(struct sock *sk, struct flowi6 *fl6,
 		skb = csum_skb;
 	}
 
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-	if (IS_ERR(skb) || (!skb))
-		printk(KERN_ERR "[NET] skb is NULL in %s!\n", __func__);
-#endif
-
 	offset += skb_transport_offset(skb);
 	if (skb_copy_bits(skb, offset, &csum, 2))
 		BUG();
@@ -820,11 +815,6 @@ static int rawv6_sendmsg(struct kiocb *iocb, struct sock *sk,
 			hlimit = np->mcast_hops;
 		else
 			hlimit = np->hop_limit;
-
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-	if (IS_ERR(dst) || (!dst))
-		printk(KERN_ERR "[NET] dst is NULL in %s!\n", __func__);
-#endif
 
 		if (hlimit < 0)
 			hlimit = ip6_dst_hoplimit(dst);

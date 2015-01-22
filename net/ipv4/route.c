@@ -2512,15 +2512,7 @@ static struct rtable *ip_route_output_slow(struct net *net, struct flowi4 *fl4)
 		fl4->saddr = FIB_RES_PREFSRC(net, res);
 
 	dev_out = FIB_RES_DEV(res);
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-	if((!dev_out) || IS_ERR(dev_out)) {
-		goto out;
-	} else {
-		fl4->flowi4_oif = dev_out->ifindex;
-	}
-#else
 	fl4->flowi4_oif = dev_out->ifindex;
-#endif
 
 
 make_route:
@@ -2875,11 +2867,6 @@ static int inet_rtm_getroute(struct sk_buff *in_skb, struct nlmsghdr* nlh, void 
 
 	if (err)
 		goto errout_free;
-
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-	if (IS_ERR(rt) || (!rt))
-		printk(KERN_ERR "[NET] rt is NULL in %s!\n", __func__);
-#endif
 
 	skb_dst_set(skb, &rt->dst);
 	if (rtm->rtm_flags & RTM_F_NOTIFY)

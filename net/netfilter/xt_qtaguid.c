@@ -2049,16 +2049,7 @@ static int ctrl_cmd_tag(const char *input)
 			 atomic_long_read(&el_socket->file->f_count));
 
 		
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-		if(likely(sock_tag_entry->socket->file))
-			sockfd_put(sock_tag_entry->socket);
-		else{
-			pr_warn("qtaguid:%s: socket->file is freed, so put el_socket.\n", __func__);
-			sockfd_put(el_socket);
-		}
-#else
 		sockfd_put(sock_tag_entry->socket);
-#endif
 		
 		prev_tag_ref_entry = lookup_tag_ref(sock_tag_entry->tag,
 						    &uid_tag_data_entry);
@@ -2181,16 +2172,7 @@ static int ctrl_cmd_untag(const char *input)
 	spin_unlock_bh(&sock_tag_list_lock);
 
 	
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-	if(likely(sock_tag_entry->socket->file))
 		sockfd_put(sock_tag_entry->socket);
-	else{
-		pr_warn("qtaguid:%s: socket->file is freed, so put el_socket.\n", __func__);
-		sockfd_put(el_socket);
-	}
-#else
-		sockfd_put(sock_tag_entry->socket);
-#endif
 	
 
 	CT_DEBUG("qtaguid: ctrl_untag(%s): done. st@%p ...->f_count=%ld\n",

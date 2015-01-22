@@ -2052,11 +2052,6 @@ int tcp_use_frto(struct sock *sk)
 
 	skb = tcp_write_queue_head(sk);
 
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-	if (IS_ERR(skb) || (!skb))
-		printk(KERN_ERR "[NET] skb is NULL in %s!\n", __func__);
-#endif
-
 	if (tcp_skb_is_last(sk, skb))
 		return 1;
 	skb = tcp_write_queue_next(sk, skb);	/* Skips head */
@@ -2127,11 +2122,6 @@ void tcp_enter_frto(struct sock *sk)
 	tp->undo_retrans = 0;
 
 	skb = tcp_write_queue_head(sk);
-
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-	if (IS_ERR(skb) || (!skb))
-		printk(KERN_ERR "[NET] skb is NULL in %s!\n", __func__);
-#endif
 
 	if (TCP_SKB_CB(skb)->sacked & TCPCB_RETRANS)
 		tp->undo_marker = 0;
@@ -2532,11 +2522,6 @@ static void tcp_timeout_skbs(struct sock *sk)
 	if (tp->scoreboard_skb_hint == NULL)
 		skb = tcp_write_queue_head(sk);
 
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-	if (IS_ERR(skb) || (!skb))
-		printk(KERN_ERR "[NET] skb is NULL in %s!\n", __func__);
-#endif
-
 	tcp_for_write_queue_from(skb, sk) {
 		if (skb == tcp_send_head(sk))
 			break;
@@ -2578,11 +2563,6 @@ static void tcp_mark_head_lost(struct sock *sk, int packets, int mark_head)
 		skb = tcp_write_queue_head(sk);
 		cnt = 0;
 	}
-
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-	if (IS_ERR(skb) || (!skb))
-		printk(KERN_ERR "[NET] skb is NULL in %s!\n", __func__);
-#endif
 
 	tcp_for_write_queue_from(skb, sk) {
 		if (skb == tcp_send_head(sk))
@@ -3708,34 +3688,6 @@ static int tcp_process_frto(struct sock *sk, int flag)
 static int tcp_ack(struct sock *sk, const struct sk_buff *skb, int flag)
 {
 
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-	struct inet_connection_sock *icsk = NULL;
-	struct tcp_sock *tp = NULL;
-	u32 prior_snd_una = 0;
-	u32 ack_seq = 0;
-	u32 ack = 0;
-	bool is_dupack = false;
-	u32 prior_in_flight = 0;
-	u32 prior_fackets = 0;
-	int prior_packets = 0;
-	int prior_sacked = 0;
-	int pkts_acked = 0;
-	int newly_acked_sacked = 0;
-	int frto_cwnd = 0;
-
-    if ((!sk) || IS_ERR(sk))
-        goto invalid_ack;
-
-    if ((!skb) || IS_ERR(skb))
-        goto invalid_ack;
-
-    icsk = inet_csk(sk);
-    tp = tcp_sk(sk);
-    prior_snd_una = tp->snd_una;
-    ack_seq = TCP_SKB_CB(skb)->seq;
-    ack = TCP_SKB_CB(skb)->ack_seq;
-    prior_sacked = tp->sacked_out;
-#else
 	struct inet_connection_sock *icsk = inet_csk(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
 	u32 prior_snd_una = tp->snd_una;
@@ -3749,7 +3701,6 @@ static int tcp_ack(struct sock *sk, const struct sk_buff *skb, int flag)
 	int pkts_acked = 0;
 	int newly_acked_sacked = 0;
 	int frto_cwnd = 0;
-#endif
 
 	/* If the ack is older than previous acks
 	 * then we can probably ignore it.

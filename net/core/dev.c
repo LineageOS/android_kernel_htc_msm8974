@@ -1611,21 +1611,8 @@ static netdev_features_t harmonize_features(struct sk_buff *skb,
 
 netdev_features_t netif_skb_features(struct sk_buff *skb)
 {
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-	__be16 protocol;
-	netdev_features_t features;
-
-	if (IS_ERR(skb) || (!skb)) {
-		printk(KERN_ERR "[CORE] skb is NULL in %s!\n", __func__);
-		return 0;
-	}
-
-    protocol = skb->protocol;
-    features  = skb->dev->features;
-#else
 	__be16 protocol = skb->protocol;
 	netdev_features_t features = skb->dev->features;
-#endif
 
 	if (protocol == htons(ETH_P_8021Q)) {
 		struct vlan_ethhdr *veh = (struct vlan_ethhdr *)skb->data;
@@ -1681,13 +1668,6 @@ int dev_hard_start_xmit(struct sk_buff *skb, struct net_device *dev,
 			skb = __vlan_put_tag(skb, vlan_tx_tag_get(skb));
 			if (unlikely(!skb))
 				goto out;
-
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-	if (IS_ERR(skb) || (!skb)) {
-		printk(KERN_ERR "[CORE] skb is NULL in %s!\n", __func__);
-		goto out;
-	}
-#endif
 
 			skb->vlan_tci = 0;
 		}
@@ -1997,12 +1977,7 @@ recursion_alert:
 	rc = -ENETDOWN;
 	rcu_read_unlock_bh();
 
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-	if (!IS_ERR(skb) && (skb))
-		kfree_skb(skb);
-#else
 	kfree_skb(skb);
-#endif
 	return rc;
 out:
 	rcu_read_unlock_bh();
@@ -2935,11 +2910,6 @@ struct sk_buff *napi_frags_skb(struct napi_struct *napi)
 
 	skb_gro_pull(skb, sizeof(*eth));
 
-
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-	if (IS_ERR(eth) || (!eth))
-		printk(KERN_ERR "[CORE] eth is NULL in %s!\n", __func__);
-#endif
 
 	skb->protocol = eth->h_proto;
 

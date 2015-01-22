@@ -203,9 +203,6 @@ extern int sysctl_tcp_thin_linear_timeouts;
 extern int sysctl_tcp_thin_dupack;
 extern int sysctl_tcp_default_init_rwnd;
 
-#ifdef CONFIG_HTC_TCP_SYN_FAIL
-extern __be32 sysctl_tcp_syn_fail;
-#endif 
 extern int sysctl_tcp_delack_seg;
 extern int sysctl_tcp_use_userconfig;
 

@@ -302,12 +302,6 @@ static void arp_solicit(struct neighbour *neigh, struct sk_buff *skb)
 	struct in_device *in_dev;
 
     
-    #ifdef CONFIG_HTC_NETWORK_CNE
-    __be32 dev_addr = 0;
-    dev_addr = inet_select_addr(dev, target, RT_SCOPE_LINK);
-    #endif
-    
-
 	rcu_read_lock();
 	in_dev = __in_dev_get_rcu(dev);
 	if (!in_dev) {
@@ -358,15 +352,6 @@ static void arp_solicit(struct neighbour *neigh, struct sk_buff *skb)
 	}
 
     
-    #ifdef CONFIG_HTC_NETWORK_CNE
-    if (dev_addr != saddr)
-    {
-        printk(KERN_DEBUG "CnE detects wrong sender IP in ARP\n");
-        saddr = dev_addr;
-    }
-    #endif
-    
-
 	arp_send(ARPOP_REQUEST, ETH_P_ARP, target, dev, saddr,
 		 dst_ha, dev->dev_addr, NULL);
 	if (dst_ha)

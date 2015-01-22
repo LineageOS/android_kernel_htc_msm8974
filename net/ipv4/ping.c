@@ -804,10 +804,6 @@ int ping_recvmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
 	struct sk_buff *skb;
 	int copied, err;
 
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-	err = 0 ;
-#endif
-
 	pr_debug("ping_recvmsg(sk=%p,sk->num=%u)\n", isk, isk->inet_num);
 
 	err = -EOPNOTSUPP;

@@ -714,16 +714,6 @@ static struct ctl_table ipv4_table[] = {
 		.proc_handler	= proc_dointvec_minmax,
 		.extra1		= &zero
 	},
-#ifdef CONFIG_HTC_TCP_SYN_FAIL
-	{
-		.procname	= "tcp_syn_fail",
-		.data		= &sysctl_tcp_syn_fail,
-		.maxlen		= sizeof(sysctl_tcp_syn_fail),
-		.mode		= 0644,
-		.proc_handler	= proc_dointvec_minmax,
-		.extra1		= &zero
-	},
-#endif 
 	{
 		.procname	= "tcp_delack_seg",
 		.data		= &sysctl_tcp_delack_seg,

@@ -81,9 +81,6 @@
 #include <net/sock.h>
 #include <net/ip_fib.h>
 #include "fib_lookup.h"
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-#include <linux/uaccess.h>
-#endif
 
 #define MAX_STAT_DEPTH 32
 
@@ -982,9 +979,6 @@ int fib_table_insert(struct fib_table *tb, struct fib_config *cfg)
 	key = ntohl(cfg->fc_dst);
 
 	pr_debug("Insert table=%u %08x/%d\n", tb->tb_id, key, plen);
-#ifdef CONFIG_HTC_FIB_RULE_DEBUG
-	printk(KERN_DEBUG "[NET][CORE][RULE] %s Insert table=%u %08x/%d\n", __func__,tb->tb_id,key, plen);
-#endif
 
 	mask = ntohl(inet_make_mask(plen));
 
@@ -1356,9 +1350,6 @@ int fib_table_delete(struct fib_table *tb, struct fib_config *cfg)
 		return -ESRCH;
 
 	pr_debug("Deleting %08x/%d tos=%d t=%p\n", key, plen, tos, t);
-#ifdef CONFIG_HTC_FIB_RULE_DEBUG
-	printk(KERN_DEBUG "[NET][CORE][RULE] %s Deleting %08x/%d tos=%d t=%p\n", __func__, key, plen, tos, t);
-#endif
 
 	fa_to_delete = NULL;
 	fa = list_entry(fa->fa_list.prev, struct fib_alias, fa_list);
@@ -1451,25 +1442,10 @@ static int trie_flush_leaf(struct leaf *l)
 static struct leaf *leaf_walk_rcu(struct tnode *p, struct rt_trie_node *c)
 {
 
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-	void *pq;
-	if ((!p) || (IS_ERR(p)) || (probe_kernel_address(p,pq))) {
-		pr_err("[NET][WARN] p is illegal in %s \n", __func__);
-		return NULL; 
-	}
-#endif
-
 	do {
 		t_key idx;
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-		void *q;
-#endif
 
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-		if ((c) && (!IS_ERR(c)))
-#else
 		if (c)
-#endif
 			idx = tkey_extract_bits(c->key, p->pos, p->bits) + 1;
 		else
 			idx = 0;
@@ -1477,20 +1453,8 @@ static struct leaf *leaf_walk_rcu(struct tnode *p, struct rt_trie_node *c)
 		while (idx < 1u << p->bits) {
 			c = tnode_get_child_rcu(p, idx++);
 
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-			if ((!c) || (IS_ERR(c))) {
-				pr_err("[NET] c is NULL in %s , idx=%d\n", __func__,idx);
-				continue;
-			}
-
-			if (probe_kernel_address(c,q)) {
-				pr_err("[NET] c is in %s illegal, going to next round,idx = %d\n", __func__,idx);
-				continue;
-			}
-#else
 			if (!c)
 				continue;
-#endif
 
 			if (IS_LEAF(c)) {
 				prefetch(rcu_dereference_rtnl(p->child[idx]));
@@ -1527,11 +1491,7 @@ static struct leaf *trie_nextleaf(struct leaf *l)
 	struct rt_trie_node *c = (struct rt_trie_node *) l;
 	struct tnode *p = node_parent_rcu(c);
 
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-	if ((!p) || (IS_ERR(p)))
-#else
 	if (!p)
-#endif
 		return NULL;	
 
 	return leaf_walk_rcu(p, c);
@@ -1553,9 +1513,6 @@ int fib_table_flush(struct fib_table *tb)
 	struct trie *t = (struct trie *) tb->tb_data;
 	struct leaf *l, *ll = NULL;
 	int found = 0;
-#ifdef CONFIG_HTC_FIB_RULE_DEBUG
-	printk(KERN_DEBUG  "[NET][CORE][RULE]%s+\n", __func__);
-#endif
 	for (l = trie_firstleaf(t); l; l = trie_nextleaf(l)) {
 		found += trie_flush_leaf(l);
 
@@ -1568,9 +1525,6 @@ int fib_table_flush(struct fib_table *tb)
 		trie_leaf_remove(t, ll);
 
 	pr_debug("trie_flush found=%d\n", found);
-#ifdef CONFIG_HTC_FIB_RULE_DEBUG
-	printk(KERN_DEBUG "[NET][CORE][RULE] %s-; trie_flush found=%d\n", __func__, found);
-#endif
 	return found;
 }
 
@@ -1657,10 +1611,6 @@ int fib_table_dump(struct fib_table *tb, struct sk_buff *skb,
 	struct trie *t = (struct trie *) tb->tb_data;
 	t_key key = cb->args[2];
 	int count = cb->args[3];
-
-#ifdef CONFIG_HTC_FIB_RULE_DEBUG
-	printk(KERN_DEBUG  "[NET][CORE][RULE]%s\n", __func__);
-#endif
 
 	rcu_read_lock();
 	if (count == 0)
@@ -2257,13 +2207,6 @@ static int fib_route_seq_show(struct seq_file *seq, void *v)
 		struct fib_alias *fa;
 		__be32 mask, prefix;
 
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-		if (( !li)  ||  IS_ERR(li)) {
-			printk(KERN_ERR "[NET] li is NULL in %s!\n", __func__);
-			return 0;
-
-		}
-#endif
 		mask = inet_make_mask(li->plen);
 		prefix = htonl(l->key);
 
@@ -2276,11 +2219,7 @@ static int fib_route_seq_show(struct seq_file *seq, void *v)
 				continue;
 
 			seq_setwidth(seq, 127);
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-			if ((fi) && (!IS_ERR(fi)))
-#else
 			if (fi)
-#endif
 				seq_printf(seq,
 					 "%s\t%08X\t%08X\t%04X\t%d\t%u\t"
 					 "%d\t%08X\t%d\t%u\t%u",

@@ -404,13 +404,6 @@ ipt_do_table(struct sk_buff *skb,
 					verdict = NF_DROP;
 					break;
 				}
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-			if (IS_ERR(stackptr) || (!stackptr) || IS_ERR(e) || (!e) || IS_ERR(jumpstack) || (!jumpstack)) {
-			    printk("[NET] ptr error in %s\n", __func__);
-			    verdict = NF_DROP;
-			    break;
-			}
-#endif
 
 				jumpstack[(*stackptr)++] = e;
 				pr_debug("Pushed %p into pos %u\n",

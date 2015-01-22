@@ -717,11 +717,6 @@ static ssize_t do_tcp_sendpages(struct sock *sk, struct page **pages, int poffse
 		int offset = poffset % PAGE_SIZE;
 		int size = min_t(size_t, psize, PAGE_SIZE - offset);
 
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-		if (IS_ERR(skb) || (!skb))
-			printk(KERN_ERR "[NET] skb is NULL in %s!\n", __func__);
-#endif
-
 		if (!tcp_send_head(sk) || (copy = size_goal - skb->len) <= 0) {
 new_segment:
 			if (!sk_stream_memory_free(sk))
@@ -1611,20 +1606,9 @@ recv_urg:
 }
 EXPORT_SYMBOL(tcp_recvmsg);
 
-#ifdef CONFIG_HTC_TCP_SYN_FAIL
-EXPORT_SYMBOL(sysctl_tcp_syn_fail);
-__be32 sysctl_tcp_syn_fail=0;
-#endif 
-
 void tcp_set_state(struct sock *sk, int state)
 {
 	int oldstate = sk->sk_state;
-
-#ifdef CONFIG_HTC_TCP_SYN_FAIL
-    struct inet_sock *inet;
-    struct inet_connection_sock *icsk = inet_csk(sk);
-    __be32 dst = icsk->icsk_inet.inet_daddr;
-#endif 
 
 	switch (state) {
 	case TCP_ESTABLISHED:
@@ -1640,18 +1624,6 @@ void tcp_set_state(struct sock *sk, int state)
 		if (inet_csk(sk)->icsk_bind_hash &&
 		    !(sk->sk_userlocks & SOCK_BINDPORT_LOCK))
 			inet_put_port(sk);
-
-#ifdef CONFIG_HTC_TCP_SYN_FAIL
-		if (sk!=NULL) {
-			inet = inet_sk(sk);
-			if (inet !=NULL && ntohs(inet->inet_sport) != 0 ) {
-				if ( dst != 0x0100007F && sk->sk_state== TCP_SYN_SENT && icsk->icsk_retransmits >= 2 ) {
-					printk(KERN_INFO "[NET][SMD] TCP SYN SENT fail, dst=%x, retransmit=%d \n",dst,icsk->icsk_retransmits);
-					sysctl_tcp_syn_fail = dst;
-				}
-			}
-		}
-#endif 
 
 		
 	default:
@@ -1731,12 +1703,6 @@ void tcp_close(struct sock *sk, long timeout)
 	int data_was_unread = 0;
 	int state;
 
-#ifdef CONFIG_HTC_NETWORK_MODIFY
-	if (IS_ERR(sk) || (!sk)) {
-		printk("[NET] sk is NULL in %s\n", __func__);
-		return;
-	}
-#endif
 	lock_sock(sk);
 	sk->sk_shutdown = SHUTDOWN_MASK;
 
