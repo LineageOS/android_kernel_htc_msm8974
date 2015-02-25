@@ -311,6 +311,7 @@ obj-$(CONFIG_MACH_MEM_UL) += board-mem-audio-amp.o
 obj-$(CONFIG_MACH_MEM_UL) += board-mem-gpiomux.o
 obj-$(CONFIG_MACH_A5) += board-afe-audio-amp.o
 obj-$(CONFIG_MACH_A5) += board-a5-gpiomux.o
+obj-$(CONFIG_MACH_A11_UL) += board-a11ul-gpiomux.o
 obj-$(CONFIG_ARCH_MSM8226) += board-8226.o board-8226-gpiomux.o
 obj-$(CONFIG_ARCH_MSM8226) += clock-local2.o clock-pll.o clock-8226.o clock-rpm.o clock-voter.o clock-mdss-8974.o
 obj-$(CONFIG_ARCH_MSM8226) += acpuclock-8226.o acpuclock-cortex.o
