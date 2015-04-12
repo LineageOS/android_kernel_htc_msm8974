@@ -45,7 +45,7 @@ struct fib_info;
 struct rtable {
 	struct dst_entry	dst;
 
-	
+	/* Lookup key. */
 	__be32			rt_key_dst;
 	__be32			rt_key_src;
 
@@ -54,22 +54,21 @@ struct rtable {
 	__u16			rt_type;
 	__u8			rt_key_tos;
 
-	__be32			rt_dst;	
-	__be32			rt_src;	
+	__be32			rt_dst;	/* Path destination	*/
+	__be32			rt_src;	/* Path source		*/
 	int			rt_route_iif;
 	int			rt_iif;
 	int			rt_oif;
 	__u32			rt_mark;
-	uid_t			rt_uid;
 
-	
+	/* Info on neighbour */
 	__be32			rt_gateway;
 
-	
-	__be32			rt_spec_dst; 
+	/* Miscellaneous cached information */
+	__be32			rt_spec_dst; /* RFC1122 specific destination */
 	u32			rt_peer_genid;
-	struct inet_peer	*peer; 
-	struct fib_info		*fi; 
+	struct inet_peer	*peer; /* long-living peer info */
+	struct fib_info		*fi; /* for client ref to shared metrics */
 };
 
 static inline bool rt_is_input_route(const struct rtable *rt)
@@ -147,7 +146,7 @@ static inline struct rtable *ip_route_output_ports(struct net *net, struct flowi
 	flowi4_init_output(fl4, oif, sk ? sk->sk_mark : 0, tos,
 			   RT_SCOPE_UNIVERSE, proto,
 			   sk ? inet_sk_flowi_flags(sk) : 0,
-			   daddr, saddr, dport, sport, sk ? sock_i_uid(sk) : 0);
+			   daddr, saddr, dport, sport);
 	if (sk)
 		security_sk_classify_flow(sk, flowi4_to_flowi(fl4));
 	return ip_route_output_flow(net, fl4, sk);
@@ -212,6 +211,29 @@ static inline char rt_tos2priority(u8 tos)
 	return ip_tos2prio[IPTOS_TOS(tos)>>1];
 }
 
+/* ip_route_connect() and ip_route_newports() work in tandem whilst
+ * binding a socket for a new outgoing connection.
+ *
+ * In order to use IPSEC properly, we must, in the end, have a
+ * route that was looked up using all available keys including source
+ * and destination ports.
+ *
+ * However, if a source port needs to be allocated (the user specified
+ * a wildcard source port) we need to obtain addressing information
+ * in order to perform that allocation.
+ *
+ * So ip_route_connect() looks up a route using wildcarded source and
+ * destination ports in the key, simply so that we can get a pair of
+ * addresses to use for port allocation.
+ *
+ * Later, once the ports are allocated, ip_route_newports() will make
+ * another route lookup if needed to make sure we catch any IPSEC
+ * rules keyed on the port information.
+ *
+ * The callers allocate the flow key on their stack, and must pass in
+ * the same flowi4 object to both the ip_route_connect() and the
+ * ip_route_newports() calls.
+ */
 
 static inline void ip_route_connect_init(struct flowi4 *fl4, __be32 dst, __be32 src,
 					 u32 tos, int oif, u8 protocol,
@@ -228,8 +250,7 @@ static inline void ip_route_connect_init(struct flowi4 *fl4, __be32 dst, __be32 
 		flow_flags |= FLOWI_FLAG_CAN_SLEEP;
 
 	flowi4_init_output(fl4, oif, sk->sk_mark, tos, RT_SCOPE_UNIVERSE,
-			   protocol, flow_flags, dst, src, dport, sport,
-			   sock_i_uid(sk));
+			   protocol, flow_flags, dst, src, dport, sport);
 }
 
 static inline struct rtable *ip_route_connect(struct flowi4 *fl4,
@@ -300,4 +321,4 @@ static inline int ip4_dst_hoplimit(const struct dst_entry *dst)
 	return hoplimit;
 }
 
-#endif	
+#endif	/* _ROUTE_H */

@@ -89,3 +89,4 @@ GTAGS
 *.orig
 *~
 \#*#
+/arch/arm/configs/eyeul_defconfig
