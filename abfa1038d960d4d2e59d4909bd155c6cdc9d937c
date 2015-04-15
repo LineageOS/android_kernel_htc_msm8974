@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "3ac371cc_4a230506",
+        "filename": "include/net/route.h",
+        "patchSetId": 7
+      },
+      "lineNbr": 38,
+      "author": {
+        "id": 3671
+      },
+      "writtenOn": "2015-04-15T09:08:18Z",
+      "side": 0,
+      "message": "not sure this file came out the way we expected...\n\ncauses a build failure for me:\n\nIn file included from ../../../../../../cm-12.0/kernel/htc/msm8974/include/net/inet_hashtables.h:32:0,\n                 from ../../../../../../cm-12.0/kernel/htc/msm8974/include/net/tcp.h:37,\n                 from ../../../../../../cm-12.0/kernel/htc/msm8974/drivers/scsi/scsi_tgt_if.c:26:\n../../../../../../cm-12.0/kernel/htc/msm8974/include/net/route.h: In function \u0027ip_route_output_ports\u0027:\n../../../../../../cm-12.0/kernel/htc/msm8974/include/net/route.h:149:7: error: too few arguments to function \u0027flowi4_init_output\u0027\n       daddr, saddr, dport, sport);",
+      "revId": "abfa1038d960d4d2e59d4909bd155c6cdc9d937c",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
