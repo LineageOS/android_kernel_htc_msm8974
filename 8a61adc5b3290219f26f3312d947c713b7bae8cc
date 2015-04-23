@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "da7fb54a_44cbe072",
+        "filename": "arch/arm/boot/dts/msm8974pro-aa-pm8941-eyeul.dts",
+        "patchSetId": 1
+      },
+      "lineNbr": 29,
+      "author": {
+        "id": 3671
+      },
+      "writtenOn": "2015-04-23T00:57:30Z",
+      "side": 0,
+      "message": "should probably either use tabs or not change this\n\n\u003c/nitpick\u003e",
+      "revId": "8a61adc5b3290219f26f3312d947c713b7bae8cc",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}

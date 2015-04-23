@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "da7fb54a_a4a02ca7",
+        "filename": "arch/arm/mach-msm/Makefile",
+        "patchSetId": 1
+      },
+      "lineNbr": 458,
+      "author": {
+        "id": 3671
+      },
+      "writtenOn": "2015-04-23T00:57:30Z",
+      "side": 1,
+      "message": "It seems like we\u0027re only kinda \u0027partly\u0027 adding support for WL and WHL, they exist in kconfig, but we aren\u0027t selecting dt for them or the panel boardfile.\n\nShould we even add them at all?",
+      "revId": "f530be166e2207424446fdb249407f0f206b21a7",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
