@@ -193,3 +193,7 @@ initrd_phys-$(CONFIG_ARCH_FSM9XXX)	:= 0x12000000
    zreladdr-$(CONFIG_ARCH_MSMSAMARIUM)	:= 0x00008000
 	dtb-$(CONFIG_ARCH_MSMSAMARIUM)	+= msmsamarium-sim.dtb
 	dtb-$(CONFIG_ARCH_MSMSAMARIUM)	+= msmsamarium-rumi.dtb
+
+ifeq ($(CONFIG_MACH_EYE_UL), y)
+	htc_dtb-$(CONFIG_ARCH_MSM8974)  += msm8974pro-aa-pm8941-eyeul.dtb
+endif

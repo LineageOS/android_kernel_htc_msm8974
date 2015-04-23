@@ -3212,6 +3212,12 @@ config HTC_FEATURES_SSR_WCNSS_ENABLE
 	default n
 	help
 
+config MACH_EYE_UL
+        depends on ARCH_MSM8974
+        bool "MSM8974 EYE_UL"
+        help
+          Support for HTC MSM8974 EYE_UL
+
 config HTC_DEFAULT_ENABLED_FEATURES
 	bool "Select default enabled config for HTC projects"
 	default y

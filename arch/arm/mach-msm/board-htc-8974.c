@@ -471,6 +471,8 @@ static void htc_8974_add_usb_devices(void)
 	android_usb_pdata.product_id	= 0x0643;
 #elif defined(CONFIG_MACH_M8_UHL)
 	android_usb_pdata.product_id	= 0x063A;
+#elif defined(CONFIG_MACH_EYE_UL)
+	android_usb_pdata.product_id	= 0x064C;
 #elif defined(CONFIG_MACH_M8_DUG)
 	android_usb_pdata.product_id	= 0x063B;
 #elif defined(CONFIG_MACH_DUMMY)
@@ -492,7 +494,7 @@ static void htc_8974_add_usb_devices(void)
 #elif defined(CONFIG_MACH_DUMMY)
 	android_usb_pdata.product_id	= 0x064C;
 #else
-	
+
 #endif
 
 	if (strcmp("0PFH20000", mid)==0)
