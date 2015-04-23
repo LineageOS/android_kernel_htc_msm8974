@@ -69,6 +69,8 @@ else ifeq ($(CONFIG_MACH_M8_DUG), y)
 	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-m8dug.dtb
 	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-m8dug-xb.dtb
 	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-m8dug-xc.dtb
+else ifeq ($(CONFIG_MACH_EYE_UL), y)
+	dtb-$(CONFIG_ARCH_MSM8974)  += msm8974pro-aa-pm8941-eyeul.dtb
 else
 	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v1-cdp.dtb
 	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v1-fluid.dtb

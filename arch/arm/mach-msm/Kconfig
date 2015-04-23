@@ -3163,6 +3163,12 @@ config MACH_M8_WL
 	help
 	  Support for HTC MSM8974 M8_WL
 
+config MACH_EYE_UL
+        depends on ARCH_MSM8974
+        bool "MSM8974 EYE_UL"
+        help
+          Support for HTC MSM8974 EYE_UL
+
 config PROJECT_NAME
 	string "Project Name"
 	default ""
