@@ -47,7 +47,9 @@ endif
 
 # MSM8974
    zreladdr-$(CONFIG_ARCH_MSM8974)	:= 0x00008000
-ifeq ($(CONFIG_MACH_M8)$(CONFIG_MACH_M8_WHL)$(CONFIG_MACH_M8_WL), y)
+ifeq ($(CONFIG_MACH_EYE_UL), y)
+	dtb-$(CONFIG_ARCH_MSM8974)  += msm8974pro-aa-pm8941-eyeul.dtb
+else ifeq ($(CONFIG_MACH_M8)$(CONFIG_MACH_M8_WHL)$(CONFIG_MACH_M8_WL), y)
 	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-m8.dtb
 	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-m8-xb.dtb
 	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-m8-xd.dtb
