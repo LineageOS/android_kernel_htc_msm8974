@@ -3139,6 +3139,12 @@ config HTC_PANEL_PWR_REG
 	bool "Register DSI Panel Power"
 	default y if ARCH_MSM8226
 
+config MACH_EYE_UL
+	depends on ARCH_MSM8974
+	bool "MSM8974 EYE_UL"
+	help
+	  Support for HTC MSM8974 EYE_UL
+
 config MACH_M8
 	depends on ARCH_MSM8974
 	bool "MSM8974 M8"
