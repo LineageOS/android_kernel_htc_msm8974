@@ -1,0 +1,72 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "da7fb54a_d5787c92",
+        "filename": "arch/arm/mach-msm/Kconfig",
+        "patchSetId": 4
+      },
+      "lineNbr": 3181,
+      "author": {
+        "id": 3671
+      },
+      "writtenOn": "2015-04-23T16:49:16Z",
+      "side": 1,
+      "message": "useless",
+      "revId": "0313970504fe336ce8afefc7a5763446d7330085",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "da7fb54a_f56d80cd",
+        "filename": "arch/arm/mach-msm/Kconfig",
+        "patchSetId": 4
+      },
+      "lineNbr": 3187,
+      "author": {
+        "id": 3671
+      },
+      "writtenOn": "2015-04-23T16:49:16Z",
+      "side": 1,
+      "message": "useless",
+      "revId": "0313970504fe336ce8afefc7a5763446d7330085",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "da7fb54a_1573c4b2",
+        "filename": "arch/arm/mach-msm/Makefile",
+        "patchSetId": 4
+      },
+      "lineNbr": 458,
+      "author": {
+        "id": 3671
+      },
+      "writtenOn": "2015-04-23T16:49:16Z",
+      "side": 1,
+      "message": "useless",
+      "revId": "0313970504fe336ce8afefc7a5763446d7330085",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "da7fb54a_3568c8ba",
+        "filename": "arch/arm/mach-msm/Makefile",
+        "patchSetId": 4
+      },
+      "lineNbr": 459,
+      "author": {
+        "id": 3671
+      },
+      "writtenOn": "2015-04-23T16:49:16Z",
+      "side": 1,
+      "message": "useless",
+      "revId": "0313970504fe336ce8afefc7a5763446d7330085",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
