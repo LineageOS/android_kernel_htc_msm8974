@@ -27,6 +27,11 @@
 #include <linux/device.h>
 #include <linux/miscdevice.h>
 
+
+#define ADB_IOCTL_MAGIC 's'
+#define ADB_ERR_PAYLOAD_STUCK       _IOW(ADB_IOCTL_MAGIC, 0, unsigned)
+#define ADB_ATS_ENABLE              _IOR(ADB_IOCTL_MAGIC, 1, unsigned)
+
 #define ADB_BULK_BUFFER_SIZE           4096
 
 /* number of tx requests to allocate */
@@ -55,8 +60,10 @@ struct adb_dev {
 	wait_queue_head_t write_wq;
 	struct usb_request *rx_req;
 	int rx_done;
-	bool notify_close;
-	bool close_notified;
+	int read_err;
+	int write_err;
+/*	bool notify_close;
+	bool close_notified;*/
 };
 
 static struct usb_interface_descriptor adb_interface_desc = {
@@ -155,12 +162,17 @@ static struct usb_descriptor_header *ss_adb_descs[] = {
 	(struct usb_descriptor_header *) &adb_superspeed_out_comp_desc,
 	NULL,
 };
-
+/*
 static void adb_ready_callback(void);
 static void adb_closed_callback(void);
-
+*/
 /* temporary variable used between adb_open() and adb_gadget_bind() */
 static struct adb_dev *_adb_dev;
+
+static struct timer_list adb_read_timer;
+
+int board_get_usb_ats(void);
+void board_set_usb_ats(int type);
 
 static inline struct adb_dev *func_to_adb(struct usb_function *f)
 {
@@ -239,9 +251,11 @@ static void adb_complete_in(struct usb_ep *ep, struct usb_request *req)
 {
 	struct adb_dev *dev = _adb_dev;
 
-	if (req->status != 0)
+	if (req->status != 0) {
+		if (req->status != -ESHUTDOWN)
+			printk(KERN_INFO "[USB] %s: warning (%d)\n", __func__, req->status);
 		atomic_set(&dev->error, 1);
-
+	}
 	adb_req_put(dev, &dev->tx_idle, req);
 
 	wake_up(&dev->write_wq);
@@ -255,6 +269,10 @@ static void adb_complete_out(struct usb_ep *ep, struct usb_request *req)
 	if (req->status != 0 && req->status != -ECONNRESET)
 		atomic_set(&dev->error, 1);
 
+	if (req->status != 0) {
+		if (req->status != -ESHUTDOWN)
+			printk(KERN_INFO "[USB] %s: warning (%d)\n", __func__, req->status);
+	}
 	wake_up(&dev->read_wq);
 }
 
@@ -309,6 +327,9 @@ fail:
 	return -1;
 }
 
+static int bugreport_debug;
+static void adb_read_timeout(void);
+
 static ssize_t adb_read(struct file *fp, char __user *buf,
 				size_t count, loff_t *pos)
 {
@@ -318,14 +339,21 @@ static ssize_t adb_read(struct file *fp, char __user *buf,
 	int ret;
 
 	pr_debug("adb_read(%d)\n", count);
-	if (!_adb_dev)
+
+	if (!_adb_dev) {
+		printk(KERN_INFO "[USB] %s _adb_dev is NULL\n",__func__);
 		return -ENODEV;
+	}
 
-	if (count > ADB_BULK_BUFFER_SIZE)
+	if (count > ADB_BULK_BUFFER_SIZE) {
+		_adb_dev->read_err = 1;
 		return -EINVAL;
+	}
 
-	if (adb_lock(&dev->read_excl))
+	if (adb_lock(&dev->read_excl)) {
+		_adb_dev->read_err = 2;
 		return -EBUSY;
+	}
 
 	/* we will block until we're online */
 	while (!(atomic_read(&dev->online) || atomic_read(&dev->error))) {
@@ -335,24 +363,31 @@ static ssize_t adb_read(struct file *fp, char __user *buf,
 			atomic_read(&dev->error)));
 		if (ret < 0) {
 			adb_unlock(&dev->read_excl);
+			_adb_dev->read_err = 3;
 			return ret;
 		}
 	}
 	if (atomic_read(&dev->error)) {
 		r = -EIO;
+		_adb_dev->read_err = 4;
 		goto done;
 	}
 
 requeue_req:
 	/* queue a request */
 	req = dev->rx_req;
-	req->length = ADB_BULK_BUFFER_SIZE;
+
+	if (count % 512 == 0)
+		req->length = count;
+	else
+		req->length = ADB_BULK_BUFFER_SIZE;
 	dev->rx_done = 0;
 	ret = usb_ep_queue(dev->ep_out, req, GFP_ATOMIC);
 	if (ret < 0) {
 		pr_debug("adb_read: failed to queue req %p (%d)\n", req, ret);
 		r = -EIO;
 		atomic_set(&dev->error, 1);
+		_adb_dev->read_err = 5;
 		goto done;
 	} else {
 		pr_debug("rx %p queue\n", req);
@@ -361,9 +396,24 @@ requeue_req:
 	/* wait for a request to complete */
 	ret = wait_event_interruptible(dev->read_wq, dev->rx_done ||
 				atomic_read(&dev->error));
+
+	if (bugreport_debug) {
+		if (atomic_read(&dev->error)) {
+			r = -EIO;
+			_adb_dev->read_err = 6;
+			adb_read_timeout();
+			goto done;
+		}
+		del_timer(&adb_read_timer);
+	}
+
 	if (ret < 0) {
-		if (ret != -ERESTARTSYS)
-		atomic_set(&dev->error, 1);
+		if (ret != -ERESTARTSYS) {
+			atomic_set(&dev->error, 1);
+			_adb_dev->read_err = 7;
+		} else {
+			_adb_dev->read_err = 8;
+		}
 		r = ret;
 		usb_ep_dequeue(dev->ep_out, req);
 		goto done;
@@ -375,11 +425,14 @@ requeue_req:
 
 		pr_debug("rx %p %d\n", req, req->actual);
 		xfer = (req->actual < count) ? req->actual : count;
-		if (copy_to_user(buf, req->buf, xfer))
+		if (copy_to_user(buf, req->buf, xfer)) {
 			r = -EFAULT;
-
-	} else
+			_adb_dev->read_err = 9;
+		}
+	} else {
+		_adb_dev->read_err = 10;
 		r = -EIO;
+	}
 
 done:
 	if (atomic_read(&dev->error))
@@ -390,6 +443,16 @@ done:
 	return r;
 }
 
+#define READ_TIMEOUT_VALUE (jiffies + msecs_to_jiffies(5000))
+static void adb_read_check_timer(unsigned long data)
+{
+	struct adb_dev *dev = _adb_dev;
+
+	pr_info("adb_read timeout\n");
+	atomic_set(&dev->error, 1);
+	wake_up(&dev->read_wq);
+}
+
 static ssize_t adb_write(struct file *fp, const char __user *buf,
 				 size_t count, loff_t *pos)
 {
@@ -398,17 +461,22 @@ static ssize_t adb_write(struct file *fp, const char __user *buf,
 	int r = count, xfer;
 	int ret;
 
-	if (!_adb_dev)
+	if (!_adb_dev) {
+		printk(KERN_INFO "[USB] %s _adb_dev is NULL\n",__func__);
 		return -ENODEV;
+	}
 	pr_debug("adb_write(%d)\n", count);
 
-	if (adb_lock(&dev->write_excl))
+	if (adb_lock(&dev->write_excl)) {
+		_adb_dev->write_err = 1;
 		return -EBUSY;
+	}
 
 	while (count > 0) {
 		if (atomic_read(&dev->error)) {
 			pr_debug("adb_write dev->error\n");
 			r = -EIO;
+			_adb_dev->write_err = 2;
 			break;
 		}
 
@@ -418,8 +486,12 @@ static ssize_t adb_write(struct file *fp, const char __user *buf,
 			((req = adb_req_get(dev, &dev->tx_idle)) ||
 			 atomic_read(&dev->error)));
 
+		if (bugreport_debug)
+			mod_timer(&adb_read_timer, READ_TIMEOUT_VALUE);
+
 		if (ret < 0) {
 			r = ret;
+			_adb_dev->write_err = 3;
 			break;
 		}
 
@@ -430,6 +502,7 @@ static ssize_t adb_write(struct file *fp, const char __user *buf,
 				xfer = count;
 			if (copy_from_user(req->buf, buf, xfer)) {
 				r = -EFAULT;
+				_adb_dev->write_err = 4;
 				break;
 			}
 
@@ -439,6 +512,7 @@ static ssize_t adb_write(struct file *fp, const char __user *buf,
 				pr_debug("adb_write: xfer error %d\n", ret);
 				atomic_set(&dev->error, 1);
 				r = -EIO;
+				_adb_dev->write_err = 5;
 				break;
 			}
 
@@ -463,10 +537,14 @@ static ssize_t adb_write(struct file *fp, const char __user *buf,
 
 static int adb_open(struct inode *ip, struct file *fp)
 {
+/*
 	static DEFINE_RATELIMIT_STATE(rl, 10*HZ, 1);
-
 	if (__ratelimit(&rl))
 		pr_info("adb_open\n");
+*/
+	printk(KERN_INFO "[USB] adb_open: %s(parent:%s): tgid=%d\n",
+			current->comm, current->parent->comm, current->tgid);
+
 	if (!_adb_dev)
 		return -ENODEV;
 
@@ -477,22 +555,29 @@ static int adb_open(struct inode *ip, struct file *fp)
 
 	/* clear the error latch */
 	atomic_set(&_adb_dev->error, 0);
-
+	_adb_dev->read_err = 0;
+	_adb_dev->write_err = 0;
+/*
 	if (_adb_dev->close_notified) {
 		_adb_dev->close_notified = false;
 		adb_ready_callback();
 	}
 
 	_adb_dev->notify_close = true;
+*/
 	return 0;
 }
 
 static int adb_release(struct inode *ip, struct file *fp)
 {
+/*
 	static DEFINE_RATELIMIT_STATE(rl, 10*HZ, 1);
 
 	if (__ratelimit(&rl))
 		pr_info("adb_release\n");
+*/
+	printk(KERN_INFO "[USB] adb_release: %s(parent:%s): tgid=%d read_err %d write_err %d\n",
+			current->comm, current->parent->comm, current->tgid,_adb_dev->read_err,_adb_dev->write_err);
 
 	/*
 	 * ADB daemon closes the device file after I/O error.  The
@@ -502,11 +587,12 @@ static int adb_release(struct inode *ip, struct file *fp)
 	 * undesired.  We want to force bus reset only for certain
 	 * commands like "adb root" and "adb usb".
 	 */
+/*
 	if (_adb_dev->notify_close) {
 		adb_closed_callback();
 		_adb_dev->close_notified = true;
 	}
-
+*/
 	adb_unlock(&_adb_dev->open_excl);
 	return 0;
 }
@@ -526,7 +612,57 @@ static struct miscdevice adb_device = {
 	.fops = &adb_fops,
 };
 
+int htc_usb_enable_function(char *name, int ebl);
+static int adb_enable_open(struct inode *ip, struct file *fp)
+{
+	printk(KERN_INFO "[USB] enabling adb: %s(parent:%s): tgid=%d\n",
+			current->comm, current->parent->comm, current->tgid);
+	htc_usb_enable_function("adb", 1);
+	return 0;
+}
 
+static int adb_enable_release(struct inode *ip, struct file *fp)
+{
+	printk(KERN_INFO "[USB] disabling adb: %s(parent:%s): tgid=%d\n",
+			current->comm, current->parent->comm, current->tgid);
+	htc_usb_enable_function("adb", 0);
+	return 0;
+}
+
+static long adb_enable_ioctl(struct file *file,
+				unsigned int cmd, unsigned long arg)
+{
+	int rc = 0;
+
+	switch (cmd) {
+	case ADB_ERR_PAYLOAD_STUCK: {
+		printk(KERN_INFO "[USB] adbd read payload stuck (reset ADB)\n");
+		break;
+	}
+	case ADB_ATS_ENABLE: {
+		printk(KERN_INFO "[USB] ATS enable =  %d\n",board_get_usb_ats());
+		rc = put_user(board_get_usb_ats(),(int __user *)arg);
+		break;
+	}
+
+	default:
+		rc = -EINVAL;
+	}
+	return rc;
+}
+
+static const struct file_operations adb_enable_fops = {
+	.owner =   THIS_MODULE,
+	.open =    adb_enable_open,
+	.release = adb_enable_release,
+	.unlocked_ioctl	= adb_enable_ioctl,
+};
+
+static struct miscdevice adb_enable_device = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = "android_adb_enable",
+	.fops = &adb_enable_fops,
+};
 
 
 static int
@@ -646,7 +782,7 @@ static void adb_function_disable(struct usb_function *f)
 	 * need to disable the configuration now.  We will
 	 * set noify_close to true when device file is re-opened.
 	 */
-	dev->notify_close = false;
+/*	dev->notify_close = false;*/
 	atomic_set(&dev->online, 0);
 	atomic_set(&dev->error, 1);
 	usb_ep_disable(dev->ep_in);
@@ -662,7 +798,7 @@ static int adb_bind_config(struct usb_configuration *c)
 {
 	struct adb_dev *dev = _adb_dev;
 
-	pr_debug("adb_bind_config\n");
+	printk(KERN_INFO "adb_bind_config\n");
 
 	dev->cdev = c->cdev;
 	dev->function.name = "adb";
@@ -697,7 +833,7 @@ static int adb_setup(void)
 	atomic_set(&dev->write_excl, 0);
 
 	/* config is disabled by default if adb is present. */
-	dev->close_notified = true;
+/*	dev->close_notified = true;*/
 
 	INIT_LIST_HEAD(&dev->tx_idle);
 
@@ -706,6 +842,15 @@ static int adb_setup(void)
 	ret = misc_register(&adb_device);
 	if (ret)
 		goto err;
+
+	/* mfgkernel mode need this device node */
+	if ((board_mfg_mode() != 0) || (board_get_usb_ats() == 1)) {
+		ret = misc_register(&adb_enable_device);
+		if (ret)
+			goto err;
+	}
+
+	setup_timer(&adb_read_timer, adb_read_check_timer, 0);
 
 	return 0;
 
@@ -718,6 +863,7 @@ err:
 static void adb_cleanup(void)
 {
 	misc_deregister(&adb_device);
+	misc_deregister(&adb_enable_device);
 
 	kfree(_adb_dev);
 	_adb_dev = NULL;

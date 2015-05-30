@@ -32,78 +32,71 @@
 #include <linux/mutex.h>
 #include <linux/atomic.h>
 #include "radio-iris-commands.h"
-const unsigned char MIN_TX_TONE_VAL = 0x00;
-const unsigned char MAX_TX_TONE_VAL = 0x07;
-const unsigned char MIN_HARD_MUTE_VAL = 0x00;
-const unsigned char MAX_HARD_MUTE_VAL = 0x03;
-const unsigned char MIN_SRCH_MODE = 0x00;
-const unsigned char MAX_SRCH_MODE = 0x09;
-const unsigned char MIN_SCAN_DWELL = 0x00;
-const unsigned char MAX_SCAN_DWELL = 0x0F;
-const unsigned char MIN_SIG_TH = 0x00;
-const unsigned char MAX_SIG_TH = 0x03;
-const unsigned char MIN_PTY = 0X00;
-const unsigned char MAX_PTY = 0x1F;
-const unsigned short MIN_PI = 0x0000;
-const unsigned short MAX_PI = 0xFFFF;
-const unsigned char MIN_SRCH_STATIONS_CNT = 0x00;
-const unsigned char MAX_SRCH_STATIONS_CNT = 0x14;
-const unsigned char MIN_CHAN_SPACING = 0x00;
-const unsigned char MAX_CHAN_SPACING = 0x02;
-const unsigned char MIN_EMPHASIS = 0x00;
-const unsigned char MAX_EMPHASIS = 0x01;
-const unsigned char MIN_RDS_STD = 0x00;
-const unsigned char MAX_RDS_STD = 0x02;
-const unsigned char MIN_ANTENNA_VAL = 0x00;
-const unsigned char MAX_ANTENNA_VAL = 0x01;
-const unsigned char MIN_TX_PS_REPEAT_CNT = 0x01;
-const unsigned char MAX_TX_PS_REPEAT_CNT = 0x0F;
-const unsigned char MIN_SOFT_MUTE = 0x00;
-const unsigned char MAX_SOFT_MUTE = 0x01;
-const unsigned char MIN_PEEK_ACCESS_LEN = 0x01;
-const unsigned char MAX_PEEK_ACCESS_LEN = 0xF9;
-const unsigned char MIN_RESET_CNTR = 0x00;
-const unsigned char MAX_RESET_CNTR = 0x01;
-const unsigned char MIN_HLSI = 0x00;
-const unsigned char MAX_HLSI = 0x02;
-const unsigned char MIN_NOTCH_FILTER = 0x00;
-const unsigned char MAX_NOTCH_FILTER = 0x02;
-const unsigned char MIN_INTF_DET_OUT_LW_TH = 0x00;
-const unsigned char MAX_INTF_DET_OUT_LW_TH = 0xFF;
-const unsigned char MIN_INTF_DET_OUT_HG_TH = 0x00;
-const unsigned char MAX_INTF_DET_OUT_HG_TH = 0xFF;
-const signed char MIN_SINR_TH = -128;
-const signed char MAX_SINR_TH = 127;
-const unsigned char MIN_SINR_SAMPLES = 0x01;
-const unsigned char MAX_SINR_SAMPLES = 0xFF;
 
-/* ---- HCI Packet structures ---- */
+#define MIN_TX_TONE_VAL 0x00
+#define MAX_TX_TONE_VAL 0x07
+#define MIN_HARD_MUTE_VAL 0x00
+#define MAX_HARD_MUTE_VAL 0x03
+#define MIN_SRCH_MODE 0x00
+#define MAX_SRCH_MODE 0x01
+#define MIN_SCAN_DWELL 0x00
+#define MAX_SCAN_DWELL 0x0F
+#define MIN_SIG_TH 0x00
+#define MAX_SIG_TH 0x03
+#define MIN_PTY 0X00
+#define MAX_PTY 0x1F
+#define MIN_PI 0x0000
+#define MAX_PI 0xFFFF
+#define MIN_SRCH_STATIONS_CNT 0x00
+#define MAX_SRCH_STATIONS_CNT 0x14
+#define MIN_CHAN_SPACING 0x00
+#define MAX_CHAN_SPACING 0x02
+#define MIN_EMPHASIS 0x00
+#define MAX_EMPHASIS 0x01
+#define MIN_RDS_STD 0x00
+#define MAX_RDS_STD 0x02
+#define MIN_ANTENNA_VAL 0x00
+#define MAX_ANTENNA_VAL 0x01
+#define MIN_TX_PS_REPEAT_CNT 0x01
+#define MAX_TX_PS_REPEAT_CNT 0x0F
+#define MIN_SOFT_MUTE 0x00
+#define MAX_SOFT_MUTE 0x01
+#define MIN_PEEK_ACCESS_LEN 0x01
+#define MAX_PEEK_ACCESS_LEN 0xF9
+#define MIN_RESET_CNTR 0x00
+#define MAX_RESET_CNTR 0x01
+#define MIN_HLSI 0x00
+#define MAX_HLSI 0x02
+#define MIN_NOTCH_FILTER 0x00
+#define MAX_NOTCH_FILTER 0x02
+#define MIN_INTF_DET_OUT_LW_TH 0x00
+#define MAX_INTF_DET_OUT_LW_TH 0xFF
+#define MIN_INTF_DET_OUT_HG_TH 0x00
+#define MAX_INTF_DET_OUT_HG_TH 0xFF
+#define MIN_SINR_TH -128
+#define MAX_SINR_TH 127
+#define MIN_SINR_SAMPLES 0x01
+#define MAX_SINR_SAMPLES 0xFF
+
 #define RADIO_HCI_COMMAND_HDR_SIZE sizeof(struct radio_hci_command_hdr)
 #define RADIO_HCI_EVENT_HDR_SIZE   sizeof(struct radio_hci_event_hdr)
 
-/* HCI data types */
 #define RADIO_HCI_COMMAND_PKT   0x11
 #define RADIO_HCI_EVENT_PKT     0x14
-/*HCI reponce packets*/
 #define MAX_RIVA_PEEK_RSP_SIZE   251
-/* default data access */
 #define DEFAULT_DATA_OFFSET 2
 #define DEFAULT_DATA_SIZE 249
-/* Power levels are 0-7, but SOC will expect values from 0-255
- * So the each level step size will be 255/7 = 36 */
 #define FM_TX_PWR_LVL_STEP_SIZE 36
-#define FM_TX_PWR_LVL_0         0 /* Lowest power lvl that can be set for Tx */
-#define FM_TX_PWR_LVL_MAX       7 /* Max power lvl for Tx */
+#define FM_TX_PWR_LVL_0         0 
+#define FM_TX_PWR_LVL_MAX       7 
 #define FM_TX_PHY_CFG_MODE   0x3c
 #define FM_TX_PHY_CFG_LEN    0x10
 #define FM_TX_PWR_GAIN_OFFSET 14
-/**RDS CONFIG MODE**/
 #define FM_RDS_CNFG_MODE	0x0f
 #define FM_RDS_CNFG_LEN		0x10
 #define AF_RMSSI_TH_LSB_OFFSET	10
 #define AF_RMSSI_TH_MSB_OFFSET	11
 #define AF_RMSSI_SAMPLES_OFFSET	15
-/**RX CONFIG MODE**/
 #define FM_RX_CONFG_MODE	0x15
 #define FM_RX_CNFG_LEN		0x20
 #define GD_CH_RMSSI_TH_OFFSET	12
@@ -122,14 +115,12 @@ const unsigned char MAX_SINR_SAMPLES = 0xFF;
 #define RX_REPEATE_BYTE_OFFSET 5
 
 #define FM_AF_LIST_MAX_SIZE   200
-#define AF_LIST_MAX     (FM_AF_LIST_MAX_SIZE / 4) /* Each AF frequency consist
-							of sizeof(int) bytes */
-/* HCI timeouts */
-#define RADIO_HCI_TIMEOUT	(10000)	/* 10 seconds */
+#define AF_LIST_MAX     (FM_AF_LIST_MAX_SIZE / 4) 
+#define RADIO_HCI_TIMEOUT	(10000)	
 
 #define TUNE_PARAM 16
 struct radio_hci_command_hdr {
-	__le16	opcode;		/* OCF & OGF */
+	__le16	opcode;		
 	__u8	plen;
 } __packed;
 
@@ -184,8 +175,6 @@ int radio_hci_send_cmd(struct radio_hci_dev *hdev, __u16 opcode, __u32 plen,
 	void *param);
 void radio_hci_event_packet(struct radio_hci_dev *hdev, struct sk_buff *skb);
 
-/* Opcode OCF */
-/* HCI recv control commands opcode */
 #define HCI_OCF_FM_ENABLE_RECV_REQ          0x0001
 #define HCI_OCF_FM_DISABLE_RECV_REQ         0x0002
 #define HCI_OCF_FM_GET_RECV_CONF_REQ        0x0003
@@ -210,7 +199,6 @@ void radio_hci_event_packet(struct radio_hci_dev *hdev, struct sk_buff *skb);
 #define HCI_OCF_FM_SET_EVENT_MASK           0x0016
 #define HCI_OCF_FM_SET_CH_DET_THRESHOLD     0x0017
 #define HCI_OCF_FM_GET_CH_DET_THRESHOLD     0x0018
-/* HCI trans control commans opcode*/
 #define HCI_OCF_FM_ENABLE_TRANS_REQ         0x0001
 #define HCI_OCF_FM_DISABLE_TRANS_REQ        0x0002
 #define HCI_OCF_FM_GET_TRANS_CONF_REQ       0x0003
@@ -219,7 +207,6 @@ void radio_hci_event_packet(struct radio_hci_dev *hdev, struct sk_buff *skb);
 #define HCI_OCF_FM_RDS_PS_REQ               0x0009
 
 
-/* HCI common control commands opcode */
 #define HCI_OCF_FM_TUNE_STATION_REQ         0x0001
 #define HCI_OCF_FM_DEFAULT_DATA_READ        0x0002
 #define HCI_OCF_FM_DEFAULT_DATA_WRITE       0x0003
@@ -228,10 +215,8 @@ void radio_hci_event_packet(struct radio_hci_dev *hdev, struct sk_buff *skb);
 #define HCI_OCF_FM_DO_CALIBRATION           0x0006
 #define HCI_OCF_FM_SET_CALIBRATION          0x0007
 
-/*HCI Status parameters commands*/
 #define HCI_OCF_FM_READ_GRP_COUNTERS        0x0001
 
-/*HCI Diagnostic commands*/
 #define HCI_OCF_FM_PEEK_DATA                0x0002
 #define HCI_OCF_FM_POKE_DATA                0x0003
 #define HCI_OCF_FM_SSBI_PEEK_REG            0x0004
@@ -239,7 +224,6 @@ void radio_hci_event_packet(struct radio_hci_dev *hdev, struct sk_buff *skb);
 #define HCI_OCF_FM_STATION_DBG_PARAM        0x0007
 #define HCI_FM_SET_INTERNAL_TONE_GENRATOR   0x0008
 
-/* Opcode OGF */
 #define HCI_OGF_FM_RECV_CTRL_CMD_REQ            0x0013
 #define HCI_OGF_FM_TRANS_CTRL_CMD_REQ           0x0014
 #define HCI_OGF_FM_COMMON_CTRL_CMD_REQ          0x0015
@@ -247,7 +231,6 @@ void radio_hci_event_packet(struct radio_hci_dev *hdev, struct sk_buff *skb);
 #define HCI_OGF_FM_TEST_CMD_REQ                 0x0017
 #define HCI_OGF_FM_DIAGNOSTIC_CMD_REQ           0x003F
 
-/* Command opcode pack/unpack */
 #define hci_opcode_pack(ogf, ocf)	(__u16) ((ocf & 0x03ff)|(ogf << 10))
 #define hci_opcode_ogf(op)		(op >> 10)
 #define hci_opcode_ocf(op)		(op & 0x03ff)
@@ -263,7 +246,6 @@ void radio_hci_event_packet(struct radio_hci_dev *hdev, struct sk_buff *skb);
 	(__u16) hci_opcode_pack(HCI_OGF_FM_DIAGNOSTIC_CMD_REQ, ocf)
 
 
-/* HCI commands with no arguments*/
 #define HCI_FM_ENABLE_RECV_CMD 1
 #define HCI_FM_DISABLE_RECV_CMD 2
 #define HCI_FM_GET_RECV_CONF_CMD 3
@@ -281,12 +263,10 @@ void radio_hci_event_packet(struct radio_hci_dev *hdev, struct sk_buff *skb);
 #define HCI_FM_GET_TX_CONFIG 15
 #define HCI_FM_GET_DET_CH_TH_CMD 16
 
-/* Defines for FM TX*/
 #define TX_PS_DATA_LENGTH 108
 #define TX_RT_DATA_LENGTH 64
 #define PS_STRING_LEN     9
 
-/* ----- HCI Command request ----- */
 struct hci_fm_recv_conf_req {
 	__u8	emphasis;
 	__u8	ch_spacing;
@@ -296,7 +276,6 @@ struct hci_fm_recv_conf_req {
 	__u32	band_high_limit;
 } __packed;
 
-/* ----- HCI Command request ----- */
 struct hci_fm_trans_conf_req_struct {
 	__u8	emphasis;
 	__u8	rds_std;
@@ -305,7 +284,6 @@ struct hci_fm_trans_conf_req_struct {
 } __packed;
 
 
-/* ----- HCI Command request ----- */
 struct hci_fm_tx_ps {
 	__u8    ps_control;
 	__u16	pi;
@@ -408,7 +386,6 @@ struct hci_fm_ch_det_threshold {
 
 } __packed;
 
-/*HCI events*/
 #define HCI_EV_TUNE_STATUS              0x01
 #define HCI_EV_RDS_LOCK_STATUS          0x02
 #define HCI_EV_STEREO_STATUS            0x03
@@ -439,12 +416,10 @@ struct hci_fm_ch_det_threshold {
 
 #define RDSGRP_DATA_OFFSET	 0x1
 
-/*RT PLUS*/
 #define DUMMY_CLASS		0
 #define RT_PLUS_LEN_1_TAG	3
 #define RT_ERT_FLAG_BIT		5
 
-/*TAG1*/
 #define TAG1_MSB_OFFSET		3
 #define TAG1_MSB_MASK		7
 #define TAG1_LSB_OFFSET		5
@@ -454,7 +429,6 @@ struct hci_fm_ch_det_threshold {
 #define TAG1_LEN_OFFSET		1
 #define TAG1_LEN_MASK		63
 
-/*TAG2*/
 #define TAG2_MSB_OFFSET		5
 #define TAG2_MSB_MASK		1
 #define TAG2_LSB_OFFSET		3
@@ -464,17 +438,13 @@ struct hci_fm_ch_det_threshold {
 #define TAG2_LEN_MASK		31
 
 #define AGT_MASK		31
-/*Extract 5 left most bits of lsb of 2nd block*/
 #define AGT(x)			(x & AGT_MASK)
-/*16 bits of 4th block*/
 #define AID(lsb, msb)		((msb << 8) | (lsb))
-/*Extract 5 right most bits of msb of 2nd block*/
 #define GTC(blk2msb)		(blk2msb >> 3)
 
 #define GRP_3A			0x6
 #define RT_PLUS_AID		0x4bd7
 
-/*ERT*/
 #define ERT_AID			0x6552
 #define CARRIAGE_RETURN		0x000D
 #define MAX_ERT_SEGMENT		31
@@ -563,7 +533,6 @@ struct hci_ev_srch_list_compl {
 	struct hci_ev_rel_freq  rel_freq[20];
 } __packed;
 
-/* ----- HCI Event Response ----- */
 struct hci_fm_conf_rsp {
 	__u8    status;
 	struct hci_fm_recv_conf_req recv_conf_rsp;
@@ -642,14 +611,12 @@ struct hci_fm_spur_data {
 } __packed;
 
 
-/* HCI dev events */
 #define RADIO_HCI_DEV_REG			1
 #define RADIO_HCI_DEV_WRITE			2
 
 #define hci_req_lock(d)		mutex_lock(&d->req_lock)
 #define hci_req_unlock(d)	mutex_unlock(&d->req_lock)
 
-/* FM RDS */
 #define RDS_PTYPE 2
 #define RDS_PID_LOWER 1
 #define RDS_PID_HIGHER 0
@@ -663,7 +630,6 @@ struct hci_fm_spur_data {
 #define AF_SIZE_OFFSET 6
 #define AF_LIST_OFFSET 7
 #define RT_A_B_FLAG_OFFSET 4
-/*FM states*/
 
 enum radio_state_t {
 	FM_OFF,
@@ -746,7 +712,6 @@ enum iris_xfr_t {
 #undef FMDERR
 #define FMDERR(fmt, args...) pr_err("iris_radio: " fmt, ##args)
 
-/* Search options */
 enum search_t {
 	SEEK,
 	SCAN,
@@ -767,7 +732,6 @@ enum spur_entry_levels {
 	ENTRY_5,
 };
 
-/* Band limits */
 #define REGION_US_EU_BAND_LOW              87500
 #define REGION_US_EU_BAND_HIGH             108000
 #define REGION_JAPAN_STANDARD_BAND_LOW     76000
@@ -776,11 +740,10 @@ enum spur_entry_levels {
 #define REGION_JAPAN_WIDE_BAND_HIGH        108000
 
 #define SRCH_MODE	0x07
-#define SRCH_DIR	0x08 /* 0-up 1-down */
+#define SRCH_DIR	0x08 
 #define SCAN_DWELL	0x70
 #define SRCH_ON		0x80
 
-/* I/O Control */
 #define IOC_HRD_MUTE	0x03
 #define IOC_SFT_MUTE	0x01
 #define IOC_MON_STR	0x01
@@ -788,25 +751,20 @@ enum spur_entry_levels {
 #define IOC_INTF_BLND	0x01
 #define IOC_ANTENNA	0x01
 
-/* RDS Control */
 #define RDS_ON		0x01
 #define RDS_BUF_SZ  100
 
-/* constants */
 #define  RDS_BLOCKS_NUM	(4)
 #define BYTES_PER_BLOCK	(3)
 #define MAX_PS_LENGTH	(108)
 #define MAX_RT_LENGTH	(64)
 #define RDS_GRP_CNTR_LEN (36)
 #define RX_RT_DATA_LENGTH (63)
-/* Search direction */
 #define SRCH_DIR_UP		(0)
 #define SRCH_DIR_DOWN		(1)
 
-/*Search RDS stations*/
 #define SEARCH_RDS_STNS_MODE_OFFSET 4
 
-/*Search Station list */
 #define PARAMS_PER_STATION 0x08
 #define STN_NUM_OFFSET     0x01
 #define STN_FREQ_OFFSET    0x02
@@ -814,11 +772,9 @@ enum spur_entry_levels {
 #define GET_MSB(x)((x >> 8) & 0xFF)
 #define GET_LSB(x)((x) & 0xFF)
 
-/* control options */
 #define CTRL_ON			(1)
 #define CTRL_OFF		(0)
 
-/*Diagnostic commands*/
 
 #define RIVA_PEEK_OPCODE 0x0D
 #define RIVA_POKE_OPCODE 0x0C
@@ -827,7 +783,6 @@ enum spur_entry_levels {
 #define RIVA_PEEK_PARAM     0x6
 #define RIVA_PEEK_LEN_OFSET  0x6
 #define SSBI_PEEK_LEN    0x01
-/*Calibration data*/
 #define PROCS_CALIB_MODE  1
 #define PROCS_CALIB_SIZE  23
 #define DC_CALIB_MODE     2
@@ -838,19 +793,18 @@ enum spur_entry_levels {
 #define CALIB_MODE_OFSET  1
 #define MAX_CALIB_SIZE 75
 
-/* Channel validity */
 #define INVALID_CHANNEL		(0)
 #define VALID_CHANNEL		(1)
 
 struct hci_fm_set_cal_req_proc {
 	__u8    mode;
-	/*Max process calibration data size*/
+	
 	__u8    data[PROCS_CALIB_SIZE];
 } __packed;
 
 struct hci_fm_set_cal_req_dc {
 	__u8    mode;
-	/*Max DC calibration data size*/
+	
 	__u8    data[DC_CALIB_SIZE];
 } __packed;
 
@@ -860,7 +814,6 @@ struct hci_cc_do_calibration_rsp {
 	__u8 data[MAX_CALIB_SIZE];
 } __packed;
 
-/* Low Power mode*/
 #define SIG_LEVEL_INTR  (1 << 0)
 #define RDS_SYNC_INTR   (1 << 1)
 #define AUDIO_CTRL_INTR (1 << 2)
@@ -872,6 +825,8 @@ int hci_def_data_write(struct hci_fm_def_data_wr_req *arg,
 	struct radio_hci_dev *hdev);
 int hci_fm_do_calibration(__u8 *arg, struct radio_hci_dev *hdev);
 int hci_fm_do_calibration(__u8 *arg, struct radio_hci_dev *hdev);
+int hci_fm_smd_register(void);
+void hci_fm_smd_deregister(void);
 
 static inline int is_valid_tone(int tone)
 {
@@ -1078,4 +1033,4 @@ static inline int is_valid_fm_state(int state)
 	else
 		return 0;
 }
-#endif /* __RADIO_HCI_CORE_H */
+#endif 
