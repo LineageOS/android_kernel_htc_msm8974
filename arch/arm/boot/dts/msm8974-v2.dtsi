@@ -29,7 +29,7 @@
 	};
 };
 /include/ "msm-pm8941.dtsi"
-/include/ "msm8974-regulator.dtsi"
+/include/ "msm-pm8x41-vreg-dump.dtsi"
 /include/ "msm8974-clock.dtsi"
 
 /include/ "msm8974-v2-iommu.dtsi"
@@ -171,10 +171,6 @@
 		};
 	};
 
-};
-
-&krait_pdn {
-	qcom,use-phase-switching;
 };
 
 &tspp {

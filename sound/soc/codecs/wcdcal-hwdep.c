@@ -148,7 +148,7 @@ static int wcdcal_hwdep_release(struct snd_hwdep *hw, struct file *file)
 {
 	struct fw_info *fw_data = hw->private_data;
 	mutex_lock(&fw_data->lock);
-	/* clear all the calibrations */
+	
 	memset(fw_data->wcdcal_state, 0,
 		sizeof(fw_data->wcdcal_state));
 	mutex_unlock(&fw_data->lock);
@@ -169,14 +169,14 @@ int wcd_cal_create_hwdep(void *data, int node, struct snd_soc_codec *codec)
 	}
 
 	fw = fw_data->fw;
-	snprintf(hwname, strlen("Codec %s"), "Codec %s", codec->name);
+	snprintf(hwname, sizeof(hwname), "Codec %s", codec->name);
 	err = snd_hwdep_new(codec->card->snd_card, hwname, node, &hwdep);
 	if (err < 0) {
 		dev_err(codec->dev, "%s: new hwdep failed %d\n",
 				__func__, err);
 		return err;
 	}
-	snprintf(hwdep->name, strlen("Codec %s"), "Codec %s", codec->name);
+	snprintf(hwdep->name, sizeof(hwdep->name), "Codec %s", codec->name);
 	hwdep->iface = SNDRV_HWDEP_IFACE_AUDIO_CODEC;
 	hwdep->private_data = fw_data;
 	hwdep->ops.ioctl_compat = wcdcal_hwdep_ioctl_compat;

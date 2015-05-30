@@ -32,17 +32,12 @@
 
 #define STATUS_CHECK_INTERVAL_MS 5000
 #define STATUS_CHECK_INTERVAL_MIN_MS 200
-#define DSI_STATUS_CHECK_DISABLE 0
+#define DSI_STATUS_CHECK_DISABLE 1
 
 static uint32_t interval = STATUS_CHECK_INTERVAL_MS;
 static uint32_t dsi_status_disable = DSI_STATUS_CHECK_DISABLE;
 struct dsi_status_data *pstatus_data;
 
-/*
- * check_dsi_ctrl_status() - Reads MFD structure and
- * calls platform specific DSI ctrl Status function.
- * @work  : dsi controller status data
- */
 static void check_dsi_ctrl_status(struct work_struct *work)
 {
 	struct dsi_status_data *pdsi_status = NULL;
@@ -63,17 +58,6 @@ static void check_dsi_ctrl_status(struct work_struct *work)
 	pdsi_status->mfd->mdp.check_dsi_status(work, interval);
 }
 
-/*
- * fb_event_callback() - Call back function for the fb_register_client()
- *			 notifying events
- * @self  : notifier block
- * @event : The event that was triggered
- * @data  : Of type struct fb_event
- *
- * This function listens for FB_BLANK_UNBLANK and FB_BLANK_POWERDOWN events
- * from frame buffer. DSI status check work is either scheduled again after
- * PANEL_STATUS_CHECK_INTERVAL or cancelled based on the event.
- */
 static int fb_event_callback(struct notifier_block *self,
 				unsigned long event, void *data)
 {
@@ -81,41 +65,21 @@ static int fb_event_callback(struct notifier_block *self,
 	struct dsi_status_data *pdata = container_of(self,
 				struct dsi_status_data, fb_notifier);
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
-	struct mdss_panel_info *pinfo;
-	struct msm_fb_data_type *mfd;
 
-	if (!evdata) {
-		pr_err("%s: event data not available\n", __func__);
-		return NOTIFY_BAD;
-	}
-
-	mfd = evdata->info->par;
-	ctrl_pdata = container_of(dev_get_platdata(&mfd->pdev->dev),
+	pdata->mfd = evdata->info->par;
+	ctrl_pdata = container_of(dev_get_platdata(&pdata->mfd->pdev->dev),
 				struct mdss_dsi_ctrl_pdata, panel_data);
 	if (!ctrl_pdata) {
 		pr_err("%s: DSI ctrl not available\n", __func__);
 		return NOTIFY_BAD;
 	}
-
-	pinfo = &ctrl_pdata->panel_data.panel_info;
-
-	if (!(pinfo->esd_check_enabled)) {
-		pr_debug("ESD check is not enaled in panel dtsi\n");
-		return NOTIFY_DONE;
-	}
-
 	if (dsi_status_disable) {
 		pr_debug("%s: DSI status disabled\n", __func__);
 		return NOTIFY_DONE;
 	}
 
-	pdata->mfd = evdata->info->par;
-	if (event == FB_EVENT_BLANK) {
+	if (event == FB_EVENT_BLANK && evdata) {
 		int *blank = evdata->data;
-		struct dsi_status_data *pdata = container_of(self,
-				struct dsi_status_data, fb_notifier);
-		pdata->mfd = evdata->info->par;
-
 		switch (*blank) {
 		case FB_BLANK_UNBLANK:
 			schedule_delayed_work(&pdata->check_status,

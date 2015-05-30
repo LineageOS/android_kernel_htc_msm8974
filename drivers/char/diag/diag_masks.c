@@ -30,6 +30,7 @@ int diag_event_num_bytes;
 #define ALL_SSID		-1
 
 #define FEATURE_MASK_LEN_BYTES		2
+extern int diag_rb_enable;
 
 struct mask_info {
 	int equip_id;
@@ -162,7 +163,7 @@ static void diag_update_msg_mask(int start, int end , uint8_t *buf)
 				*(uint32_t *)actual_last_ptr = actual_last;
 			}
 			if (CHK_OVERFLOW(ptr_buffer_start, ptr, ptr_buffer_end,
-								copy_len)) {
+					  (((end - start)+1)*4))) {
 				pr_debug("diag: update ssid start %d, end %d\n",
 								 start, end);
 				memcpy(ptr, buf, copy_len);
@@ -686,6 +687,14 @@ int diag_process_apps_masks(unsigned char *buf, int len)
 				*(int *)(driver->apps_rsp_buf+12+i) = *(buf+i);
 
 			for (i = 0; i < NUM_SMD_CONTROL_CHANNELS; i++) {
+				if (i == MODEM_DATA && (diag_rb_enable & DQ_FILTER_MASK)){
+					printk("diag(%d): Filter Modem mask\n", __LINE__);
+					continue;
+				}
+				if (i == MODEM_DATA && (diag_rb_enable & WCNSS_FILTER_MASK)) {
+					printk("diag(%d): Filter Modem mask\n", __LINE__);
+					continue;
+				}
 				if (driver->smd_cntl[i].ch)
 					diag_send_log_mask_update(
 						&driver->smd_cntl[i],
@@ -728,6 +737,14 @@ int diag_process_apps_masks(unsigned char *buf, int len)
 			*(int *)(driver->apps_rsp_buf + 4) = 0x0;
 			*(int *)(driver->apps_rsp_buf + 8) = 0x0; /* status */
 			for (i = 0; i < NUM_SMD_CONTROL_CHANNELS; i++) {
+				if (i == MODEM_DATA && (diag_rb_enable & DQ_FILTER_MASK)){
+					printk("diag(%d): Filter Modem mask\n", __LINE__);
+					continue;
+				}
+				if (i == MODEM_DATA && (diag_rb_enable & WCNSS_FILTER_MASK)) {
+					printk("diag(%d): Filter Modem mask\n", __LINE__);
+					continue;
+				}
 				if (driver->smd_cntl[i].ch)
 					diag_send_log_mask_update(
 						&driver->smd_cntl[i],
@@ -799,6 +816,14 @@ int diag_process_apps_masks(unsigned char *buf, int len)
 				*(driver->apps_rsp_buf + i) = *(buf+i);
 			*(driver->apps_rsp_buf + 6) = 0x1;
 			for (i = 0; i < NUM_SMD_CONTROL_CHANNELS; i++) {
+				if (i == MODEM_DATA && (diag_rb_enable & DQ_FILTER_MASK)){
+					printk("diag(%d): Filter Modem mask\n", __LINE__);
+					continue;
+				}
+				if (i == MODEM_DATA && (diag_rb_enable & WCNSS_FILTER_MASK)) {
+					printk("diag(%d): Filter Modem mask\n", __LINE__);
+					continue;
+				}
 				if (driver->smd_cntl[i].ch)
 					diag_send_msg_mask_update(
 						&driver->smd_cntl[i],
@@ -824,6 +849,14 @@ int diag_process_apps_masks(unsigned char *buf, int len)
 			*(int *)(driver->apps_rsp_buf + 4) = rt_mask;
 			/* send msg mask update to peripheral */
 			for (i = 0; i < NUM_SMD_CONTROL_CHANNELS; i++) {
+				if (i == MODEM_DATA && (diag_rb_enable & DQ_FILTER_MASK)) {
+					printk("diag(%d): Filter Modem mask\n", __LINE__);
+					continue;
+				}
+				if (i == MODEM_DATA && (diag_rb_enable & WCNSS_FILTER_MASK)) {
+					printk("diag(%d): Filter Modem mask\n", __LINE__);
+					continue;
+				}
 				if (driver->smd_cntl[i].ch)
 					diag_send_msg_mask_update(
 						&driver->smd_cntl[i],
@@ -850,6 +883,14 @@ int diag_process_apps_masks(unsigned char *buf, int len)
 			memcpy(driver->apps_rsp_buf+6, driver->event_masks,
 				EVENT_LAST_ID/8+1);
 			for (i = 0; i < NUM_SMD_CONTROL_CHANNELS; i++) {
+				if (i == MODEM_DATA && (diag_rb_enable & DQ_FILTER_MASK)){
+					printk("diag(%d): Filter Modem mask\n", __LINE__);
+					continue;
+				}
+				if (i == MODEM_DATA && (diag_rb_enable & WCNSS_FILTER_MASK)) {
+					printk("diag(%d): Filter Modem mask\n", __LINE__);
+					continue;
+				}
 				if (driver->smd_cntl[i].ch)
 					diag_send_event_mask_update(
 						&driver->smd_cntl[i],
@@ -868,6 +909,14 @@ int diag_process_apps_masks(unsigned char *buf, int len)
 			driver->apps_rsp_buf[1] = 0x0;
 			driver->apps_rsp_buf[2] = 0x0;
 			for (i = 0; i < NUM_SMD_CONTROL_CHANNELS; i++) {
+				if (i == MODEM_DATA && (diag_rb_enable & DQ_FILTER_MASK)) {
+					printk("diag(%d): Filter Modem mask\n", __LINE__);
+					continue;
+				}
+				if (i == MODEM_DATA && (diag_rb_enable & WCNSS_FILTER_MASK)) {
+					printk("diag(%d): Filter Modem mask\n", __LINE__);
+					continue;
+				}
 				if (driver->smd_cntl[i].ch)
 					diag_send_event_mask_update(
 						&driver->smd_cntl[i],
