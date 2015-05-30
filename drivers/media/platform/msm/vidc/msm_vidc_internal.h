@@ -20,7 +20,6 @@
 #include <linux/types.h>
 #include <linux/completion.h>
 #include <linux/wait.h>
-#include <linux/workqueue.h>
 #include <mach/msm_bus.h>
 #include <mach/msm_bus_board.h>
 #include <mach/ocmem.h>
@@ -33,6 +32,7 @@
 #include <media/msm_vidc.h>
 #include <media/msm_media_info.h>
 
+#include "vidc_hfi_api.h"
 #include "vidc_hfi_api.h"
 
 #define MSM_VIDC_DRV_NAME "msm_vidc_driver"
@@ -201,7 +201,7 @@ struct msm_vidc_core_capability {
 
 struct msm_vidc_core {
 	struct list_head list;
-	struct mutex lock;
+	struct mutex sync_lock, lock;
 	int id;
 	void *device;
 	struct msm_video_device vdev[MSM_VIDC_MAX_DEVICES];
@@ -214,7 +214,6 @@ struct msm_vidc_core {
 	struct msm_vidc_platform_resources resources;
 	u32 enc_codec_supported;
 	u32 dec_codec_supported;
-	struct delayed_work fw_unload_work;
 };
 
 struct msm_vidc_inst {
@@ -255,6 +254,10 @@ struct msm_vidc_inst {
 	struct list_head registered_bufs;
 	bool map_output_buffer;
 	struct v4l2_ctrl **ctrls;
+
+	pid_t call_pid;
+	char process_name[50];
+
 };
 
 extern struct msm_vidc_drv *vidc_driver;
@@ -313,5 +316,4 @@ int qbuf_dynamic_buf(struct msm_vidc_inst *inst,
 			struct buffer_info *binfo);
 int unmap_and_deregister_buf(struct msm_vidc_inst *inst,
 			struct buffer_info *binfo);
-void msm_vidc_fw_unload_handler(struct work_struct *work);
 #endif
