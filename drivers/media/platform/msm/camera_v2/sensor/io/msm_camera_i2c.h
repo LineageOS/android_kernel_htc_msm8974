@@ -45,6 +45,10 @@ struct msm_camera_i2c_fn_t {
 	int32_t (*i2c_write_conf_tbl)(struct msm_camera_i2c_client *client,
 		struct msm_camera_i2c_reg_conf *reg_conf_tbl, uint16_t size,
 		enum msm_camera_i2c_data_type data_type);
+/*HTC_START*/
+	int32_t (*i2c_poll_table)(struct msm_camera_i2c_client *,
+		struct msm_camera_i2c_reg_setting *);
+/*HTC_END*/
 	int32_t (*i2c_poll)(struct msm_camera_i2c_client *client,
 		uint32_t addr, uint16_t data,
 		enum msm_camera_i2c_data_type data_type);
@@ -81,6 +85,12 @@ int32_t msm_camera_cci_i2c_write_conf_tbl(
 	struct msm_camera_i2c_reg_conf *reg_conf_tbl, uint16_t size,
 	enum msm_camera_i2c_data_type data_type);
 
+/*HTC_START*/
+int32_t msm_camera_cci_i2c_poll_table(
+	struct msm_camera_i2c_client *client,
+	struct msm_camera_i2c_reg_setting *poll_setting);
+/*HTC_END*/
+
 int32_t msm_sensor_cci_i2c_util(struct msm_camera_i2c_client *client,
 	uint16_t cci_cmd);
 
@@ -115,10 +125,6 @@ int32_t msm_camera_qup_i2c_write_table_w_microdelay(
 int32_t msm_camera_qup_i2c_write_conf_tbl(
 	struct msm_camera_i2c_client *client,
 	struct msm_camera_i2c_reg_conf *reg_conf_tbl, uint16_t size,
-	enum msm_camera_i2c_data_type data_type);
-
-int32_t msm_camera_qup_i2c_poll(struct msm_camera_i2c_client *client,
-	uint32_t addr, uint16_t data,
 	enum msm_camera_i2c_data_type data_type);
 
 #endif

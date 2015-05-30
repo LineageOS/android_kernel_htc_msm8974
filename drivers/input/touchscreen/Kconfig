@@ -484,6 +484,12 @@ config TOUCHSCREEN_TNETV107X
 	  To compile this driver as a module, choose M here: the
 	  module will be called tnetv107x-ts.
 
+config TOUCHSCREEN_SYNAPTICS_3K
+        tristate "Synaptics 3k serious i2c touchscreen"
+        depends on I2C
+        help
+          This enables support for Synaptics RMI4 over I2C based touchscreens.
+
 config TOUCHSCREEN_SYNAPTICS_I2C_RMI
 	tristate "Synaptics i2c touchscreen"
 	depends on I2C
@@ -496,6 +502,26 @@ config TOUCHSCREEN_SYNAPTICS_RMI4_I2C
 	select SYNA_MULTI_TOUCH
 	help
 	  This enables support for Synaptics RMI over I2C based touchscreens(ClearPad 3000).
+
+config TOUCHSCREEN_HIMAX
+        tristate "HIMAX HM852xD serious i2c touchscreen"
+		depends on I2C
+		help
+		This enables support for HIMAX HM852xD over I2C based touchscreens.
+
+config TOUCHSCREEN_ONE_LAYER_HIMAX
+        tristate "HIMAX 1 layer  HM852xD serious i2c touchscreen"
+		depends on I2C
+		help
+		This enables support for 1 layer HIMAX HM852xD too for just A11 project.
+		default n
+
+
+config TOUCHSCREEN_HIMAX_ESD_EN
+        tristate "HIMAX HM852xD ESD recovery function"
+		depends on I2C
+		help
+		This enables support ESD recovery function for HIMAX HM852xD.
 
 config SYNA_MULTI_TOUCH
 	tristate "Synaptics i2c touchscreen(ClearPad 3000) MutilTouch support"
@@ -1013,9 +1039,8 @@ config TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE
 
 config SECURE_TOUCH
 	bool "Secure Touch"
-	depends on TOUCHSCREEN_ATMEL_MXT
 	help
-	  Say Y here to enable Secure Touch support in the Atmel MXT
+	  Say Y here to enable Secure Touch support in touch
 	  driver.
 
 	  If unsure, say N.

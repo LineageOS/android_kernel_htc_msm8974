@@ -40,6 +40,18 @@ static struct snd_soc_dai_driver msm_stub_dais[] = {
 				    SNDRV_PCM_FMTBIT_S24_LE),
 		},
 	},
+//htc audio ++
+	{
+		.name = "msm_htc_mi2s_codec",
+		.playback = { /* Support maximum range */
+			.stream_name = "htc-virtual-mi2s-if",
+			.channels_min = 1,
+			.channels_max = 8,
+			.rates = SNDRV_PCM_RATE_8000_48000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE,
+		},
+	},
+//htc audio --
 };
 
 static struct snd_soc_codec_driver soc_msm_stub = {};

@@ -61,7 +61,7 @@ struct mdp3_session_data {
 	struct blocking_notifier_head notifier_head;
 
 	int vsync_enabled;
-	atomic_t vsync_countdown; /* Used to count down  */
+	atomic_t vsync_countdown; 
 	bool in_splash_screen;
 
 	bool dma_active;
@@ -71,4 +71,4 @@ struct mdp3_session_data {
 
 int mdp3_ctrl_init(struct msm_fb_data_type *mfd);
 
-#endif /* MDP3_CTRL_H */
+#endif 

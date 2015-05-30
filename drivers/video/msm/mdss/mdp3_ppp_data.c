@@ -18,7 +18,6 @@
 
 #define MDP_IS_IMGTYPE_BAD(x) ((x) >= MDP_IMGTYPE_LIMIT)
 
-/* bg_config_lut not needed since it is same as src */
 const uint32_t src_cfg_lut[MDP_IMGTYPE_LIMIT] = {
 	[MDP_RGB_565] = MDP_RGB_565_SRC_REG,
 	[MDP_BGR_565] = MDP_RGB_565_SRC_REG,
@@ -88,35 +87,6 @@ const uint32_t pack_patt_lut[MDP_IMGTYPE_LIMIT] = {
 		CLR_G, CLR_R, 8),
 };
 
-const uint32_t swapped_pack_patt_lut[MDP_IMGTYPE_LIMIT] = {
-	[MDP_RGB_565] = PPP_GET_PACK_PATTERN(0, CLR_B, CLR_G, CLR_R, 8),
-	[MDP_BGR_565] = PPP_GET_PACK_PATTERN(0, CLR_R, CLR_G, CLR_B, 8),
-	[MDP_RGB_888] = PPP_GET_PACK_PATTERN(0, CLR_B, CLR_G, CLR_R, 8),
-	[MDP_BGR_888] = PPP_GET_PACK_PATTERN(0, CLR_R, CLR_G, CLR_B, 8),
-	[MDP_BGRA_8888] = PPP_GET_PACK_PATTERN(CLR_ALPHA, CLR_R,
-		CLR_G, CLR_B, 8),
-	[MDP_RGBA_8888] = PPP_GET_PACK_PATTERN(CLR_ALPHA, CLR_B,
-		CLR_G, CLR_R, 8),
-	[MDP_ARGB_8888] = PPP_GET_PACK_PATTERN(CLR_ALPHA, CLR_B,
-		CLR_G, CLR_R, 8),
-	[MDP_XRGB_8888] = PPP_GET_PACK_PATTERN(CLR_ALPHA, CLR_B,
-		CLR_G, CLR_R, 8),
-	[MDP_RGBX_8888] = PPP_GET_PACK_PATTERN(CLR_ALPHA, CLR_B,
-		CLR_G, CLR_R, 8),
-	[MDP_Y_CRCB_H2V2] = PPP_GET_PACK_PATTERN(0, 0, CLR_CB, CLR_CR, 8),
-	[MDP_Y_CBCR_H2V2] = PPP_GET_PACK_PATTERN(0, 0, CLR_CR, CLR_CB, 8),
-	[MDP_Y_CBCR_H2V2_ADRENO] = PPP_GET_PACK_PATTERN(0, 0, CLR_CR,
-		CLR_CB, 8),
-	[MDP_Y_CBCR_H2V2_VENUS] = PPP_GET_PACK_PATTERN(0, 0, CLR_CR,
-		CLR_CB, 8),
-	[MDP_YCRYCB_H2V1] = PPP_GET_PACK_PATTERN(CLR_Y,
-		CLR_CB, CLR_Y, CLR_CR, 8),
-	[MDP_Y_CBCR_H2V1] = PPP_GET_PACK_PATTERN(0, 0, CLR_CR, CLR_CB, 8),
-	[MDP_Y_CRCB_H2V1] = PPP_GET_PACK_PATTERN(0, 0, CLR_CB, CLR_CR, 8),
-	[MDP_BGRX_8888] = PPP_GET_PACK_PATTERN(CLR_ALPHA, CLR_R,
-		CLR_G, CLR_B, 8),
-};
-
 const uint32_t dst_op_reg[MDP_IMGTYPE_LIMIT] = {
 	[MDP_Y_CRCB_H2V2] = PPP_OP_DST_CHROMA_420,
 	[MDP_Y_CBCR_H2V2] = PPP_OP_DST_CHROMA_420,
@@ -170,7 +140,6 @@ const bool multi_plane[MDP_IMGTYPE_LIMIT] = {
 	[MDP_Y_CRCB_H2V1] = true,
 };
 
-/* lut default */
 uint32_t default_pre_lut_val[PPP_LUT_MAX] = {
 	0x0,
 	0x151515,
@@ -828,7 +797,7 @@ const struct ppp_table upscale_table[PPP_UPSCALE_MAX] = {
 };
 
 const struct ppp_table mdp_gaussian_blur_table[PPP_BLUR_SCALE_MAX] = {
-	/* max variance */
+	
 	{ 0x5fffc, 0x20000080 },
 	{ 0x50280, 0x20000080 },
 	{ 0x5fffc, 0x20000080 },
@@ -1559,13 +1528,10 @@ uint32_t ppp_out_config(uint32_t type)
 	return out_cfg_lut[type];
 }
 
-uint32_t ppp_pack_pattern(uint32_t type, uint32_t yuv2rgb)
+uint32_t ppp_pack_pattern(uint32_t type)
 {
 	if (MDP_IS_IMGTYPE_BAD(type))
 		return 0;
-	if (yuv2rgb)
-		return swapped_pack_patt_lut[type];
-
 	return pack_patt_lut[type];
 }
 

@@ -101,7 +101,9 @@ struct snd_pcm_ops {
 #define SNDRV_PCM_IOCTL1_CHANNEL_INFO	2
 #define SNDRV_PCM_IOCTL1_GSTATE		3
 #define SNDRV_PCM_IOCTL1_FIFO_SIZE	4
-
+//htc audio ++
+#define SNDRV_PCM_IOCTL1_ENABLE_EFFECT  5
+//htc audio --
 #define SNDRV_PCM_TRIGGER_STOP		0
 #define SNDRV_PCM_TRIGGER_START		1
 #define SNDRV_PCM_TRIGGER_PAUSE_PUSH	3
