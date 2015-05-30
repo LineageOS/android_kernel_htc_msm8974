@@ -201,6 +201,7 @@ extern spinlock_t smem_lock;
 
 
 void smd_diag(void);
+int smd_smsm_erase_efs(void);
 
 struct interrupt_stat {
 	uint32_t smd_in_count;

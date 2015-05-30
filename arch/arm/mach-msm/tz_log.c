@@ -22,6 +22,7 @@
 #include <linux/string.h>
 #include <linux/types.h>
 #include <linux/uaccess.h>
+#include <linux/of_device.h>
 #include <mach/scm.h>
 #include <mach/qseecomi.h>
 
@@ -190,6 +191,7 @@ enum tzdbg_stats_type {
 	TZDBG_GENERAL,
 	TZDBG_LOG,
 	TZDBG_QSEE_LOG,
+    TZDBG_HTCLOG,
 	TZDBG_STATS_MAX
 };
 
@@ -215,8 +217,31 @@ static struct tzdbg tzdbg = {
 	.stat[TZDBG_GENERAL].name = "general",
 	.stat[TZDBG_LOG].name = "log",
 	.stat[TZDBG_QSEE_LOG].name = "qsee_log",
+	.stat[TZDBG_HTCLOG].name = "htclog",
 };
 
+#ifndef MSM_TZLOG_PHYS
+#define MSM_TZLOG_PHYS		0x05BE0000
+#endif
+
+#ifndef MSM_TZLOG_SIZE
+#define MSM_TZLOG_SIZE		(64 * 1024)
+#endif
+
+#define TZ_SCM_LOG_PHYS		MSM_TZLOG_PHYS
+#define TZ_SCM_LOG_SIZE		MSM_TZLOG_SIZE
+
+#define INT_SIZE		4
+
+struct htc_tzlog_dev {
+	char *buffer;
+	uint32_t *pw_cursor;
+	uint32_t *pr_cursor;
+	uint32_t tz_scm_log_phys;
+	uint32_t tz_scm_log_size;
+};
+
+static struct htc_tzlog_dev *htc_tzlog;
 static struct tzdbg_log_t *g_qsee_log;
 
 /*
@@ -474,6 +499,68 @@ static int _disp_tz_log_stats(size_t count)
 				tzdbg.diag_buf->ring_len, count, TZDBG_LOG);
 }
 
+static int _disp_tz_htc_log_stats(char __user *ubuf, size_t count, loff_t *offp)
+{
+	char *buf = htc_tzlog->buffer;
+	uint32_t *pw_cursor = htc_tzlog->pw_cursor;
+	uint32_t *pr_cursor = htc_tzlog->pr_cursor;
+	uint32_t tz_scm_log_size = htc_tzlog->tz_scm_log_size;
+	uint32_t r_cursor, w_cursor;
+	int ret;
+
+	if (buf != 0) {
+		/* update r_cursor */
+		r_cursor = *pr_cursor;
+		w_cursor = *pw_cursor;
+
+		if (r_cursor < w_cursor) {
+			if ((w_cursor - r_cursor) > count) {
+				ret = copy_to_user(ubuf, buf + r_cursor, count);
+				if (ret == count)
+					return -EFAULT;
+
+				*pr_cursor = r_cursor + count;
+				return count;
+			} else {
+				ret = copy_to_user(ubuf, buf + r_cursor, (w_cursor - r_cursor));
+				if (ret == (w_cursor - r_cursor))
+					return -EFAULT;
+
+				*pr_cursor = w_cursor;
+				return (w_cursor - r_cursor);
+			}
+		}
+
+		if (r_cursor > w_cursor) {
+			int buf_end = tz_scm_log_size - 2*INT_SIZE - 1;
+			int left_len = buf_end - r_cursor;
+
+			if (left_len > count) {
+				ret = copy_to_user(ubuf, buf + r_cursor, count);
+				if (ret == count)
+					return -EFAULT;
+
+				*pr_cursor = r_cursor + count;
+				return count;
+			} else {
+				ret = copy_to_user(ubuf, buf + r_cursor, left_len);
+				if (ret == left_len)
+					return -EFAULT;
+
+				*pr_cursor = 0;
+				return left_len;
+			}
+		}
+
+		if (r_cursor == w_cursor) {
+			pr_info("No New Trust Zone log\n");
+			return 0;
+		}
+	}
+
+	return 0;
+}
+
 static int _disp_qsee_log_stats(size_t count)
 {
 	static struct tzdbg_log_pos_t log_start = {0};
@@ -520,6 +607,8 @@ static ssize_t tzdbgfs_read(struct file *file, char __user *buf,
 		len = _disp_qsee_log_stats(count);
 		*offp = 0;
 		break;
+	case TZDBG_HTCLOG:
+		return _disp_tz_htc_log_stats(buf, count, offp);
 	default:
 		break;
 	}
@@ -679,6 +768,8 @@ static int __devinit tz_log_probe(struct platform_device *pdev)
 	void __iomem *virt_iobase;
 	uint32_t tzdiag_phy_iobase;
 	uint32_t *ptr = NULL;
+	struct device_node *node = pdev->dev.of_node;
+	uint32_t tz_scm_log_phys, tz_scm_log_size;
 
 	/*
 	 * Get address that stores the physical location of 4KB
@@ -696,6 +787,10 @@ static int __devinit tz_log_probe(struct platform_device *pdev)
 	 */
 	virt_iobase = devm_ioremap_nocache(&pdev->dev, resource->start,
 				resource->end - resource->start + 1);
+
+	pr_info("[TZLOG] start:%x end:%x, virt:%x",
+			resource->start,  resource->end, (uint32_t)virt_iobase);
+
 	if (!virt_iobase) {
 		dev_err(&pdev->dev,
 			"%s: ERROR could not ioremap: start=%p, len=%u\n",
@@ -730,6 +825,47 @@ static int __devinit tz_log_probe(struct platform_device *pdev)
 	}
 
 	tzdbg.diag_buf = (struct tzdbg_t *)ptr;
+
+	htc_tzlog = kzalloc(sizeof(struct htc_tzlog_dev), GFP_KERNEL);
+	if (!htc_tzlog) {
+		pr_err("%s: Can't Allocate memory: scm_dev\n", __func__);
+		return -ENOMEM;
+	}
+
+	if(of_property_read_u32(node, "htc,tz_scm_log_phys", &tz_scm_log_phys))
+		tz_scm_log_phys = TZ_SCM_LOG_PHYS;
+	if(of_property_read_u32(node, "htc,tz_scm_log_size", &tz_scm_log_size))
+		tz_scm_log_size = TZ_SCM_LOG_SIZE;
+
+	htc_tzlog->tz_scm_log_phys = tz_scm_log_phys;
+	htc_tzlog->tz_scm_log_size = tz_scm_log_size;
+
+	htc_tzlog->buffer = devm_ioremap_nocache(&pdev->dev,
+		tz_scm_log_phys, tz_scm_log_size);
+	if (htc_tzlog->buffer == NULL) {
+		pr_err("%s: ioremap fail...\n", __func__);
+		kfree(htc_tzlog);
+		return -EFAULT;
+	}
+
+	pr_info("[TZLOG] buffer address:%x size:%x virt:%x\n",
+		tz_scm_log_phys, tz_scm_log_size, (uint32_t)htc_tzlog->buffer);
+
+	htc_tzlog->pr_cursor = (int *)((int)(htc_tzlog->buffer) +
+				tz_scm_log_size - 2*INT_SIZE);
+	htc_tzlog->pw_cursor = (int *)((int)(htc_tzlog->buffer) +
+				tz_scm_log_size - INT_SIZE);
+
+	memset(htc_tzlog->buffer, 0, tz_scm_log_size);
+
+#if 0
+	secure_log_operation(0, 0, tz_scm_log_phys, tz_scm_log_size, 0);
+	pr_info("[TZLOG] ---LOG START---\n");
+	pr_info("%s", htc_tzlog->buffer);
+	pr_info("[TZ] --- LOG END---\n");
+#endif
+
+	secure_log_operation(tz_scm_log_phys, tz_scm_log_size, 0, 0, 0);
 
 	if (tzdbgfs_init(pdev))
 		goto err;
