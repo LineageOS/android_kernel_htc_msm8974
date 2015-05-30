@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -91,6 +91,15 @@ int pm8xxx_batt_alarm_enable(enum pm8xxx_batt_alarm_comparator comparator);
  */
 int pm8xxx_batt_alarm_disable(enum pm8xxx_batt_alarm_comparator comparator);
 
+/**
+ * pm8xxx_batt_alarm_state_set - enable or disable the threshold comparators
+ * @enable_lower_comparator: 1 = enable comparator, 0 = disable comparator
+ * @enable_upper_comparator: 1 = enable comparator, 0 = disable comparator
+ *
+ * RETURNS: an appropriate -ERRNO error value on error, or zero for success.
+ */
+int pm8xxx_batt_alarm_state_set(int enable_lower_comparator,
+				int enable_upper_comparator);
 
 /**
  * pm8xxx_batt_alarm_threshold_set - set the lower and upper alarm thresholds
@@ -162,6 +171,34 @@ int pm8xxx_batt_alarm_hold_time_set(enum pm8xxx_batt_alarm_hold_time hold_time);
  */
 int pm8xxx_batt_alarm_pwm_rate_set(int use_pwm, int clock_scaler,
 				   int clock_divider);
+
+/** htc_gauge interface **/
+/**
+ * pm8xxx_batt_lower_alarm_register_notifier - register notifier for
+ * htc_gauge
+ * @callback: callback function to register
+ *
+ * RETURNS: an appropriate -ERRNO error value on error, or zero for success.
+ */
+int pm8xxx_batt_lower_alarm_register_notifier(void (*callback)(int));
+
+/**
+ * pm8xxx_batt_lower_alarm_enable - enable low comparator voltage
+ * alarm
+ * @enable: 1: enable, 0: disable
+ *
+ * RETURNS: an appropriate -ERRNO error value on error, or zero for success.
+ */
+int pm8xxx_batt_lower_alarm_enable(int enable);
+
+/**
+ * pm8xxx_batt_lower_alarm_threshold_set - set the lower alarm thresholds
+ * @threshold_mV:	battery voltage threshold in millivolts
+ *			set points = 2500-5675 mV in 25 mV steps
+ *
+ * RETURNS: an appropriate -ERRNO error value on error, or zero for success.
+ */
+int pm8xxx_batt_lower_alarm_threshold_set(int threshold_mV);
 #else
 
 static inline int
@@ -195,6 +232,15 @@ static inline int
 pm8xxx_batt_alarm_pwm_rate_set(int use_pwm, int clock_scaler, int clock_divider)
 { return -ENODEV; }
 
+static inline int pm8xxx_batt_lower_alarm_register_notifier(
+				void (*callback)(int))
+{ return -ENODEV; }
+
+static inline int pm8xxx_batt_lower_alarm_enable(int enable)
+{ return -ENODEV; }
+
+static inline int pm8xxx_batt_lower_alarm_threshold_set(int threshold_mV)
+{ return -ENODEV; }
 #endif
 
 

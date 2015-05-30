@@ -19,15 +19,6 @@
 #include "mdss_dsi.h"
 #include "mdp3_ctrl.h"
 
-/*
- * mdp3_check_dsi_ctrl_status() - Check MDP3 DSI controller status periodically.
- * @work     : dsi controller status data
- * @interval : duration in milliseconds to schedule work queue
- *
- * This function calls check_status API on DSI controller to send the BTA
- * command. If DSI controller fails to acknowledge the BTA command, it sends
- * the PANEL_ALIVE=0 status to HAL layer.
- */
 void mdp3_check_dsi_ctrl_status(struct work_struct *work,
 				uint32_t interval)
 {

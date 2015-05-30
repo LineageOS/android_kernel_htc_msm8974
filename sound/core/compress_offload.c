@@ -794,6 +794,56 @@ static int snd_compress_simple_ioctls(struct file *file,
 	return retval;
 }
 
+static int snd_compr_effect(struct snd_compr_stream *stream, unsigned long arg)
+{
+   int rc = 0;
+   struct snd_compr_runtime *runtime = stream->runtime;
+   void *prtd = runtime->private_data;
+   struct dsp_effect_param q6_param;
+   void *payload;
+
+   pr_info("compress_offload snd_compr_effect +++\n");
+   pr_info("[%p] SNDRV_COMPRESS_ENABLE_EFFECT\n", __func__);
+   if (copy_from_user(&q6_param, (void *) arg,
+               sizeof(q6_param))) {
+       pr_err("[%p] %s: copy param from user failed\n",
+           prtd, __func__);
+       return -EFAULT;
+   }
+   if (q6_param.payload_size <= 0 ||
+       (q6_param.effect_type != 0 &&
+        q6_param.effect_type != 1)) {
+       pr_err("[%p] %s: unsupported param: %d, 0x%x, 0x%x, %d\n",
+           prtd, __func__, q6_param.effect_type,
+           q6_param.module_id, q6_param.param_id,
+           q6_param.payload_size);
+       return -EINVAL;
+   }
+   payload = kzalloc(q6_param.payload_size, GFP_KERNEL);
+   if (!payload) {
+       pr_err("[%p] %s: failed to allocate memory\n",
+           prtd, __func__);
+       return -ENOMEM;
+   }
+   if (copy_from_user(payload, (void *) (arg + sizeof(q6_param)),
+       q6_param.payload_size)) {
+       pr_err("[%p] %s: copy payload from user failed\n",
+           prtd, __func__);
+       kfree(payload);
+       return -EFAULT;
+   }
+   if (q6_param.effect_type == 0) {
+       rc = stream->ops->config_effect(stream, (void *)&q6_param, payload);
+       if (rc) {
+           pr_err("[%p] %s: config_effect error %d\n", prtd, __func__, rc);
+       }
+   }
+   pr_info("compress_offload snd_compr_effect ---\n");
+   kfree(payload);
+   return 0;
+}
+
+
 static long snd_compr_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
 {
 	struct snd_compr_file *data = f->private_data;
@@ -844,6 +894,10 @@ static long snd_compr_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
 		retval = snd_compr_next_track(stream);
 		break;
 
+	case _IOC_NR(SNDRV_COMPRESS_ENABLE_EFFECT):
+		retval = snd_compr_effect(stream, arg);
+		break;
+
 	default:
 		mutex_unlock(&stream->device->lock);
 		return snd_compress_simple_ioctls(f, stream, cmd, arg);
@@ -875,7 +929,7 @@ static int snd_compress_dev_register(struct snd_device *device)
 		return -EBADFD;
 	compr = device->device_data;
 
-	sprintf(str, "comprC%iD%i", compr->card->number, compr->device);
+	snprintf(str, sizeof(str),"comprC%iD%i", compr->card->number, compr->device);
 	pr_debug("reg %s for device %s, direction %d\n", str, compr->name,
 			compr->direction);
 	/* register compressed device */

@@ -44,7 +44,6 @@ uint32_t get_voice_rx_topology(void);
 uint32_t get_voice_tx_topology(void);
 uint32_t get_adm_rx_topology(void);
 uint32_t get_adm_tx_topology(void);
-uint32_t get_asm_topology(void);
 void reset_custom_topology_flags(void);
 int get_adm_custom_topology(struct acdb_cal_block *cal_block);
 int get_asm_custom_topology(struct acdb_cal_block *cal_block);
@@ -66,4 +65,6 @@ int get_spk_protection_cfg(struct msm_spk_prot_cfg *prot_cfg);
 int get_aanc_cal(struct acdb_cal_block *cal_block);
 int get_hw_delay(int32_t path, struct hw_delay_entry *delay_info);
 
+uint32_t get_asm_topology(uint32_t session);
+void store_asm_topology(uint32_t topology,uint32_t session);
 #endif
