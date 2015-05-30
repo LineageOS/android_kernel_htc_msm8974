@@ -58,6 +58,7 @@
 #include "io.h"
 
 #include "debug.h"
+#include <mach/htc_battery_common.h>
 
 static char *maximum_speed = "super";
 module_param(maximum_speed, charp, 0);
@@ -175,7 +176,7 @@ static void dwc3_core_soft_reset(struct dwc3 *dwc)
 	reg |= DWC3_GUSB2PHYCFG_PHYSOFTRST;
 	dwc3_writel(dwc->regs, DWC3_GUSB2PHYCFG(0), reg);
 
-	mdelay(100);
+	mdelay(10);
 
 	/* Clear USB3 PHY reset */
 	reg = dwc3_readl(dwc->regs, DWC3_GUSB3PIPECTL(0));
@@ -187,7 +188,7 @@ static void dwc3_core_soft_reset(struct dwc3 *dwc)
 	reg &= ~DWC3_GUSB2PHYCFG_PHYSOFTRST;
 	dwc3_writel(dwc->regs, DWC3_GUSB2PHYCFG(0), reg);
 
-	mdelay(100);
+	mdelay(10);
 
 	/* After PHYs are stable we can take Core out of reset state */
 	reg = dwc3_readl(dwc->regs, DWC3_GCTL);
@@ -514,6 +515,14 @@ void dwc3_post_host_reset_core_init(struct dwc3 *dwc)
 	dwc3_notify_event(dwc, DWC3_CONTROLLER_POST_INITIALIZATION_EVENT);
 }
 
+static void usb_chg_stop(struct work_struct *w)
+{
+#if (defined(CONFIG_HTC_BATT_8960))
+	printk(KERN_INFO "[USB] disable charger\n");
+	htc_battery_pwrsrc_disable();
+#endif
+}
+
 static void (*notify_event) (struct dwc3 *, unsigned);
 void dwc3_set_notifier(void (*notify)(struct dwc3 *, unsigned))
 {
@@ -521,16 +530,10 @@ void dwc3_set_notifier(void (*notify)(struct dwc3 *, unsigned))
 }
 EXPORT_SYMBOL(dwc3_set_notifier);
 
-int dwc3_notify_event(struct dwc3 *dwc, unsigned event)
+void dwc3_notify_event(struct dwc3 *dwc, unsigned event)
 {
-	int ret = 0;
-
 	if (dwc->notify_event)
 		dwc->notify_event(dwc, event);
-	else
-		ret = -ENODEV;
-
-	return ret;
 }
 EXPORT_SYMBOL(dwc3_notify_event);
 
@@ -644,6 +647,7 @@ static int __devinit dwc3_probe(struct platform_device *pdev)
 		dev_dbg(dev, "host only mode selected\n");
 		mode = DWC3_MODE_HOST;
 	}
+	INIT_DELAYED_WORK(&dwc->chg_stop, usb_chg_stop);
 
 	switch (mode) {
 	case DWC3_MODE_DEVICE:

@@ -30,10 +30,25 @@
 #define GROUP_BYTES 4
 #define ROW_BYTES 16
 #define MAX_VSYNC_COUNT 0xFFFFFFF
+struct mdss_debug_data {
+	struct dentry *root;
+	struct list_head base_list;
+};
+
+struct mdss_debug_base {
+	struct mdss_debug_data *mdd;
+	void __iomem *base;
+	size_t off;
+	size_t cnt;
+	size_t max_offset;
+	char *buf;
+	size_t buf_len;
+	struct list_head head;
+};
 
 static int mdss_debug_base_open(struct inode *inode, struct file *file)
 {
-	/* non-seekable */
+	
 	file->f_mode &= ~(FMODE_LSEEK | FMODE_PREAD | FMODE_PWRITE);
 	file->private_data = inode->i_private;
 	return 0;
@@ -67,7 +82,7 @@ static ssize_t mdss_debug_base_offset_write(struct file *file,
 	if (copy_from_user(buf, user_buf, count))
 		return -EFAULT;
 
-	buf[count] = 0;	/* end of string */
+	buf[count] = 0;	
 
 	sscanf(buf, "%5x %x", &off, &cnt);
 
@@ -96,7 +111,7 @@ static ssize_t mdss_debug_base_offset_read(struct file *file,
 		return -ENODEV;
 
 	if (*ppos)
-		return 0;	/* the end */
+		return 0;	
 
 	len = snprintf(buf, sizeof(buf), "0x%08x %x\n", dbg->off, dbg->cnt);
 	if (len < 0)
@@ -105,7 +120,7 @@ static ssize_t mdss_debug_base_offset_read(struct file *file,
 	if (copy_to_user(buff, buf, len))
 		return -EFAULT;
 
-	*ppos += len;	/* increase offset */
+	*ppos += len;	
 
 	return len;
 }
@@ -128,7 +143,7 @@ static ssize_t mdss_debug_base_reg_write(struct file *file,
 	if (copy_from_user(buf, user_buf, count))
 		return -EFAULT;
 
-	buf[count] = 0;	/* end of string */
+	buf[count] = 0;	
 
 	cnt = sscanf(buf, "%x %x", &off, &data);
 
@@ -204,7 +219,7 @@ static ssize_t mdss_debug_base_reg_read(struct file *file,
 	}
 
 	if (*ppos >= dbg->buf_len)
-		return 0; /* done reading */
+		return 0; 
 
 	len = min(count, dbg->buf_len - (size_t) *ppos);
 	if (copy_to_user(user_buf, dbg->buf + *ppos, len)) {
@@ -212,7 +227,7 @@ static ssize_t mdss_debug_base_reg_read(struct file *file,
 		return -EFAULT;
 	}
 
-	*ppos += len; /* increase offset */
+	*ppos += len; 
 
 	return len;
 }
@@ -250,14 +265,12 @@ int mdss_debug_register_base(const char *name, void __iomem *base,
 	if (!dbg)
 		return -ENOMEM;
 
-	if (name)
-		strlcpy(dbg->name, name, sizeof(dbg->name));
 	dbg->base = base;
 	dbg->max_offset = max_offset;
 	dbg->off = 0;
 	dbg->cnt = DEFAULT_BASE_REG_CNT;
 
-	if (name && strcmp(name, "mdp"))
+	if (name)
 		prefix_len = snprintf(dn, sizeof(dn), "%s_", name);
 
 	strlcpy(dn + prefix_len, "off", sizeof(dn) - prefix_len);
@@ -287,7 +300,7 @@ off_fail:
 
 static int mdss_debug_stat_open(struct inode *inode, struct file *file)
 {
-	/* non-seekable */
+	
 	file->f_mode &= ~(FMODE_LSEEK | FMODE_PREAD | FMODE_PWRITE);
 	file->private_data = inode->i_private;
 	return 0;
@@ -306,7 +319,7 @@ static ssize_t mdss_debug_stat_read(struct file *file, char __user *buff,
 	char bp[512];
 
 	if (*ppos)
-		return 0;	/* the end */
+		return 0;	
 
 	len = sizeof(bp);
 
@@ -322,7 +335,7 @@ static ssize_t mdss_debug_stat_read(struct file *file, char __user *buff,
 	if (copy_to_user(buff, bp, tot))
 		return -EFAULT;
 
-	*ppos += tot;	/* increase offset */
+	*ppos += tot;	
 
 	return tot;
 }
@@ -382,11 +395,6 @@ int mdss_debugfs_init(struct mdss_data_type *mdata)
 	debugfs_create_u32("min_mdp_clk", 0644, mdd->root,
 			(u32 *)&mdata->min_mdp_clk);
 
-	if (mdss_create_xlog_debug(mdd)) {
-		mdss_debugfs_cleanup(mdd);
-		return -ENODEV;
-	}
-
 	mdata->debug_inf.debug_data = mdd;
 
 	return 0;
@@ -400,29 +408,6 @@ int mdss_debugfs_remove(struct mdss_data_type *mdata)
 	mdata->debug_inf.debug_data = NULL;
 
 	return 0;
-}
-
-void mdss_dump_reg(char __iomem *base, int len)
-{
-	char *addr;
-	u32 x0, x4, x8, xc;
-	int i;
-
-	addr = base;
-	if (len % 16)
-		len += 16;
-	len /= 16;
-
-	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON, false);
-	for (i = 0; i < len; i++) {
-		x0 = readl_relaxed(addr+0x0);
-		x4 = readl_relaxed(addr+0x4);
-		x8 = readl_relaxed(addr+0x8);
-		xc = readl_relaxed(addr+0xc);
-		pr_info("%p : %08x %08x %08x %08x\n", addr, x0, x4, x8, xc);
-		addr += 16;
-	}
-	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF, false);
 }
 
 int vsync_count;
@@ -520,6 +505,10 @@ int mdss_misr_set(struct mdss_data_type *mdata,
 	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON, false);
 	if (req->block_id == DISPLAY_MISR_MDP) {
 		mixer = mdss_mdp_mixer_get(ctl, MDSS_MDP_MIXER_MUX_DEFAULT);
+		if (!mixer) {
+			pr_err("mdss_mdp_mixer_get get NULL mixer\n");
+			return -EINVAL;
+		}
 		mixer_num = mixer->num;
 		pr_debug("SET MDP MISR BLK to MDSS_MDP_LP_MISR_SEL_LMIX%d_GC\n",
 			req->block_id);
@@ -553,7 +542,7 @@ int mdss_misr_set(struct mdss_data_type *mdata,
 
 	writel_relaxed(MDSS_MDP_LP_MISR_CTRL_STATUS_CLEAR,
 			mdata->mdp_base + map->ctrl_reg);
-	/* ensure clear is done */
+	
 	wmb();
 
 	memset(map->crc_ping, 0, sizeof(map->crc_ping));
@@ -645,7 +634,6 @@ int mdss_misr_get(struct mdss_data_type *mdata,
 	return ret;
 }
 
-/* This function is expected to be called from interrupt context */
 void mdss_misr_crc_collect(struct mdss_data_type *mdata, int block_id)
 {
 	struct mdss_mdp_misr_map *map;

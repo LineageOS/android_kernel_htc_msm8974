@@ -72,7 +72,7 @@ enum {
 };
 
 enum {
-	MDP3_DMA_OUTPUT_COMP_BITS_4, /*4 bits per color component*/
+	MDP3_DMA_OUTPUT_COMP_BITS_4, 
 	MDP3_DMA_OUTPUT_COMP_BITS_5,
 	MDP3_DMA_OUTPUT_COMP_BITS_6,
 	MDP3_DMA_OUTPUT_COMP_BITS_8,
@@ -167,13 +167,13 @@ struct mdp3_dma_output_config {
 
 struct mdp3_dma_cursor_blend_config {
 	u32 mode;
-	u32 transparent_color; /*color keying*/
+	u32 transparent_color; 
 	u32 transparency_mask;
 	u32 constant_alpha;
 };
 
 struct mdp3_dma_cursor {
-	int enable; /* enable cursor or not*/
+	int enable; 
 	u32 format;
 	int width;
 	int height;
@@ -184,10 +184,10 @@ struct mdp3_dma_cursor {
 };
 
 struct mdp3_dma_ccs {
-	u32 *mv; /*set1 matrix vector, 3x3 */
-	u32 *pre_bv; /*pre-bias vector for set1, 1x3*/
-	u32 *post_bv; /*post-bias vecotr for set1,  */
-	u32 *pre_lv; /*pre-limit vector for set 1, 1x6*/
+	u32 *mv; 
+	u32 *pre_bv; 
+	u32 *post_bv; 
+	u32 *pre_lv; 
 	u32 *post_lv;
 };
 
@@ -233,19 +233,6 @@ struct mdp3_notification {
 	void *arg;
 };
 
-struct mdp3_tear_check {
-	int frame_rate;
-	bool hw_vsync_mode;
-	u32 tear_check_en;
-	u32 sync_cfg_height;
-	u32 vsync_init_val;
-	u32 sync_threshold_start;
-	u32 sync_threshold_continue;
-	u32 start_pos;
-	u32 rd_ptr_irq;
-	u32 refx100;
-};
-
 struct mdp3_intf;
 
 struct mdp3_dma {
@@ -277,9 +264,6 @@ struct mdp3_dma {
 	int (*dma_config)(struct mdp3_dma *dma,
 			struct mdp3_dma_source *source_config,
 			struct mdp3_dma_output_config *output_config);
-
-	int (*dma_sync_config)(struct mdp3_dma *dma, struct mdp3_dma_source
-				*source_config, struct mdp3_tear_check *te);
 
 	void (*dma_config_source)(struct mdp3_dma *dma);
 
@@ -368,4 +352,4 @@ void mdp3_dma_callback_enable(struct mdp3_dma *dma, int type);
 
 void mdp3_dma_callback_disable(struct mdp3_dma *dma, int type);
 
-#endif /* MDP3_DMA_H */
+#endif 

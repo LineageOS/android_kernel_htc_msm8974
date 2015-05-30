@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -131,17 +131,13 @@ static int mdss_mdp_writeback_format_setup(struct mdss_mdp_writeback_ctx *ctx,
 	struct mdss_mdp_format_params *fmt;
 	u32 dst_format, pattern, ystride0, ystride1, outsize, chroma_samp;
 	u32 opmode = ctx->opmode;
-	bool rotation = false;
 	struct mdss_data_type *mdata;
 
 	pr_debug("wb_num=%d format=%d\n", ctx->wb_num, format);
 
-	if (ctx->rot90)
-		rotation = true;
-
 	mdss_mdp_get_plane_sizes(format, ctx->width, ctx->height,
 				 &ctx->dst_planes,
-				 ctx->opmode & MDSS_MDP_OP_BWC_EN, rotation);
+				 ctx->opmode & MDSS_MDP_OP_BWC_EN);
 
 	fmt = mdss_mdp_get_format_params(format);
 	if (!fmt) {
@@ -155,9 +151,9 @@ static int mdss_mdp_writeback_format_setup(struct mdss_mdp_writeback_ctx *ctx,
 	if (ctx->type != MDSS_MDP_WRITEBACK_TYPE_ROTATOR && fmt->is_yuv) {
 		mdss_mdp_csc_setup(MDSS_MDP_BLOCK_WB, ctx->wb_num, 0,
 				   MDSS_MDP_CSC_RGB2YUV);
-		opmode |= (1 << 8) |	/* CSC_EN */
-			  (0 << 9) |	/* SRC_DATA=RGB */
-			  (1 << 10);	/* DST_DATA=YCBCR */
+		opmode |= (1 << 8) |	
+			  (0 << 9) |	
+			  (1 << 10);	
 
 		switch (chroma_samp) {
 		case MDSS_MDP_CHROMA_RGB:
@@ -185,9 +181,9 @@ static int mdss_mdp_writeback_format_setup(struct mdss_mdp_writeback_ctx *ctx,
 		     (fmt->bits[C0_G_Y] << 0);
 
 	if (fmt->bits[C3_ALPHA] || fmt->alpha_enable) {
-		dst_format |= BIT(8); /* DSTC3_EN */
+		dst_format |= BIT(8); 
 		if (!fmt->alpha_enable)
-			dst_format |= BIT(14); /* DST_ALPHA_X */
+			dst_format |= BIT(14); 
 	}
 
 	mdata = mdss_mdp_get_mdata();
@@ -234,7 +230,7 @@ static int mdss_mdp_writeback_prepare_wfd(struct mdss_mdp_ctl *ctl, void *arg)
 	if (!ctx)
 		return -ENODEV;
 
-	if (ctx->initialized && !ctl->shared_lock) /* already set */
+	if (ctx->initialized && !ctl->shared_lock) 
 		return 0;
 
 	pr_debug("wfd setup ctl=%d\n", ctl->num);
@@ -279,9 +275,9 @@ static int mdss_mdp_writeback_prepare_rot(struct mdss_mdp_ctl *ctl, void *arg)
 	}
 	pr_debug("rot setup wb_num=%d\n", ctx->wb_num);
 
-	ctx->opmode = BIT(6); /* ROT EN */
+	ctx->opmode = BIT(6); 
 	if (ctl->mdata->rot_block_size == 128)
-		ctx->opmode |= BIT(4); /* block size 128 */
+		ctx->opmode |= BIT(4); 
 
 	ctx->bwc_mode = rot->bwc_mode;
 	ctx->opmode |= ctx->bwc_mode;
@@ -301,7 +297,7 @@ static int mdss_mdp_writeback_prepare_rot(struct mdss_mdp_ctl *ctl, void *arg)
 		format = mdss_mdp_get_rotator_dst_format(rot->format, 0);
 
 	if (ctx->rot90) {
-		ctx->opmode |= BIT(5); /* ROT 90 */
+		ctx->opmode |= BIT(5); 
 		swap(ctx->dst_rect.w, ctx->dst_rect.h);
 	}
 
@@ -443,8 +439,7 @@ static int mdss_mdp_wb_wait4comp(struct mdss_mdp_ctl *ctl, void *arg)
 	}
 
 	mdss_iommu_ctrl(0);
-	mdss_bus_bandwidth_ctrl(false);
-	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF, false); /* clock off */
+	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF, false); 
 
 	ctx->comp_cnt--;
 
@@ -496,7 +491,7 @@ static int mdss_mdp_writeback_display(struct mdss_mdp_ctl *ctl, void *arg)
 	mdss_mdp_set_intr_callback(ctx->intr_type, ctx->intf_num,
 		   mdss_mdp_writeback_intr_done, ctl);
 
-	flush_bits = BIT(16); /* WB */
+	flush_bits = BIT(16); 
 	mdp_wb_write(ctx, MDSS_MDP_REG_WB_DST_ADDR_SW_STATUS, ctl->is_secure);
 	mdss_mdp_ctl_write(ctl, MDSS_MDP_REG_CTL_FLUSH, flush_bits);
 
@@ -509,7 +504,6 @@ static int mdss_mdp_writeback_display(struct mdss_mdp_ctl *ctl, void *arg)
 		return ret;
 	}
 	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON, false);
-	mdss_bus_bandwidth_ctrl(true);
 	mdss_mdp_ctl_write(ctl, MDSS_MDP_REG_CTL_START, 1);
 	wmb();
 
@@ -539,7 +533,7 @@ int mdss_mdp_writeback_start(struct mdss_mdp_ctl *ctl)
 		return -EINVAL;
 	}
 	ctl->priv_data = ctx;
-	ctx->wb_num = ctl->num;	/* wb num should match ctl num */
+	ctx->wb_num = ctl->num;	
 	ctx->base = ctl->wb_base;
 	ctx->initialized = false;
 	init_completion(&ctx->wb_comp);
@@ -548,7 +542,7 @@ int mdss_mdp_writeback_start(struct mdss_mdp_ctl *ctl)
 
 	if (ctx->type == MDSS_MDP_WRITEBACK_TYPE_ROTATOR)
 		ctl->prepare_fnc = mdss_mdp_writeback_prepare_rot;
-	else /* wfd or line mode */
+	else 
 		ctl->prepare_fnc = mdss_mdp_writeback_prepare_wfd;
 	ctl->stop_fnc = mdss_mdp_writeback_stop;
 	ctl->display_fnc = mdss_mdp_writeback_display;
