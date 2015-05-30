@@ -110,6 +110,15 @@ config IMX134
 		HFR @60fps and @120fps
 		Video HDR support.
 
+config OV2720
+	bool "Sensor OV2720 (BAYER 2M)"
+	depends on MSMB_CAMERA
+	---help---
+		OmniVision 2 MP Bayer Sensor, supports 2 mipi lanes,
+		preview and snapshot config at 1932 * 1092 at 30 fps,
+		hfr video at 60, 90 and 120 fps. This sensor driver does
+		not support auto focus.
+
 config OV9724
 	bool "Sensor OV9724 (BAYER 2M)"
 	depends on MSMB_CAMERA
@@ -145,6 +154,20 @@ config MT9M114
 		and snapshot. The preview and snapshot resolution shall be
 		1280 * 270. It does not support auto focus. It supports
 		few special effects like saturation.
+
+config VD6869
+	bool "Sensor VD6869 (BAYER 4M)"
+	depends on MSMB_CAMERA
+	default n
+	---help---
+		ST 4MP Bayer Sensor
+
+config OV4688
+	bool "Sensor ov4688 (BAYER 4M)"
+	depends on MSMB_CAMERA
+	default n
+	---help---
+		OmniVision 4MP Bayer Sensor
 
 config SP1628
 	bool "Sensor SP1628 (YUV 720P)"
@@ -200,6 +223,20 @@ config OV12830
 		snapshot config = 4224 * 3000 at 15 fps.
 		2 lanes max fps is 18, 4 lanes max fps is 24.
 
+config OV2722
+	bool "Sensor ov2722"
+	depends on MSMB_CAMERA
+	default n
+	---help---
+	  Support for OV2722 sensor driver.
+
+config s5k5e
+	bool "Sensor s5k5e"
+	depends on MSMB_CAMERA
+	default n
+	---help---
+	  Support for s5k5e sensor driver.
+
 config MSM_V4L2_VIDEO_OVERLAY_DEVICE
 	tristate "Qualcomm MSM V4l2 video overlay device"
 	---help---
@@ -217,8 +254,35 @@ config MSMB_JPEG
 	  This module serves as the common driver
 	  for the JPEG 1.0 encoder and decoder.
 
+config RAWCHIPII
+        bool "RawchipII"
+        depends on MSMB_CAMERA
+        default n
+        ---help---
+          ST Yushan rawchipII
+
 config MSM_GEMINI
 	tristate "Qualcomm MSM Gemini JPEG engine support"
 	depends on MSMB_CAMERA && (ARCH_MSM7X30 || ARCH_MSM8X60 || ARCH_MSM8960)
 	---help---
 	  Enables support for the Gemini JPEG encoder engine for 8x60.
+
+config TI201_ACT
+       bool "Lens actuator ti201"
+       depends on MSMB_CAMERA
+       ---help---
+         ti201 lens actuator driver for SONY IMX175, IMX091 and VD6869.
+
+config ACT_OIS_BINDER
+       bool "Act_Ois_Binder"
+       depends on MSMB_CAMERA
+       default n
+       ---help---
+         Act_Ois_Binder for OIS function through ti201 lens actuator driver.
+
+config RUMBAS_ACT
+	bool "RUMBA-S actuator"
+	depends on MSMB_CAMERA
+	default n
+	---help---
+	  Autofocus of RUMBA-S actuator

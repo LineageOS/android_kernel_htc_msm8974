@@ -229,6 +229,28 @@ int of_device_is_compatible(const struct device_node *device,
 }
 EXPORT_SYMBOL(of_device_is_compatible);
 
+int of_machine_projectid(int index) {
+	struct device_node *root;
+	static int isRead = 0;
+	static u32 array[3];
+	int ret = 0;
+
+	if (!isRead) {
+		root = of_find_node_by_path("/");
+		if (root) {
+			ret = of_property_read_u32_array(root, "htc,project-id", array, 3);
+
+			if (ret < 0)
+				return -1;
+
+			isRead = 1;
+		}
+	}
+
+	return array[index];
+}
+EXPORT_SYMBOL(of_machine_projectid);
+
 /**
  * of_machine_is_compatible - Test root of device tree for a given compatible value
  * @compat: compatible string to look for in root node's compatible property.
