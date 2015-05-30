@@ -100,6 +100,7 @@ static uint32_t msm_eeprom_match_crc(struct msm_eeprom_memory_block_t *data)
 	return ret;
 }
 
+#if (CONFIG_HTC_CAMERA_HAL_VERSION > 1)
 static int msm_eeprom_get_mm_data(struct msm_eeprom_ctrl_t *e_ctrl,
 				       struct msm_eeprom_cfg_data *cdata)
 {
@@ -110,6 +111,7 @@ static int msm_eeprom_get_mm_data(struct msm_eeprom_ctrl_t *e_ctrl,
 	cdata->cfg.get_mm_data.mm_size = mm_data->mm_size;
 	return rc;
 }
+#endif
 
 static int eeprom_config_read_cal_data(struct msm_eeprom_ctrl_t *e_ctrl,
 				       struct msm_eeprom_cfg_data *cdata)
@@ -159,10 +161,12 @@ static int msm_eeprom_config(struct msm_eeprom_ctrl_t *e_ctrl,
 		CDBG("%s E CFG_EEPROM_READ_CAL_DATA\n", __func__);
 		rc = eeprom_config_read_cal_data(e_ctrl, cdata);
 		break;
+#if (CONFIG_HTC_CAMERA_HAL_VERSION > 1)
 	case CFG_EEPROM_GET_MM_INFO:
 		CDBG("%s E CFG_EEPROM_GET_MM_INFO\n", __func__);
 		rc = msm_eeprom_get_mm_data(e_ctrl, cdata);
 		break;
+#endif
 	default:
 		break;
 	}
@@ -446,7 +450,7 @@ static struct msm_cam_clk_info cam_8960_clk_info[] = {
 };
 
 static struct msm_cam_clk_info cam_8974_clk_info[] = {
-	[SENSOR_CAM_MCLK] = {"cam_src_clk", 19200000},
+	[SENSOR_CAM_MCLK] = {"cam_src_clk", 24000000},
 	[SENSOR_CAM_CLK] = {"cam_clk", 0},
 };
 
@@ -740,7 +744,7 @@ static int msm_eeprom_spi_setup(struct spi_device *spi)
 	CDBG("cell-index %d, rc %d\n", e_ctrl->subdev_id, rc);
 	if (rc < 0) {
 		pr_err("failed rc %d\n", rc);
-		return rc;
+		goto spi_free;
 	}
 
 	e_ctrl->eeprom_device_type = MSM_CAMERA_SPI_DEVICE;

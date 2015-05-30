@@ -389,7 +389,7 @@ error:
 	return status;
 } /* hdmi_ddc_read_retry */
 
-void hdmi_ddc_config(struct hdmi_tx_ddc_ctrl *ddc_ctrl)
+void hdmi_ddc_config(struct hdmi_tx_ddc_ctrl *ddc_ctrl, u16 ddc_ref_clk)
 {
 	if (!ddc_ctrl || !ddc_ctrl->io) {
 		DEV_ERR("%s: invalid input\n", __func__);
@@ -405,8 +405,8 @@ void hdmi_ddc_config(struct hdmi_tx_ddc_ctrl *ddc_ctrl)
 	 */
 	DSS_REG_W_ND(ddc_ctrl->io, HDMI_DDC_SETUP, 0xFF000000);
 
-	/* Enable reference timer to 19 micro-seconds */
-	DSS_REG_W_ND(ddc_ctrl->io, HDMI_DDC_REF, (1 << 16) | (19 << 0));
+	
+	DSS_REG_W_ND(ddc_ctrl->io, HDMI_DDC_REF, (1 << 16) | ddc_ref_clk);
 } /* hdmi_ddc_config */
 
 int hdmi_ddc_isr(struct hdmi_tx_ddc_ctrl *ddc_ctrl)

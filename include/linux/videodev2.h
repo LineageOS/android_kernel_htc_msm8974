@@ -256,6 +256,11 @@ struct v4l2_capability {
 	__u32	reserved[3];
 };
 
+struct htc_callingpid_data {
+        pid_t call_pid;
+        const char *process_name;
+};
+
 /* Values for 'capabilities' field */
 #define V4L2_CAP_VIDEO_CAPTURE		0x00000001  /* Is a video capture device */
 #define V4L2_CAP_VIDEO_OUTPUT		0x00000002  /* Is a video output device */
@@ -661,7 +666,7 @@ struct v4l2_plane {
  * I/O methods.
  */
 struct v4l2_buffer {
-	__u32			index;
+	int			index;
 	enum v4l2_buf_type      type;
 	__u32			bytesused;
 	__u32			flags;
@@ -2731,6 +2736,8 @@ struct v4l2_create_buffers {
 
 /* Reminder: when adding new ioctls please add support for them to
    drivers/media/video/v4l2-compat-ioctl32.c as well! */
+
+#define VIDIOC_HTC_SET_CALLPIDNAME _IOW('V', 99, struct htc_callingpid_data)
 
 #define BASE_VIDIOC_PRIVATE	192		/* 192-255 are private */
 
