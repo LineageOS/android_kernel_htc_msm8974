@@ -13,10 +13,6 @@
  *
  */
 
-/*
- * Root HUB management and Asynchronous scheduling traversal
- * Based on ehci-hub.c and ehci-q.c
- */
 
 #define pr_fmt(fmt) "%s: " fmt, __func__
 
@@ -44,31 +40,29 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/ice40.h>
 
-#define FADDR_REG 0x00 /* R/W: Device address */
-#define HCMD_REG 0x01 /* R/W: Host transfer command */
-#define XFRST_REG 0x02 /* R: Transfer status */
-#define IRQ_REG 0x03 /* R/C: IRQ status */
-#define IEN_REG 0x04 /* R/W: IRQ enable */
-#define CTRL0_REG 0x05 /* R/W: Host control command */
-#define CTRL1_REG 0x06 /* R/W: Host control command */
-#define WBUF0_REG 0x10 /* W: Tx fifo 0 */
-#define WBUF1_REG 0x11 /* W: Tx fifo 1 */
-#define SUBUF_REG 0x12 /* W: SETUP fifo */
-#define WBLEN_REG 0x13 /* W: Tx fifo size */
-#define RBUF0_REG 0x18 /* R: Rx fifo 0 */
-#define RBUF1_REG 0x19 /* R: Rx fifo 1 */
-#define RBLEN_REG 0x1B /* R: Rx fifo size */
+#define FADDR_REG 0x00 
+#define HCMD_REG 0x01 
+#define XFRST_REG 0x02 
+#define IRQ_REG 0x03 
+#define IEN_REG 0x04 
+#define CTRL0_REG 0x05 
+#define CTRL1_REG 0x06 
+#define WBUF0_REG 0x10 
+#define WBUF1_REG 0x11 
+#define SUBUF_REG 0x12 
+#define WBLEN_REG 0x13 
+#define RBUF0_REG 0x18 
+#define RBUF1_REG 0x19 
+#define RBLEN_REG 0x1B 
 
 #define WRITE_CMD(addr) ((addr << 3) | 1)
 #define READ_CMD(addr) ((addr << 3) | 0)
 
-/* Host controller command register definitions */
 #define HCMD_EP(ep) (ep & 0xF)
 #define HCMD_BSEL(sel) (sel << 4)
 #define HCMD_TOGV(toggle) (toggle << 5)
 #define HCMD_PT(token) (token << 6)
 
-/* Transfer status register definitions */
 #define XFR_MASK(xfr) (xfr & 0xF)
 #define XFR_SUCCESS 0x0
 #define XFR_BUSY 0x1
@@ -82,13 +76,12 @@
 #define XFR_BADLEN 0x9
 #define XFR_TIMEOUT 0xA
 
-#define LINE_STATE(xfr) ((xfr & 0x30) >> 4) /* D+, D- */
+#define LINE_STATE(xfr) ((xfr & 0x30) >> 4) 
 #define DPST	BIT(5)
 #define DMST	BIT(4)
 #define PLLOK	BIT(6)
 #define R64B	BIT(7)
 
-/* Interrupt enable/status register definitions */
 #define RESET_IRQ BIT(0)
 #define RESUME_IRQ BIT(1)
 #define SUSP_IRQ BIT(3)
@@ -97,7 +90,6 @@
 #define FRAME_IRQ BIT(6)
 #define XFR_IRQ BIT(7)
 
-/* Control 0 register definitions */
 #define RESET_CTRL BIT(0)
 #define FRAME_RESET_CTRL BIT(1)
 #define DET_BUS_CTRL BIT(2)
@@ -107,7 +99,6 @@
 #define DP_PD_CTRL BIT(7)
 #define HRST_CTRL  BIT(5)
 
-/* Control 1 register definitions */
 #define INT_EN_CTRL BIT(0)
 
 enum ice40_xfr_type {
@@ -165,33 +156,33 @@ struct ice40_hcd {
 	struct dentry *dbg_root;
 	bool pcd_pending;
 
-	/* SPI stuff later */
+	
 	struct spi_device *spi;
 
 	struct spi_message *fmsg;
-	struct spi_transfer *fmsg_xfr; /* size 1 */
+	struct spi_transfer *fmsg_xfr; 
 
 	struct spi_message *wmsg;
-	struct spi_transfer *wmsg_xfr; /* size 1 */
+	struct spi_transfer *wmsg_xfr; 
 	u8 *w_tx_buf;
 	u8 *w_rx_buf;
 
 	struct spi_message *rmsg;
-	struct spi_transfer *rmsg_xfr; /* size 1 */
+	struct spi_transfer *rmsg_xfr; 
 	u8 *r_tx_buf;
 	u8 *r_rx_buf;
 
 	struct spi_message *setup_msg;
-	struct spi_transfer *setup_xfr; /* size 2 */
-	u8 *setup_buf; /* size 1 for SUBUF */
+	struct spi_transfer *setup_xfr; 
+	u8 *setup_buf; 
 
 	struct spi_message *in_msg;
-	struct spi_transfer *in_xfr; /* size 2 */
-	u8 *in_buf; /* size 2 for reading from RBUF0 */
+	struct spi_transfer *in_xfr; 
+	u8 *in_buf; 
 
 	struct spi_message *out_msg;
-	struct spi_transfer *out_xfr; /* size 2 */
-	u8 *out_buf; /* size 1 for writing WBUF0 */
+	struct spi_transfer *out_xfr; 
+	u8 *out_buf; 
 };
 
 static char fw_name[16] = "ice40.bin";
@@ -211,21 +202,13 @@ static void ice40_spi_reg_write(struct ice40_hcd *ihcd, u8 val, u8 addr)
 {
 	int ret;
 
-	/*
-	 * Register Write Pattern:
-	 * TX: 1st byte is CMD (register + write), 2nd byte is value
-	 * RX: Ignore
-	 *
-	 * The Mutex is to protect concurrent register writes as
-	 * we have only 1 SPI message struct.
-	 */
 
 	mutex_lock(&ihcd->wlock);
 
 	ihcd->w_tx_buf[0] = WRITE_CMD(addr);
 	ihcd->w_tx_buf[1] = val;
 	ret = spi_sync(ihcd->spi, ihcd->wmsg);
-	if (ret < 0) /* should not happen */
+	if (ret < 0) 
 		pr_err("failed. val = %d addr = %d\n", val, addr);
 
 	trace_ice40_reg_write(addr, val, ihcd->w_tx_buf[0],
@@ -238,14 +221,6 @@ static int ice40_spi_reg_read(struct ice40_hcd *ihcd, u8 addr)
 {
 	int ret;
 
-	/*
-	 * Register Read Pattern:
-	 * TX: 1st byte is CMD (register + read)
-	 * RX: 1st, 2nd byte Ignore, 3rd byte value.
-	 *
-	 * The Mutex is to protect concurrent register reads as
-	 * we have only 1 SPI message struct.
-	 */
 
 	mutex_lock(&ihcd->rlock);
 
@@ -267,14 +242,10 @@ static int ice40_poll_xfer(struct ice40_hcd *ihcd, int usecs)
 {
 	ktime_t start = ktime_get();
 	u8 val, retry = 0;
-	u8 ret = ~0; /* time out */
+	u8 ret = ~0; 
 
 again:
 
-	/*
-	 * The SPI transaction may take tens of usec. Use ktime
-	 * based checks rather than loop count.
-	 */
 	do {
 		val = ice40_spi_reg_read(ihcd, XFRST_REG);
 
@@ -283,11 +254,6 @@ again:
 
 	} while (ktime_us_delta(ktime_get(), start) < usecs);
 
-	/*
-	 * The SPI transaction involves a context switch. For any
-	 * reason, if we are scheduled out more than usecs after
-	 * the 1st read, this extra read will help.
-	 */
 	if (!retry) {
 		retry = 1;
 		goto again;
@@ -329,24 +295,10 @@ static int ice40_reset(struct usb_hcd *hcd)
 	u8 ctrl, status;
 	int ret = 0;
 
-	/*
-	 * Program the defualt address 0. The device address is
-	 * re-programmed after SET_ADDRESS in URB handling path.
-	 */
 	ihcd->devnum = 0;
 	ice40_spi_reg_write(ihcd, 0, FADDR_REG);
 
 	ihcd->wblen0 = ~0;
-	/*
-	 * Read the line state. This driver is loaded after the
-	 * UICC card insertion. So the line state should indicate
-	 * that a Full-speed device is connected. Return error
-	 * if there is no device connected.
-	 *
-	 * There can be no device connected during debug. A debugfs
-	 * file is provided to sample the bus line and update the
-	 * port flags accordingly.
-	 */
 
 	if (debugger)
 		goto out;
@@ -378,12 +330,6 @@ static int ice40_run(struct usb_hcd *hcd)
 {
 	struct ice40_hcd *ihcd = hcd_to_ihcd(hcd);
 
-	/*
-	 * HCD_FLAG_POLL_RH flag is not set by us. Core will not poll
-	 * for the port status periodically. This uses_new_polling
-	 * flag tells core that this hcd will call usb_hcd_poll_rh_status
-	 * upon port change.
-	 */
 	hcd->uses_new_polling = 1;
 
 	/*
@@ -404,10 +350,6 @@ static void ice40_stop(struct usb_hcd *hcd)
 	cancel_work_sync(&ihcd->async_work);
 }
 
-/*
- * The _Error looks odd. But very helpful when looking for
- * any errors in logs.
- */
 static char __maybe_unused *xfr_status_string(int status)
 {
 	switch (XFR_MASK(status)) {
@@ -446,13 +388,6 @@ static int ice40_xfer_setup(struct ice40_hcd *ihcd, struct urb *urb)
 	int ret, status;
 	u8 cmd;
 
-	/*
-	 * SETUP transaction Handling:
-	 * - copy the setup buffer to SUBUF fifo
-	 * - Program HCMD register to initiate the SETP transaction.
-	 * - poll for completion by reading XFRST register.
-	 * - Interpret the result.
-	 */
 
 	ihcd->setup_buf[0] = WRITE_CMD(SUBUF_REG);
 	ihcd->setup_xfr[1].tx_buf = buf;
@@ -474,7 +409,7 @@ static int ice40_xfer_setup(struct ice40_hcd *ihcd, struct urb *urb)
 		iep->xcat_err = 0;
 		ret = 0;
 		break;
-	case XFR_NAK: /* Device should not return Nak for SETUP */
+	case XFR_NAK: 
 	case XFR_STALL:
 		iep->xcat_err = 0;
 		ret = -EPIPE;
@@ -516,7 +451,7 @@ static int ice40_xfer_in(struct ice40_hcd *ihcd, struct urb *urb)
 	if (epnum == 0 && ihcd->ep0_state == STATUS_PHASE) {
 		expected_len = 0;
 		buf = NULL;
-		t = 1; /* STATUS PHASE is always DATA1 */
+		t = 1; 
 	} else {
 		expected_len = min_t(u32, maxpacket,
 				total_len - urb->actual_length);
@@ -524,14 +459,6 @@ static int ice40_xfer_in(struct ice40_hcd *ihcd, struct urb *urb)
 		t = usb_gettoggle(udev, epnum, is_out);
 	}
 
-	/*
-	 * IN transaction Handling:
-	 * - Program HCMD register to initiate the IN transaction.
-	 * - poll for completion by reading XFRST register.
-	 * - Interpret the result.
-	 * - If ACK is received and we expect some data, read RBLEN
-	 * - Read the data from RBUF
-	 */
 
 	cmd = HCMD_PT(0) | HCMD_TOGV(t) | HCMD_BSEL(0) | HCMD_EP(epnum);
 	ice40_spi_reg_write(ihcd, cmd, HCMD_REG);
@@ -550,12 +477,6 @@ static int ice40_xfer_in(struct ice40_hcd *ihcd, struct urb *urb)
 		ret = -EINPROGRESS;
 		break;
 	case XFR_TOGERR:
-		/*
-		 * Peripheral had missed the previous Ack and sent
-		 * the same packet again. Ack is sent by the hardware.
-		 * As the data is received already, ignore this
-		 * event.
-		 */
 		ret = -EINPROGRESS;
 		break;
 	case XFR_PKTERR:
@@ -579,10 +500,6 @@ static int ice40_xfer_in(struct ice40_hcd *ihcd, struct urb *urb)
 		ret = -EIO;
 	}
 
-	/*
-	 * Proceed further only if Ack is received and
-	 * we are expecting some data.
-	 */
 	if (ret || !expected_len)
 		goto out;
 
@@ -591,17 +508,13 @@ static int ice40_xfer_in(struct ice40_hcd *ihcd, struct urb *urb)
 	else
 		len = 64;
 
-	/* babble condition */
+	
 	if (len > expected_len) {
 		pr_err("overflow condition\n");
 		ret = -EOVERFLOW;
 		goto out;
 	}
 
-	/*
-	 * zero len packet received. nothing to read from
-	 * FIFO.
-	 */
 	if (len == 0) {
 		ret = 0;
 		goto out;
@@ -622,9 +535,9 @@ static int ice40_xfer_in(struct ice40_hcd *ihcd, struct urb *urb)
 	urb->actual_length += len;
 	if ((urb->actual_length == total_len) ||
 			(len < expected_len))
-		ret = 0; /* URB completed */
+		ret = 0; 
 	else
-		ret = -EINPROGRESS; /* still pending */
+		ret = -EINPROGRESS; 
 out:
 	trace_ice40_in(epnum, xfr_status_string(status), len,
 			expected_len, ret);
@@ -647,21 +560,13 @@ static int ice40_xfer_out(struct ice40_hcd *ihcd, struct urb *urb)
 	if (epnum == 0 && ihcd->ep0_state == STATUS_PHASE) {
 		len = 0;
 		buf = NULL;
-		t = 1; /* STATUS PHASE is always DATA1 */
+		t = 1; 
 	} else {
 		len = min_t(u32, maxpacket, total_len - urb->actual_length);
 		buf = urb->transfer_buffer + urb->actual_length;
 		t = usb_gettoggle(udev, epnum, is_out);
 	}
 
-	/*
-	 * OUT transaction Handling:
-	 * - If we need to send data, write the data to WBUF Fifo
-	 * - Program the WBLEN register
-	 * - Program HCMD register to initiate the OUT transaction.
-	 * - poll for completion by reading XFRST register.
-	 * - Interpret the result.
-	 */
 
 
 	if (!len)
@@ -680,10 +585,6 @@ static int ice40_xfer_out(struct ice40_hcd *ihcd, struct urb *urb)
 	}
 
 no_data:
-	/*
-	 * Cache the WBLEN register and update it only if it
-	 * is changed from the previous value.
-	 */
 	if (len != ihcd->wblen0) {
 		ice40_spi_reg_write(ihcd, len, WBLEN_REG);
 		ihcd->wblen0 = len;
@@ -699,9 +600,9 @@ no_data:
 		urb->actual_length += len;
 		iep->xcat_err = 0;
 		if (!len || (urb->actual_length == total_len))
-			ret = 0; /* URB completed */
+			ret = 0; 
 		else
-			ret = -EINPROGRESS; /* pending */
+			ret = -EINPROGRESS; 
 		break;
 	case XFR_NAK:
 		iep->xcat_err = 0;
@@ -741,15 +642,6 @@ static int ice40_process_urb(struct ice40_hcd *ihcd, struct urb *urb)
 	u32 total_len = urb->transfer_buffer_length;
 	int ret = 0;
 
-	/*
-	 * The USB device address can be reset to 0 by core temporarily
-	 * during reset recovery process. Don't assume anything about
-	 * device address. The device address is programmed as 0 by
-	 * default. If the device address is different to the previous
-	 * cached value, re-program it here before proceeding. The device
-	 * address register (FADDR) holds the value across multiple
-	 * transactions and we support only one device.
-	 */
 	if (ihcd->devnum != devnum) {
 		ice40_spi_reg_write(ihcd, devnum, FADDR_REG);
 		ihcd->devnum = devnum;
@@ -765,16 +657,12 @@ static int ice40_process_urb(struct ice40_hcd *ihcd, struct urb *urb)
 				break;
 			if (total_len) {
 				ihcd->ep0_state = DATA_PHASE;
-				/*
-				 * Data stage always begin with
-				 * DATA1 PID.
-				 */
 				usb_settoggle(udev, 0, is_out, 1);
 			} else {
 				ihcd->ep0_state = STATUS_PHASE;
 				goto do_status;
 			}
-			/* fall through */
+			
 		case DATA_PHASE:
 			trace_ice40_ep0("DATA");
 			if (is_out)
@@ -783,13 +671,13 @@ static int ice40_process_urb(struct ice40_hcd *ihcd, struct urb *urb)
 				ret = ice40_xfer_in(ihcd, urb);
 			if (ret)
 				break;
-			/* DATA Phase is completed successfully */
+			
 			ihcd->ep0_state = STATUS_PHASE;
-			/* fall through */
+			
 		case STATUS_PHASE:
 do_status:
 			trace_ice40_ep0("STATUS");
-			/* zero len DATA transfers have IN status */
+			
 			if (!total_len || is_out)
 				ret = ice40_xfer_in(ihcd, urb);
 			else
@@ -808,10 +696,6 @@ do_status:
 			ret = ice40_xfer_out(ihcd, urb);
 		else
 			ret = ice40_xfer_in(ihcd, urb);
-		/*
-		 * We may have to support zero len packet terminations
-		 * for URB_ZERO_PACKET URBs.
-		 */
 		break;
 	default:
 		pr_err("IN/ISO transfers not supported\n");
@@ -821,7 +705,6 @@ do_status:
 	return ret;
 }
 
-/* Must be called with spin lock and interrupts disabled */
 static void ice40_complete_urb(struct usb_hcd *hcd, struct urb *urb, int status)
 {
 	struct ice40_hcd *ihcd = hcd_to_ihcd(hcd);
@@ -831,11 +714,6 @@ static void ice40_complete_urb(struct usb_hcd *hcd, struct urb *urb, int status)
 	bool needs_update = false;
 	bool control = usb_pipecontrol(urb->pipe);
 
-	/*
-	 * If the active URB i.e the first URB in the ep list is being
-	 * removed, clear the transaction error count. If it is a control
-	 * URB ep0_state needs to be reset to SETUP_PHASE.
-	 */
 	first_urb = list_first_entry(&ep->urb_list, struct urb, urb_list);
 	if (urb == first_urb)
 		needs_update = true;
@@ -865,12 +743,6 @@ static void ice40_async_work(struct work_struct *work)
 	unsigned long flags;
 	int status;
 
-	/*
-	 * Traverse the active endpoints circularly and process URBs.
-	 * If any endpoint is marked for unlinking, the URBs are
-	 * completed here. The endpoint is removed from active list
-	 * if a URB is retired with -EPIPE/-EPROTO errors.
-	 */
 
 	spin_lock_irqsave(&ihcd->lock, flags);
 
@@ -933,11 +805,6 @@ ice40_urb_enqueue(struct usb_hcd *hcd, struct urb *urb, gfp_t mem_flags)
 	unsigned long flags;
 	int ret;
 
-	/*
-	 * This bridge chip supports only Full-speed. So ISO is not
-	 * supported. Interrupt support is not implemented as there
-	 * is no use case.
-	 */
 	if (usb_pipeisoc(urb->pipe) || usb_pipeint(urb->pipe)) {
 		pr_debug("iso and int xfers not supported\n");
 		ret = -ENOTSUPP;
@@ -968,13 +835,6 @@ ice40_urb_enqueue(struct usb_hcd *hcd, struct urb *urb, gfp_t mem_flags)
 			ihcd->ep0_state = SETUP_PHASE;
 	}
 
-	/*
-	 * We expect the interface driver to clear the stall condition
-	 * before queueing another URB. For example mass storage
-	 * device may STALL a bulk endpoint for un-supported command.
-	 * The storage driver clear the STALL condition before queueing
-	 * another URB.
-	 */
 	iep->halted = false;
 	if (list_empty(&iep->ep_list))
 		list_add_tail(&iep->ep_list, &ihcd->async_list);
@@ -1010,12 +870,6 @@ ice40_urb_dequeue(struct usb_hcd *hcd, struct urb *urb, int status)
 	trace_ice40_urb_dequeue(urb);
 	iep = ep->hcpriv;
 
-	/*
-	 * If the endpoint is not in asynchronous schedule, complete
-	 * the URB immediately. Otherwise mark it as being unlinked.
-	 * The asynchronous schedule work will take care of completing
-	 * the URB when this endpoint is encountered during traversal.
-	 */
 	if (list_empty(&iep->ep_list))
 		ice40_complete_urb(hcd, urb, status);
 	else
@@ -1031,10 +885,6 @@ ice40_endpoint_disable(struct usb_hcd *hcd, struct usb_host_endpoint *ep)
 {
 	struct ice40_ep	*iep = ep->hcpriv;
 
-	/*
-	 * If there is no I/O on this endpoint before, ep->hcpriv
-	 * will be NULL. nothing to do in this case.
-	 */
 	if (!iep)
 		return;
 
@@ -1051,13 +901,6 @@ static int ice40_hub_status_data(struct usb_hcd *hcd, char *buf)
 	struct ice40_hcd *ihcd = hcd_to_ihcd(hcd);
 	int ret = 0;
 
-	/*
-	 * core calls hub_status_method during suspend/resume.
-	 * return 0 if there is no port change. pcd_pending
-	 * is set to true when a device is connected and line
-	 * state is sampled via debugfs command. clear this
-	 * flag after returning the port change status.
-	 */
 	if (ihcd->pcd_pending) {
 		*buf = (1 << 1);
 		ret = 1;
@@ -1069,7 +912,7 @@ static int ice40_hub_status_data(struct usb_hcd *hcd, char *buf)
 
 static void ice40_hub_descriptor(struct usb_hub_descriptor *desc)
 {
-	/* There is nothing special about us!! */
+	
 	desc->bDescLength = 9;
 	desc->bDescriptorType = 0x29;
 	desc->bNbrPorts = 1;
@@ -1089,24 +932,12 @@ ice40_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue,
 	u8 ctrl;
 	struct ice40_hcd *ihcd = hcd_to_ihcd(hcd);
 
-	/*
-	 * We have only 1 port. No special locking is required while
-	 * handling root hub commands. The bridge chip does not maintain
-	 * any port states. Maintain different port states in software.
-	 */
 	switch (typeReq) {
 	case ClearPortFeature:
 		if (wIndex != 1 || wLength != 0)
 			goto error;
 		switch (wValue) {
 		case USB_PORT_FEAT_SUSPEND:
-			/*
-			 * The device is resumed as part of the root hub
-			 * resume to simplify the resume sequence. so
-			 * we may simply return from here. If device is
-			 * resumed before root hub is suspended, this
-			 * flags will be cleared here.
-			 */
 			if (!(ihcd->port_flags & USB_PORT_STAT_SUSPEND))
 				break;
 			ihcd->port_flags &= ~USB_PORT_STAT_SUSPEND;
@@ -1124,7 +955,7 @@ ice40_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue,
 		case USB_PORT_FEAT_C_SUSPEND:
 		case USB_PORT_FEAT_C_OVER_CURRENT:
 		case USB_PORT_FEAT_C_RESET:
-			/* nothing special here */
+			
 			break;
 		default:
 			goto error;
@@ -1140,11 +971,6 @@ ice40_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue,
 		if (wIndex != 1)
 			goto error;
 
-		/*
-		 * Core resets the device and requests port status to
-		 * stop the reset signaling. If there is a reset in
-		 * progress, finish it here.
-		 */
 		ctrl = ice40_spi_reg_read(ihcd, CTRL0_REG);
 		if (!(ctrl & RESET_CTRL))
 			ihcd->port_flags &= ~USB_PORT_STAT_RESET;
@@ -1160,14 +986,14 @@ ice40_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue,
 				goto error;
 			if (!(ihcd->port_flags & USB_PORT_STAT_ENABLE))
 				goto error;
-			/* SOFs will be stopped during root hub suspend */
+			
 			ihcd->port_flags |= USB_PORT_STAT_SUSPEND;
 			break;
 		case USB_PORT_FEAT_POWER:
 			ihcd->port_flags |= USB_PORT_STAT_POWER;
 			break;
 		case USB_PORT_FEAT_RESET:
-			/* Good time to enable the port */
+			
 			ice40_spi_reg_write(ihcd, ihcd->ctrl0 |
 					RESET_CTRL, CTRL0_REG);
 			ihcd->port_flags |= USB_PORT_STAT_RESET;
@@ -1179,7 +1005,7 @@ ice40_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue,
 		break;
 	default:
 error:
-		/* "protocol stall" on error */
+		
 		ret = -EPIPE;
 	}
 
@@ -1192,30 +1018,21 @@ static int ice40_bus_suspend(struct usb_hcd *hcd)
 {
 	struct ice40_hcd *ihcd = hcd_to_ihcd(hcd);
 
-	trace_ice40_bus_suspend(0); /* start */
+	trace_ice40_bus_suspend(0); 
 
-	/* This happens only during debugging */
+	
 	if (!ihcd->devnum) {
 		pr_debug("device still not connected. abort suspend\n");
-		trace_ice40_bus_suspend(2); /* failure */
+		trace_ice40_bus_suspend(2); 
 		return -EAGAIN;
 	}
-	/*
-	 * Stop sending the SOFs on downstream port. The device
-	 * finds the bus idle and enter suspend. The device
-	 * takes ~3 msec to enter suspend.
-	 */
 	ihcd->ctrl0 &= ~SOFEN_CTRL;
 	ice40_spi_reg_write(ihcd, ihcd->ctrl0, CTRL0_REG);
 	usleep_range(4500, 5000);
 
-	/*
-	 * Power collapse the bridge chip to avoid the leakage
-	 * current.
-	 */
 	ice40_spi_power_off(ihcd);
 
-	trace_ice40_bus_suspend(1); /* successful */
+	trace_ice40_bus_suspend(1); 
 	pm_relax(&ihcd->spi->dev);
 	return 0;
 }
@@ -1226,15 +1043,8 @@ static int ice40_bus_resume(struct usb_hcd *hcd)
 	struct ice40_hcd *ihcd = hcd_to_ihcd(hcd);
 	u8 ctrl0;
 	int ret, i;
-
 	pm_stay_awake(&ihcd->spi->dev);
-	trace_ice40_bus_resume(0); /* start */
-	/*
-	 * Power up the bridge chip and load the configuration file.
-	 * Re-program the previous settings. For now we need to
-	 * update the device address only.
-	 */
-
+	trace_ice40_bus_resume(0); 
 	for (i = 0; i < 3; i++) {
 		ret = ice40_spi_load_fw(ihcd);
 		if (!ret)
@@ -1249,40 +1059,31 @@ static int ice40_bus_resume(struct usb_hcd *hcd)
 	ice40_spi_reg_write(ihcd, ihcd->devnum, FADDR_REG);
 	ihcd->wblen0 = ~0;
 
-	/*
-	 * Program the bridge chip to drive resume signaling. The SOFs
-	 * are automatically transmitted after resume completion. It
-	 * will take ~20 msec for resume completion.
-	 */
 	ice40_spi_reg_write(ihcd, ihcd->ctrl0 | RESUME_CTRL, CTRL0_REG);
 	usleep_range(20000, 21000);
 	ret = ice40_handshake(ihcd, CTRL0_REG, RESUME_CTRL, 0, 5000);
 	if (ret) {
 		pr_err("resume failed\n");
-		trace_ice40_bus_resume(2); /* failure */
+		trace_ice40_bus_resume(2); 
 		return -ENODEV;
 	}
 
 	ctrl0 = ice40_spi_reg_read(ihcd, CTRL0_REG);
 	if (!(ctrl0 & SOFEN_CTRL)) {
 		pr_err("SOFs are not transmitted after resume\n");
-		trace_ice40_bus_resume(3); /* failure */
+		trace_ice40_bus_resume(3); 
 		return -ENODEV;
 	}
 
 	ihcd->port_flags &= ~USB_PORT_STAT_SUSPEND;
 	ihcd->ctrl0 |= SOFEN_CTRL;
 
-	trace_ice40_bus_resume(1); /* success */
+	trace_ice40_bus_resume(1); 
 	return 0;
 }
 
 static void ice40_set_autosuspend_delay(struct usb_device *dev)
 {
-	/*
-	 * Immediate suspend for root hub and 500 msec auto-suspend
-	 * timeout for the card.
-	 */
 	if (!dev->parent)
 		pm_runtime_set_autosuspend_delay(&dev->dev, 0);
 	else
@@ -1295,17 +1096,17 @@ static const struct hc_driver ice40_hc_driver = {
 	.hcd_priv_size = sizeof(struct ice40_hcd *),
 	.flags = HCD_USB11,
 
-	/* setup and clean up */
+	
 	.reset = ice40_reset,
 	.start = ice40_run,
 	.stop = ice40_stop,
 
-	/* endpoint and I/O routines */
+	
 	.urb_enqueue = ice40_urb_enqueue,
 	.urb_dequeue = ice40_urb_dequeue,
 	.endpoint_disable = ice40_endpoint_disable,
 
-	/* Root hub operations */
+	
 	.hub_status_data = ice40_hub_status_data,
 	.hub_control = ice40_hub_control,
 	.bus_suspend = ice40_bus_suspend,
@@ -1355,11 +1156,6 @@ static int ice40_spi_parse_dt(struct ice40_hcd *ihcd)
 		goto out;
 	}
 
-	/*
-	 * When clk-en-gpio is present, it is used to enable the 19.2 MHz
-	 * clock from MSM to the bridge chip. Otherwise on-board clock
-	 * is used.
-	 */
 	ihcd->clk_en_gpio = of_get_named_gpio(node, "lattice,clk-en-gpio", 0);
 	if (ihcd->clk_en_gpio < 0)
 		ihcd->clk_en_gpio = 0;
@@ -1396,20 +1192,20 @@ static int ice40_spi_power_up(struct ice40_hcd *ihcd)
 	}
 
 	if (ihcd->gpio_vcc) {
-		ret = regulator_enable(ihcd->gpio_vcc); /* 1.8 V */
+		ret = regulator_enable(ihcd->gpio_vcc); 
 		if (ret < 0) {
 			pr_err("fail to enable gpio vcc\n");
 			goto disable_clk;
 		}
 	}
 
-	ret = regulator_enable(ihcd->spi_vcc); /* 1.8 V */
+	ret = regulator_enable(ihcd->spi_vcc); 
 	if (ret < 0) {
 		pr_err("fail to enable spi vcc\n");
 		goto disable_gpio_vcc;
 	}
 
-	ret = regulator_enable(ihcd->core_vcc); /* 1.2 V */
+	ret = regulator_enable(ihcd->core_vcc); 
 	if (ret < 0) {
 		pr_err("fail to enable core vcc\n");
 		goto disable_spi_vcc;
@@ -1461,12 +1257,6 @@ static int ice40_spi_cache_fw(struct ice40_hcd *ihcd)
 
 	pr_debug("received firmware size = %zu\n", fw->size);
 
-	/*
-	 * The bridge expects additional clock cycles after
-	 * receiving the configuration data. We don't have a
-	 * direct control over SPI clock. Add extra bytes
-	 * to the confiration data.
-	 */
 	buf_len = fw->size + 16;
 	buf = devm_kzalloc(&ihcd->spi->dev, buf_len, GFP_KERNEL);
 	if (!buf) {
@@ -1475,19 +1265,9 @@ static int ice40_spi_cache_fw(struct ice40_hcd *ihcd)
 		goto release;
 	}
 
-	/*
-	 * The firmware buffer can not be used for DMA as it
-	 * is not physically contiguous. We copy the data
-	 * in kmalloc buffer. This buffer will be freed only
-	 * during unbind or rmmod.
-	 */
 	memcpy(buf, fw->data, fw->size);
 	release_firmware(fw);
 
-	/*
-	 * The bridge supports only 25 MHz during configuration
-	 * file loading.
-	 */
 	ihcd->fmsg_xfr[0].tx_buf = buf;
 	ihcd->fmsg_xfr[0].len = buf_len;
 	ihcd->fmsg_xfr[0].speed_hz = 25000000;
@@ -1517,17 +1297,6 @@ static int ice40_spi_load_fw(struct ice40_hcd *ihcd)
 		goto out;
 	}
 
-	/*
-	 * The bridge chip samples the chip select signal during
-	 * power-up. If it is low, it enters SPI slave mode and
-	 * accepts the configuration data from us. The chip
-	 * select signal is managed by the SPI controller driver.
-	 * We temporarily override the chip select config to
-	 * drive it low. The SPI bus needs to be locked down during
-	 * this period to avoid other slave data going to our
-	 * bridge chip. Disable the SPI runtime suspend for exclusive
-	 * chip select access.
-	 */
 	pm_runtime_get_sync(ihcd->spi->master->dev.parent);
 
 	spi_bus_lock(ihcd->spi->master);
@@ -1561,10 +1330,6 @@ static int ice40_spi_load_fw(struct ice40_hcd *ihcd)
 	}
 
 
-	/*
-	 * The databook says 1200 usec is required before the
-	 * chip becomes ready for the SPI transfer.
-	 */
 	usleep_range(1200, 1250);
 
 	ret = msm_gpiomux_write(ihcd->slave_select_gpio, GPIOMUX_SUSPENDED,
@@ -1882,13 +1647,6 @@ static ssize_t ice40_dbg_cmd_write(struct file *file, const char __user *ubuf,
 			ret = -EAGAIN;
 			goto out;
 		}
-		/*
-		 * The bridge chip supports interrupt for device
-		 * connect and disconnect. We don;t have a real
-		 * use case of connect/disconnect. This debugfs
-		 * interface provides a way to enumerate the
-		 * attached device.
-		 */
 		ice40_spi_reg_write(ihcd, ihcd->ctrl0 |
 				DET_BUS_CTRL, CTRL0_REG);
 		ice40_handshake(ihcd, CTRL0_REG, DET_BUS_CTRL, 0, 5000);
@@ -1915,11 +1673,6 @@ static ssize_t ice40_dbg_cmd_write(struct file *file, const char __user *ubuf,
 			ret = -EAGAIN;
 			goto out;
 		}
-		/*
-		 * Forcfully disconnect the device. This is required
-		 * for simulating the disconnect on a USB port which
-		 * does not have pull-down resistors.
-		 */
 		ihcd->port_flags &= ~USB_PORT_STAT_ENABLE;
 		ihcd->port_flags &= ~USB_PORT_STAT_CONNECTION;
 		ihcd->port_flags |= (USB_PORT_STAT_C_CONNECTION << 16);
@@ -2013,10 +1766,6 @@ static int ice40_spi_probe(struct spi_device *spi)
 	mutex_init(&ihcd->wlock);
 	mutex_init(&ihcd->rlock);
 
-	/*
-	 * Enable all our trace points. Useful in debugging card
-	 * enumeration issues.
-	 */
 	ret = trace_set_clr_event(__stringify(TRACE_SYSTEM), NULL, 1);
 	if (ret < 0)
 		pr_err("fail to enable trace points with %d\n", ret);
@@ -2063,23 +1812,10 @@ static int ice40_spi_probe(struct spi_device *spi)
 
 	ice40_debugfs_init(ihcd);
 
-	/*
-	 * We manage the power states of the bridge chip
-	 * as part of root hub suspend/resume. We don't
-	 * need to implement any additional runtime PM
-	 * methods.
-	 */
 	pm_runtime_no_callbacks(&spi->dev);
 	pm_runtime_set_active(&spi->dev);
 	pm_runtime_enable(&spi->dev);
 
-	/*
-	 * This does not mean bridge chip can wakeup the
-	 * system from sleep. It's activity can prevent
-	 * or abort the system sleep. The device_init_wakeup
-	 * creates the wakeup source for us which we will
-	 * use to control system sleep.
-	 */
 	device_init_wakeup(&spi->dev, 1);
 	pm_stay_awake(&spi->dev);
 
