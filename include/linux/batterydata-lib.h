@@ -117,6 +117,7 @@ struct bms_battery_data {
 	struct pc_temp_ocv_lut	*pc_temp_ocv_lut;
 	struct sf_lut		*pc_sf_lut;
 	struct sf_lut		*rbatt_sf_lut;
+	struct sf_lut		*rbatt_est_ocv_lut;
 	int			default_rbatt_mohm;
 	int			delta_rbatt_mohm;
 	int			rbatt_capacitive_mohm;
@@ -125,6 +126,8 @@ struct bms_battery_data {
 	int			cutoff_uv;
 	int			iterm_ua;
 	int			batt_id_kohm;
+	int		qc20_ibatmax_ma;
+	int		qc20_ibatsafe_ma;
 };
 
 #if defined(CONFIG_PM8921_BMS) || \

@@ -168,4 +168,18 @@ struct msm_v4l2_format_data {
 /* Bayer hist stats */
 #define MSM_V4L2_PIX_FMT_STATS_BHST v4l2_fourcc('B', 'H', 'S', 'T')
 
+//HTC_START
+#ifdef pr_err
+#undef pr_err
+#endif
+#define pr_err(fmt, args...) \
+         printk(KERN_ERR "[CAM] " pr_fmt(fmt), ## args)
+
+#ifdef pr_info
+#undef pr_info
+#endif
+#define pr_info(fmt, args...) \
+        printk(KERN_INFO "[CAM] " pr_fmt(fmt), ## args)
+//HTC_END
+
 #endif /* __LINUX_MSMB_CAMERA_H */

@@ -800,43 +800,36 @@ module_param(ep_addr_rxdbg_mask, uint, S_IRUGO | S_IWUSR);
 static unsigned int ep_addr_txdbg_mask = 1;
 module_param(ep_addr_txdbg_mask, uint, S_IRUGO | S_IWUSR);
 
-/* Maximum debug message length */
 #define DBG_DATA_MSG   64UL
 
-/* Maximum number of messages */
+#ifdef CONFIG_HTC_USB_DEBUG_FLAG
+#define DBG_DATA_MAX   1024UL
+#else
 #define DBG_DATA_MAX   128UL
+#endif
 
 static struct {
-	char     (buf[DBG_DATA_MAX])[DBG_DATA_MSG];   /* buffer */
-	unsigned idx;   /* index */
-	unsigned tty;   /* print to console? */
-	rwlock_t lck;   /* lock */
+	char     (buf[DBG_DATA_MAX])[DBG_DATA_MSG];   
+	unsigned idx;   
+	unsigned tty;   
+	rwlock_t lck;   
 } dbg_dwc3_data = {
 	.idx = 0,
 	.tty = 0,
 	.lck = __RW_LOCK_UNLOCKED(lck)
 };
 
-/**
- * dbg_dec: decrements debug event index
- * @idx: buffer index
- */
 static inline void __maybe_unused dbg_dec(unsigned *idx)
 {
 	*idx = (*idx - 1) % DBG_DATA_MAX;
 }
 
-/**
- * dbg_inc: increments debug event index
- * @idx: buffer index
- */
 static inline void dbg_inc(unsigned *idx)
 {
 	*idx = (*idx + 1) % DBG_DATA_MAX;
 }
 
 #define TIME_BUF_LEN  20
-/*get_timestamp - returns time of day in us */
 static char *get_timestamp(char *tbuf)
 {
 	unsigned long long t;
@@ -853,7 +846,7 @@ static int allow_dbg_print(u8 ep_num)
 {
 	int dir, num;
 
-	/* allow bus wide events */
+	
 	if (ep_num == 0xff)
 		return 1;
 
@@ -869,13 +862,6 @@ static int allow_dbg_print(u8 ep_num)
 	return 0;
 }
 
-/**
- * dbg_print:  prints the common part of the event
- * @addr:   endpoint address
- * @name:   event name
- * @status: status
- * @extra:  extra information
- */
 void dbg_print(u8 ep_num, const char *name, int status, const char *extra)
 {
 	unsigned long flags;
@@ -899,12 +885,6 @@ void dbg_print(u8 ep_num, const char *name, int status, const char *extra)
 			  get_timestamp(tbuf), ep_num, name, status, extra);
 }
 
-/**
- * dbg_done: prints a DONE event
- * @addr:   endpoint address
- * @td:     transfer descriptor
- * @status: status
- */
 void dbg_done(u8 ep_num, const u32 count, int status)
 {
 	char msg[DBG_DATA_MSG];
@@ -916,12 +896,6 @@ void dbg_done(u8 ep_num, const u32 count, int status)
 	dbg_print(ep_num, "DONE", status, msg);
 }
 
-/**
- * dbg_event: prints a generic event
- * @addr:   endpoint address
- * @name:   event name
- * @status: status
- */
 void dbg_event(u8 ep_num, const char *name, int status)
 {
 	if (!allow_dbg_print(ep_num))
@@ -931,12 +905,6 @@ void dbg_event(u8 ep_num, const char *name, int status)
 		dbg_print(ep_num, name, status, "");
 }
 
-/*
- * dbg_queue: prints a QUEUE event
- * @addr:   endpoint address
- * @req:    USB request
- * @status: status
- */
 void dbg_queue(u8 ep_num, const struct usb_request *req, int status)
 {
 	char msg[DBG_DATA_MSG];
@@ -951,11 +919,6 @@ void dbg_queue(u8 ep_num, const struct usb_request *req, int status)
 	}
 }
 
-/**
- * dbg_setup: prints a SETUP event
- * @addr: endpoint address
- * @req:  setup request
- */
 void dbg_setup(u8 ep_num, const struct usb_ctrlrequest *req)
 {
 	char msg[DBG_DATA_MSG];
@@ -972,11 +935,6 @@ void dbg_setup(u8 ep_num, const struct usb_ctrlrequest *req)
 	}
 }
 
-/**
- * dbg_print_reg: prints a reg value
- * @name:   reg name
- * @reg: reg value to be printed
- */
 void dbg_print_reg(const char *name, int reg)
 {
 	unsigned long flags;
@@ -994,10 +952,6 @@ void dbg_print_reg(const char *name, int reg)
 		pr_notice("%s = 0x%08x\n", name, reg);
 }
 
-/**
- * store_events: configure if events are going to be also printed to console
- *
- */
 static ssize_t dwc3_store_events(struct file *file,
 			    const char __user *buf, size_t count, loff_t *ppos)
 {
