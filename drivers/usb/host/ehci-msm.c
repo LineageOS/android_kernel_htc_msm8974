@@ -179,7 +179,7 @@ static int ehci_msm_probe(struct platform_device *pdev)
 
 	hcd_to_ehci(hcd)->transceiver = phy;
 	device_init_wakeup(&pdev->dev, 1);
-	pm_runtime_enable(&pdev->dev);
+/*	pm_runtime_enable(&pdev->dev);*/
 
 	return 0;
 

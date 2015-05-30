@@ -55,15 +55,17 @@
 			reg = <28>;
 			qcom,heap-align = <0x1000>;
 			qcom,memory-reservation-type = "EBI1"; /* reserve EBI memory */
-			qcom,memory-reservation-size = <0x614000>;
+			qcom,memory-reservation-size = <0xACF000>;
 			qcom,ion-heap-type = "CARVEOUT";
 		};
 
-		qcom,ion-heap@23 { /* OTHER PIL HEAP */
+		qcom,ion-heap@13 { /* FBMEM HEAP */
 			compatible = "qcom,msm-ion-reserve";
-			reg = <23>;
+			reg = <13>;
 			qcom,heap-align = <0x1000>;
-			qcom,memory-fixed = <0x05d00000 0x1e00000>;
+			/*
+			qcom,memory-fixed = <0x10600000 0x1a00000>;
+			*/
 			qcom,ion-heap-type = "CARVEOUT";
 		};
 	};

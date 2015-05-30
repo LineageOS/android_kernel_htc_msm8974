@@ -21,7 +21,7 @@
 
 #define MSM_VDEC_DVC_NAME "msm_vdec_8974"
 #define MIN_NUM_OUTPUT_BUFFERS 4
-#define MAX_NUM_OUTPUT_BUFFERS VB2_MAX_FRAME
+#define MAX_NUM_OUTPUT_BUFFERS VIDEO_MAX_FRAME
 #define DEFAULT_VIDEO_CONCEAL_COLOR_BLACK 0x8010
 #define MB_SIZE_IN_PIXEL (16 * 16)
 
@@ -318,6 +318,15 @@ static struct msm_vidc_ctrl msm_vdec_ctrls[] = {
 		.step = 1,
 	},
 	{
+		.id = V4L2_CID_MPEG_VIDC_VIDEO_CONCEAL_COLOR,
+		.name = "Picture concealed color",
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.minimum = 0x0,
+		.maximum = 0xffffff,
+		.default_value = DEFAULT_VIDEO_CONCEAL_COLOR_BLACK,
+		.step = 1,
+	},
+	{
 		.id = V4L2_CID_MPEG_VIDC_VIDEO_BUFFER_SIZE_LIMIT,
 		.name = "Buffer size limit",
 		.type = V4L2_CTRL_TYPE_INTEGER,
@@ -527,14 +536,6 @@ int msm_vdec_prepare_buf(struct msm_vidc_inst *inst,
 	}
 	hdev = inst->core->device;
 
-	if (inst->state == MSM_VIDC_CORE_INVALID ||
-			inst->core->state == VIDC_CORE_INVALID) {
-		dprintk(VIDC_ERR,
-			"Core %p in bad state, ignoring prepare buf\n",
-				inst->core);
-		goto exit;
-	}
-
 	switch (b->type) {
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
 		break;
@@ -584,7 +585,6 @@ int msm_vdec_prepare_buf(struct msm_vidc_inst *inst,
 		dprintk(VIDC_ERR, "Buffer type not recognized: %d\n", b->type);
 		break;
 	}
-exit:
 	return rc;
 }
 
@@ -715,7 +715,7 @@ int msm_vdec_reqbufs(struct msm_vidc_inst *inst, struct v4l2_requestbuffers *b)
 	rc = vb2_reqbufs(&q->vb2_bufq, b);
 	mutex_unlock(&q->lock);
 	if (rc)
-		dprintk(VIDC_DBG, "Failed to get reqbufs, %d\n", rc);
+		dprintk(VIDC_ERR, "Failed to get reqbufs, %d\n", rc);
 	return rc;
 }
 
@@ -921,8 +921,9 @@ int msm_vdec_s_parm(struct msm_vidc_inst *inst, struct v4l2_streamparm *a)
 		dprintk(VIDC_PROF, "reported fps changed for %p: %d->%d\n",
 				inst, inst->prop.fps, fps);
 		inst->prop.fps = fps;
-
+		mutex_lock(&inst->core->sync_lock);
 		msm_comm_scale_clocks_and_bus(inst);
+		mutex_unlock(&inst->core->sync_lock);
 	}
 exit:
 	return rc;
@@ -1271,8 +1272,9 @@ static inline int start_streaming(struct msm_vidc_inst *inst)
 			goto fail_start;
 		}
 	}
-
+	mutex_lock(&inst->core->sync_lock);
 	msm_comm_scale_clocks_and_bus(inst);
+	mutex_unlock(&inst->core->sync_lock);
 
 	rc = msm_comm_try_state(inst, MSM_VIDC_START_DONE);
 	if (rc) {
@@ -1379,7 +1381,9 @@ static int msm_vdec_stop_streaming(struct vb2_queue *q)
 		break;
 	}
 
+	mutex_lock(&inst->core->sync_lock);
 	msm_comm_scale_clocks_and_bus(inst);
+	mutex_unlock(&inst->core->sync_lock);
 
 	if (rc)
 		dprintk(VIDC_ERR,
@@ -1409,7 +1413,7 @@ int msm_vdec_cmd(struct msm_vidc_inst *inst, struct v4l2_decoder_cmd *dec)
 	case V4L2_DEC_QCOM_CMD_FLUSH:
 		if (core->state != VIDC_CORE_INVALID &&
 			inst->state ==  MSM_VIDC_CORE_INVALID) {
-			rc = msm_comm_kill_session(inst);
+			rc = msm_comm_recover_from_session_error(inst);
 			if (rc)
 				dprintk(VIDC_ERR,
 					"Failed to recover from session_error: %d\n",
@@ -1424,7 +1428,7 @@ int msm_vdec_cmd(struct msm_vidc_inst *inst, struct v4l2_decoder_cmd *dec)
 	case V4L2_DEC_CMD_STOP:
 		if (core->state != VIDC_CORE_INVALID &&
 			inst->state ==  MSM_VIDC_CORE_INVALID) {
-			rc = msm_comm_kill_session(inst);
+			rc = msm_comm_recover_from_session_error(inst);
 			if (rc)
 				dprintk(VIDC_ERR,
 					"Failed to recover from session_error: %d\n",
@@ -1876,10 +1880,6 @@ int msm_vdec_ctrl_init(struct msm_vidc_inst *inst)
 			ctrl_cfg.def = msm_vdec_ctrls[idx].default_value;
 			ctrl_cfg.flags = 0;
 			ctrl_cfg.id = msm_vdec_ctrls[idx].id;
-			/* ctrl_cfg.is_private =
-			 * msm_vdec_ctrls[idx].is_private;
-			 * ctrl_cfg.is_volatile =
-			 * msm_vdec_ctrls[idx].is_volatile;*/
 			ctrl_cfg.max = msm_vdec_ctrls[idx].maximum;
 			ctrl_cfg.min = msm_vdec_ctrls[idx].minimum;
 			ctrl_cfg.menu_skip_mask =

@@ -593,7 +593,8 @@ int msm_camera_get_dt_gpio_req_tbl(struct device_node *of_node,
 		if (val_array[i] >= gpio_array_size) {
 			pr_err("%s gpio req tbl index %d invalid\n",
 				__func__, val_array[i]);
-			return -EINVAL;
+			rc = -EINVAL;
+			goto ERROR2;
 		}
 		gconf->cam_gpio_req_tbl[i].gpio = gpio_array[val_array[i]];
 		CDBG("%s cam_gpio_req_tbl[%d].gpio = %d\n", __func__, i,
@@ -1082,6 +1083,12 @@ power_up_failed:
 				0);
 			break;
 		case SENSOR_GPIO:
+
+			if (ctrl->gpio_conf->gpio_num_info == NULL) {
+				pr_err("%s ctrl->gpio_conf->gpio_num_info is NULL\n", __func__);
+				break;
+			}
+
 			if (!ctrl->gpio_conf->gpio_num_info->valid
 				[power_setting->seq_val])
 				continue;
