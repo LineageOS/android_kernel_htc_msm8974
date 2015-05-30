@@ -13,6 +13,7 @@
 /dts-v1/;
 
 /include/ "msm8974-v2.0-1.dtsi"
+/include/ "msm8974-regulator.dtsi"
 /include/ "msm8974-mtp.dtsi"
 
 / {
@@ -25,4 +26,8 @@
 
 &pm8941_chg {
 	qcom,bpd-detection = "bpd_thm";
+};
+
+&krait_pdn {
+	qcom,use-phase-switching;
 };

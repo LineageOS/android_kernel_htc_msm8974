@@ -107,17 +107,6 @@ void msm_camera_io_memcpy(void __iomem *dest_addr,
 	msm_camera_io_dump(dest_addr, len);
 }
 
-void msm_camera_io_memcpy_mb(void __iomem *dest_addr,
-	void __iomem *src_addr, u32 len)
-{
-	int i;
-	u32 *d = (u32 *) dest_addr;
-	u32 *s = (u32 *) src_addr;
-
-	for (i = 0; i < (len / 4); i++)
-		msm_camera_io_w_mb(*s++, d++);
-}
-
 int msm_cam_clk_sel_src(struct device *dev, struct msm_cam_clk_info *clk_info,
 		struct msm_cam_clk_info *clk_src_info, int num_clk)
 {
@@ -556,7 +545,12 @@ int msm_camera_request_gpio_table(struct gpio *gpio_tbl, uint8_t size,
 	int gpio_en)
 {
 	int rc = 0, i = 0, err = 0;
-
+         
+	static int gpio_558_index = 0;
+	static int gpio_557_index = 0;
+	static int gpio_430_index = 0;
+	static int gpio_429_index = 0;
+        
 	if (!gpio_tbl || !size) {
 		pr_err("%s:%d invalid gpio_tbl %p / size %d\n", __func__,
 			__LINE__, gpio_tbl, size);
@@ -568,6 +562,49 @@ int msm_camera_request_gpio_table(struct gpio *gpio_tbl, uint8_t size,
 	}
 	if (gpio_en) {
 		for (i = 0; i < size; i++) {
+		 
+		if(gpio_tbl[i].gpio ==  558)
+		{
+		    gpio_558_index ++;
+		    if(gpio_558_index == 1)
+		    {
+		        err = gpio_request_one(gpio_tbl[i].gpio, gpio_tbl[i].flags, gpio_tbl[i].label);
+		    }
+		    else
+		    pr_info("%s:%d already request gpio_558_index:%d\n", __func__,__LINE__, gpio_558_index);
+		}
+		else if(gpio_tbl[i].gpio ==  557)
+		{
+		    gpio_557_index ++;
+		    if(gpio_557_index == 1)
+		    {
+		        err = gpio_request_one(gpio_tbl[i].gpio, gpio_tbl[i].flags, gpio_tbl[i].label);
+		    }
+		    else
+		        pr_info("%s:%d already request gpio_557_index:%d\n", __func__, __LINE__, gpio_557_index);
+		}
+		else if(gpio_tbl[i].gpio ==  430)
+		{
+		    gpio_430_index ++;
+		    if(gpio_430_index == 1)
+		    {
+		        err = gpio_request_one(gpio_tbl[i].gpio, gpio_tbl[i].flags, gpio_tbl[i].label);
+		    }
+		    else
+		        pr_info("%s:%d already request gpio_430_index:%d\n", __func__, __LINE__, gpio_430_index);
+		}
+		else if(gpio_tbl[i].gpio ==  429)
+		{
+		    gpio_429_index ++;
+		    if(gpio_429_index == 1)
+		    {
+		        err = gpio_request_one(gpio_tbl[i].gpio, gpio_tbl[i].flags, gpio_tbl[i].label);
+		    }
+		    else
+		        pr_info("%s:%d already request gpio_429_index:%d\n", __func__, __LINE__, gpio_429_index);
+		}
+		else
+		
 			err = gpio_request_one(gpio_tbl[i].gpio,
 				gpio_tbl[i].flags, gpio_tbl[i].label);
 			if (err) {
@@ -582,7 +619,40 @@ int msm_camera_request_gpio_table(struct gpio *gpio_tbl, uint8_t size,
 			}
 		}
 	} else {
+	    #if 1 
+	    for (i = 0; i < size; i++)
+	    {
+	        if(gpio_tbl[i].gpio ==  558)
+	        {
+	            gpio_558_index--;
+	            if(gpio_558_index == 0)
+	                gpio_free(gpio_tbl[i].gpio);
+	        }
+	        else if(gpio_tbl[i].gpio ==  557)
+	        {
+	            gpio_557_index--;
+	            if(gpio_557_index == 0)
+	                gpio_free(gpio_tbl[i].gpio);
+	        }
+	        else if(gpio_tbl[i].gpio ==  430)
+	        {
+	            gpio_430_index--;
+	            if(gpio_430_index == 0)
+	                gpio_free(gpio_tbl[i].gpio);
+	        }
+	        else if(gpio_tbl[i].gpio ==  429)
+	        {
+	            gpio_429_index--;
+	            if(gpio_429_index == 0)
+	                gpio_free(gpio_tbl[i].gpio);
+	        }
+	        else
+	            gpio_free(gpio_tbl[i].gpio);
+	    }
+	    #else
 		gpio_free_array(gpio_tbl, size);
+	    #endif
+	    
 	}
 	return rc;
 }
