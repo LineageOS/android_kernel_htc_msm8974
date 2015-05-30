@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -28,65 +28,59 @@ struct mdss_dsi_ctrl_pdata;
 #define DSI_HDR_DATA1(data)	((data) & 0x0ff)
 #define DSI_HDR_WC(wc)		((wc) & 0x0ffff)
 
-#define MDSS_DSI_MRPS	0x04  /* Maximum Return Packet Size */
+#define MDSS_DSI_MRPS	0x04  
 
-#define MDSS_DSI_LEN 10 /* 4 x 4 - 4 - 2, bytes dcs header+crc-align  */
+#define MDSS_DSI_LEN 8 
 
 struct dsi_buf {
-	u32 *hdr;	/* dsi host header */
-	char *start;	/* buffer start addr */
-	char *end;	/* buffer end addr */
-	int size;	/* size of buffer */
-	char *data;	/* buffer */
-	int len;	/* data length */
-	dma_addr_t dmap; /* mapped dma addr */
-	int read_cnt;
+	u32 *hdr;	
+	char *start;	
+	char *end;	
+	int size;	
+	char *data;	
+	int len;	
+	dma_addr_t dmap; 
 };
 
-/* dcs read/write */
-#define DTYPE_DCS_WRITE		0x05	/* short write, 0 parameter */
-#define DTYPE_DCS_WRITE1	0x15	/* short write, 1 parameter */
-#define DTYPE_DCS_READ		0x06	/* read */
-#define DTYPE_DCS_LWRITE	0x39	/* long write */
+#define DTYPE_DCS_WRITE		0x05	
+#define DTYPE_DCS_WRITE1	0x15	
+#define DTYPE_DCS_READ		0x06	
+#define DTYPE_DCS_LWRITE	0x39	
 
-/* generic read/write */
-#define DTYPE_GEN_WRITE		0x03	/* short write, 0 parameter */
-#define DTYPE_GEN_WRITE1	0x13	/* short write, 1 parameter */
-#define DTYPE_GEN_WRITE2	0x23	/* short write, 2 parameter */
-#define DTYPE_GEN_LWRITE	0x29	/* long write */
-#define DTYPE_GEN_READ		0x04	/* long read, 0 parameter */
-#define DTYPE_GEN_READ1		0x14	/* long read, 1 parameter */
-#define DTYPE_GEN_READ2		0x24	/* long read, 2 parameter */
+#define DTYPE_GEN_WRITE		0x03	
+#define DTYPE_GEN_WRITE1	0x13	
+#define DTYPE_GEN_WRITE2	0x23	
+#define DTYPE_GEN_LWRITE	0x29	
+#define DTYPE_GEN_READ		0x04	
+#define DTYPE_GEN_READ1		0x14	
+#define DTYPE_GEN_READ2		0x24	
 
-#define DTYPE_TEAR_ON		0x35	/* set tear on */
-#define DTYPE_MAX_PKTSIZE	0x37	/* set max packet size */
-#define DTYPE_NULL_PKT		0x09	/* null packet, no data */
-#define DTYPE_BLANK_PKT		0x19	/* blankiing packet, no data */
+#define DTYPE_TEAR_ON		0x35	
+#define DTYPE_MAX_PKTSIZE	0x37	
+#define DTYPE_NULL_PKT		0x09	
+#define DTYPE_BLANK_PKT		0x19	
 
-#define DTYPE_CM_ON		0x02	/* color mode off */
-#define DTYPE_CM_OFF		0x12	/* color mode on */
+#define DTYPE_CM_ON		0x02	
+#define DTYPE_CM_OFF		0x12	
 #define DTYPE_PERIPHERAL_OFF	0x22
 #define DTYPE_PERIPHERAL_ON	0x32
 
-/*
- * dcs response
- */
 #define DTYPE_ACK_ERR_RESP      0x02
-#define DTYPE_EOT_RESP          0x08    /* end of tx */
-#define DTYPE_GEN_READ1_RESP    0x11    /* 1 parameter, short */
-#define DTYPE_GEN_READ2_RESP    0x12    /* 2 parameter, short */
+#define DTYPE_EOT_RESP          0x08    
+#define DTYPE_GEN_READ1_RESP    0x11    
+#define DTYPE_GEN_READ2_RESP    0x12    
 #define DTYPE_GEN_LREAD_RESP    0x1a
 #define DTYPE_DCS_LREAD_RESP    0x1c
-#define DTYPE_DCS_READ1_RESP    0x21    /* 1 parameter, short */
-#define DTYPE_DCS_READ2_RESP    0x22    /* 2 parameter, short */
+#define DTYPE_DCS_READ1_RESP    0x21    
+#define DTYPE_DCS_READ2_RESP    0x22    
 
 struct dsi_ctrl_hdr {
-	char dtype;	/* data type */
-	char last;	/* last in chain */
-	char vc;	/* virtual chan */
-	char ack;	/* ask ACK from peripheral */
-	char wait;	/* ms */
-	short dlen;	/* 16 bits */
+	char dtype;	
+	char last;	
+	char vc;	
+	char ack;	
+	char wait;	
+	short dlen;	
 } __packed;
 
 struct dsi_cmd_desc {
@@ -106,8 +100,8 @@ struct dcs_cmd_req {
 	struct dsi_cmd_desc *cmds;
 	int cmds_cnt;
 	u32 flags;
-	int rlen;       /* rx length */
-	char *rbuf;	/* rx buf */
+	int rlen;       
+	char *rbuf;	
 	void (*cb)(int data);
 };
 

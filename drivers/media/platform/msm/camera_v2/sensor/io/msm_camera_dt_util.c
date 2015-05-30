@@ -16,7 +16,6 @@
 #include "msm_camera_i2c_mux.h"
 #include "msm_cci.h"
 
-/*#define CONFIG_MSM_CAMERA_DT_DEBUG*/
 #undef CDBG
 #ifdef CONFIG_MSM_CAMERA_DT_DEBUG
 #define CDBG(fmt, args...) pr_err(fmt, ##args)
@@ -31,14 +30,14 @@ int msm_camera_fill_vreg_params(struct camera_vreg_t *cam_vreg,
 	uint16_t i = 0;
 	int      j = 0;
 
-	/* Validate input parameters */
+	
 	if (!cam_vreg || !power_setting) {
 		pr_err("%s:%d failed: cam_vreg %p power_setting %p", __func__,
 			__LINE__,  cam_vreg, power_setting);
 		return -EINVAL;
 	}
 
-	/* Validate size of num_vreg */
+	
 	if (num_vreg <= 0) {
 		pr_err("failed: num_vreg %d", num_vreg);
 		return -EINVAL;
@@ -593,7 +592,8 @@ int msm_camera_get_dt_gpio_req_tbl(struct device_node *of_node,
 		if (val_array[i] >= gpio_array_size) {
 			pr_err("%s gpio req tbl index %d invalid\n",
 				__func__, val_array[i]);
-			return -EINVAL;
+			rc = -EINVAL;
+			goto ERROR2;
 		}
 		gconf->cam_gpio_req_tbl[i].gpio = gpio_array[val_array[i]];
 		CDBG("%s cam_gpio_req_tbl[%d].gpio = %d\n", __func__, i,
@@ -1082,6 +1082,13 @@ power_up_failed:
 				0);
 			break;
 		case SENSOR_GPIO:
+			
+			if (ctrl->gpio_conf->gpio_num_info == NULL) {
+				pr_err("%s ctrl->gpio_conf->gpio_num_info is NULL\n", __func__);
+				break;
+			}
+			
+
 			if (!ctrl->gpio_conf->gpio_num_info->valid
 				[power_setting->seq_val])
 				continue;

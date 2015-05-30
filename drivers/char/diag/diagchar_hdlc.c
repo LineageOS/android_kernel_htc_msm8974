@@ -238,19 +238,19 @@ int crc_check(uint8_t *buf, uint16_t len)
 	uint8_t sent_crc[2] = {0, 0};
 
 	/*
-	 * The minimum length of a valid incoming packet is 4. 1 byte
-	 * of data and 3 bytes for CRC
-	 */
+	* The minimum length of a valid incoming packet is 4. 1 byte
+	* of data and 3 bytes for CRC
+	*/
 	if (!buf || len < 4) {
 		pr_err_ratelimited("diag: In %s, invalid packet or length, buf: 0x%x, len: %d",
-				   __func__, (int)buf, len);
+			__func__, (int)buf, len);
 		return -EIO;
 	}
 
 	/*
-	 * Run CRC check for the original input. Skip the last 3 CRC
-	 * bytes
-	 */
+	* Run CRC check for the original input. Skip the last 3 CRC
+	* bytes
+	*/
 	crc = crc_ccitt(crc, buf, len-3);
 	crc ^= CRC_16_L_SEED;
 
@@ -259,9 +259,8 @@ int crc_check(uint8_t *buf, uint16_t len)
 	sent_crc[1] = buf[len-2];
 	if (crc != *((uint16_t *)sent_crc)) {
 		pr_debug("diag: In %s, crc mismatch. expected: %x, sent %x.\n",
-				__func__, crc, *((uint16_t *)sent_crc));
+			__func__, crc, *((uint16_t *)sent_crc));
 		return -EIO;
 	}
-
 	return 0;
 }

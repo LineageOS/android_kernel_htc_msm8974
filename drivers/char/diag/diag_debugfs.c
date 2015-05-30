@@ -402,12 +402,10 @@ static ssize_t diag_dbgfs_read_table(struct file *file, char __user *ubuf,
 			driver->table[i].cmd_code_hi,
 			driver->table[i].process_id,
 			(diag_find_polling_reg(i) ? "<- Polling cmd reg" : ""));
-
 		bytes_in_buffer += bytes_written;
 
 		/* Check if there is room to add another table entry */
 		bytes_remaining = buf_size - bytes_in_buffer;
-
 		if (bytes_remaining < bytes_written)
 			break;
 	}

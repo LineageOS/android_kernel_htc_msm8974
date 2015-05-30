@@ -233,6 +233,30 @@ static int msm_v4l2_enum_framesizes(struct file *file, void *fh,
 	struct msm_vidc_inst *vidc_inst = get_vidc_inst(file, fh);
 	return msm_vidc_enum_framesizes((void *)vidc_inst, fsize);
 }
+
+int msm_v4l2_htc_set_callingpid_name(struct file *file, void *fh,
+                                struct htc_callingpid_data *b)
+{
+	struct msm_vidc_inst *vidc_inst;
+	if (!b) {
+		dprintk(VIDC_ERR, "%s: Invalid input params\n",  __func__);
+		return -EINVAL;
+	}
+	vidc_inst = get_vidc_inst(file, fh);
+	if (!vidc_inst) {
+		dprintk(VIDC_ERR, "%s: Invalid vidc instance\n",  __func__);
+		return -EINVAL;
+	} else {
+		dprintk(VIDC_WARN,
+			"[Vidc_Pid][%p] Calling PID: %d, Name: %s\n",
+			vidc_inst, b->call_pid, b->process_name);
+	}
+	vidc_inst->call_pid = b->call_pid;
+	strncpy(vidc_inst->process_name, b->process_name, sizeof(vidc_inst->process_name));
+	vidc_inst->process_name[sizeof(vidc_inst->process_name)-1] = '\0';
+	return 0;
+}
+
 static const struct v4l2_ioctl_ops msm_v4l2_ioctl_ops = {
 	.vidioc_querycap = msm_v4l2_querycap,
 	.vidioc_enum_fmt_vid_cap_mplane = msm_v4l2_enum_fmt,
@@ -257,6 +281,9 @@ static const struct v4l2_ioctl_ops msm_v4l2_ioctl_ops = {
 	.vidioc_s_parm = msm_v4l2_s_parm,
 	.vidioc_g_parm = msm_v4l2_g_parm,
 	.vidioc_enum_framesizes = msm_v4l2_enum_framesizes,
+	
+	.vidioc_htc_set_callingpid_name = msm_v4l2_htc_set_callingpid_name,
+	
 };
 
 static const struct v4l2_ioctl_ops msm_v4l2_enc_ioctl_ops = {
@@ -297,10 +324,10 @@ static int read_platform_resources(struct msm_vidc_core *core,
 
 	core->resources.pdev = pdev;
 	if (pdev->dev.of_node) {
-		/* Target supports DT, parse from it */
+		
 		return read_platform_resources_from_dt(&core->resources);
 	} else {
-		/* Legacy board file usage */
+		
 		return read_platform_resources_from_board(
 				&core->resources);
 	}
@@ -319,6 +346,7 @@ static int msm_vidc_initialize_core(struct platform_device *pdev,
 	}
 
 	INIT_LIST_HEAD(&core->instances);
+	mutex_init(&core->sync_lock);
 	mutex_init(&core->lock);
 
 	core->state = VIDC_CORE_UNINIT;
@@ -327,7 +355,6 @@ static int msm_vidc_initialize_core(struct platform_device *pdev,
 		init_completion(&core->completions[i]);
 	}
 
-	INIT_DELAYED_WORK(&core->fw_unload_work, msm_vidc_fw_unload_handler);
 	return rc;
 }
 

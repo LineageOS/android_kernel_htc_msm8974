@@ -38,8 +38,8 @@ int msm_isp_axi_check_stream_state(
 	struct msm_vfe_axi_stream_cfg_cmd *stream_cfg_cmd);
 
 void msm_isp_calculate_framedrop(
-		struct msm_vfe_axi_shared_data *axi_data,
-		struct msm_vfe_axi_stream_request_cmd *stream_cfg_cmd);
+        struct msm_vfe_axi_shared_data *axi_data,
+        struct msm_vfe_axi_stream_request_cmd *stream_cfg_cmd);
 
 int msm_isp_request_axi_stream(struct vfe_device *vfe_dev, void *arg);
 int msm_isp_cfg_axi_stream(struct vfe_device *vfe_dev, void *arg);
@@ -55,4 +55,4 @@ void msm_isp_sof_notify(struct vfe_device *vfe_dev,
 void msm_isp_process_axi_irq(struct vfe_device *vfe_dev,
 	uint32_t irq_status0, uint32_t irq_status1,
 	struct msm_isp_timestamp *ts);
-#endif /* __MSM_ISP_AXI_UTIL_H__ */
+#endif 

@@ -38,7 +38,6 @@
 #include "msm-pcm-routing.h"
 
 #define COMPRE_CAPTURE_NUM_PERIODS	16
-/* Allocate the worst case frame size for compressed audio */
 #define COMPRE_CAPTURE_HEADER_SIZE	(sizeof(struct snd_compr_audio_info))
 #define COMPRE_CAPTURE_MAX_FRAME_SIZE	(6144)
 #define COMPRE_CAPTURE_PERIOD_SIZE	((COMPRE_CAPTURE_MAX_FRAME_SIZE + \
@@ -95,7 +94,6 @@ static struct snd_pcm_hardware msm_compr_hardware_playback = {
 	.fifo_size =	    0,
 };
 
-/* Conventional and unconventional sample rate supported */
 static unsigned int supported_sample_rates[] = {
 	8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000
 };
@@ -355,7 +353,7 @@ static int msm_compr_playback_prepare(struct snd_pcm_substream *substream)
 	prtd->pcm_size = snd_pcm_lib_buffer_bytes(substream);
 	prtd->pcm_count = snd_pcm_lib_period_bytes(substream);
 	prtd->pcm_irq_pos = 0;
-	/* rate and channels are sent to audio driver */
+	
 	prtd->samp_rate = runtime->rate;
 	prtd->channel_mode = runtime->channels;
 	prtd->out_head = 0;
@@ -516,7 +514,7 @@ static int msm_compr_capture_prepare(struct snd_pcm_substream *substream)
 	prtd->pcm_count = snd_pcm_lib_period_bytes(substream);
 	prtd->pcm_irq_pos = 0;
 
-	/* rate and channels are sent to audio driver */
+	
 	prtd->samp_rate = runtime->rate;
 	prtd->channel_mode = runtime->channels;
 
@@ -529,8 +527,8 @@ static int msm_compr_capture_prepare(struct snd_pcm_substream *substream)
 		pr_debug("SND_AUDIOCODEC_AMRWB\n");
 		ret = q6asm_enc_cfg_blk_amrwb(prtd->audio_client,
 			MAX_NUM_FRAMES_PER_BUFFER,
-			codec->options.generic.reserved[0] /*bitrate 0-8*/,
-			codec->options.generic.reserved[1] /*dtx mode 0/1*/);
+			codec->options.generic.reserved[0] ,
+			codec->options.generic.reserved[1] );
 		if (ret < 0)
 			pr_err("%s: CMD Format block" \
 				"failed: %d\n", __func__, ret);
@@ -665,7 +663,7 @@ static int msm_compr_trigger(struct snd_pcm_substream *substream, int cmd)
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_START:
 		prtd->pcm_irq_pos = 0;
-		/* intentional fall-through */
+		
 	case SNDRV_PCM_TRIGGER_RESUME:
 	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
 		pr_debug("%s: Trigger start\n", __func__);
@@ -699,7 +697,7 @@ static void populate_codec_list(struct compr_audio *compr,
 		struct snd_pcm_runtime *runtime)
 {
 	pr_debug("%s\n", __func__);
-	/* MP3 Block */
+	
 	compr->info.compr_cap.num_codecs = 14;
 	compr->info.compr_cap.min_fragment_size = runtime->hw.period_bytes_min;
 	compr->info.compr_cap.max_fragment_size = runtime->hw.period_bytes_max;
@@ -719,7 +717,7 @@ static void populate_codec_list(struct compr_audio *compr,
 	compr->info.compr_cap.codecs[11] = SND_AUDIOCODEC_PCM;
 	compr->info.compr_cap.codecs[12] = SND_AUDIOCODEC_MP2;
 	compr->info.compr_cap.codecs[13] = SND_AUDIOCODEC_DTS_LBR_PASS_THROUGH;
-	/* Add new codecs here and update num_codecs*/
+	
 }
 
 static int msm_compr_open(struct snd_pcm_substream *substream)
@@ -774,7 +772,7 @@ static int msm_compr_open(struct snd_pcm_substream *substream)
 			&constraints_sample_rates);
 	if (ret < 0)
 		pr_info("snd_pcm_hw_constraint_list failed\n");
-	/* Ensure that buffer size is a multiple of period size */
+	
 	ret = snd_pcm_hw_constraint_integer(runtime,
 			    SNDRV_PCM_HW_PARAM_PERIODS);
 	if (ret < 0)
@@ -1081,7 +1079,7 @@ static int msm_compr_hw_params(struct snd_pcm_substream *substream,
 		pr_err("%s: Set IO mode failed\n", __func__);
 		return -ENOMEM;
 	}
-	/* Modifying kernel hardware params based on userspace config */
+	
 	if (params_periods(params) > 0 &&
 		(params_periods(params) != runtime->hw.periods_max)) {
 		runtime->hw.periods_max = params_periods(params);
@@ -1172,9 +1170,6 @@ static int msm_compr_ioctl(struct snd_pcm_substream *substream,
 			pr_err("%s: ERROR: copy from user\n", __func__);
 			return rc;
 		}
-		/*
-		* DTS Security needed for the transcode path
-		*/
 		if (compr->info.codec_param.codec.transcode_dts) {
 			char modelId[128];
 			struct snd_dec_dts opt_dts =
@@ -1196,7 +1191,7 @@ static int msm_compr_ioctl(struct snd_pcm_substream *substream,
 		}
 		switch (compr->info.codec_param.codec.id) {
 		case SND_AUDIOCODEC_MP3:
-			/* For MP3 we dont need any other parameter */
+			
 			pr_debug("SND_AUDIOCODEC_MP3\n");
 			compr->codec = FORMAT_MP3;
 			break;
@@ -1271,8 +1266,6 @@ static int msm_compr_ioctl(struct snd_pcm_substream *substream,
 			compr->codec = FORMAT_AMR_WB_PLUS;
 			break;
 		case SND_AUDIOCODEC_PASS_THROUGH:
-			/* format pass through is used for HDMI IN compressed
-			   where the decoder format is indicated by LPASS */
 			pr_debug("msm_compr_ioctl SND_AUDIOCODEC_PASSTHROUGH\n");
 			compr->codec = FORMAT_PASS_THROUGH;
 			break;
@@ -1291,8 +1284,6 @@ static int msm_compr_ioctl(struct snd_pcm_substream *substream,
 		return 0;
 	case SNDRV_PCM_IOCTL1_RESET:
 		pr_debug("SNDRV_PCM_IOCTL1_RESET\n");
-		/* Flush only when session is started during CAPTURE,
-		   while PLAYBACK has no such restriction. */
 		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK ||
 			  (substream->stream == SNDRV_PCM_STREAM_CAPTURE &&
 						atomic_read(&prtd->start))) {
@@ -1303,8 +1294,6 @@ static int msm_compr_ioctl(struct snd_pcm_substream *substream,
 				atomic_set(&prtd->pending_buffer, 1);
 			}
 
-			/* A unlikely race condition possible with FLUSH
-			   DRAIN if ack is set by flush and reset by drain */
 			prtd->cmd_ack = 0;
 			rc = q6asm_cmd(prtd->audio_client, CMD_FLUSH);
 			if (rc < 0) {
@@ -1325,7 +1314,7 @@ static int msm_compr_ioctl(struct snd_pcm_substream *substream,
 		atomic_set(&prtd->pending_buffer, 0);
 		prtd->cmd_ack = 0;
 		q6asm_cmd_nowait(prtd->audio_client, CMD_EOS);
-		/* Wait indefinitely for  DRAIN. Flush can also signal this*/
+		
 		rc = wait_event_interruptible(the_locks.eos_wait,
 			prtd->cmd_ack);
 		if (rc < 0)
