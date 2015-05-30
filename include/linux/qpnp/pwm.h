@@ -181,4 +181,6 @@ int pwm_config_us(struct pwm_device *pwm,
  * @pwm: the PWM device
  */
 
+void qpnp_led_set_for_key(int brightness_key);
+
 #endif /* __QPNP_PWM_H__ */

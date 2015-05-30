@@ -35,7 +35,8 @@ static int msm_buf_mngr_get_buf(struct msm_buf_mngr_device *buf_mngr_dev,
 	new_entry->vb2_buf = buf_mngr_dev->vb2_ops.get_buf(buf_info->session_id,
 		buf_info->stream_id);
 	if (!new_entry->vb2_buf) {
-		pr_debug("%s:Get buf is null\n", __func__);
+		pr_err("%s:Get buf is null, session_id %d, stream_id %d \n", __func__,
+				buf_info->session_id, buf_info->stream_id); 
 		kfree(new_entry);
 		return -EINVAL;
 	}

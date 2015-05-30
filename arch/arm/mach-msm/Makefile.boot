@@ -47,35 +47,57 @@ endif
 
 # MSM8974
    zreladdr-$(CONFIG_ARCH_MSM8974)	:= 0x00008000
-        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v1-cdp.dtb
-        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v1-fluid.dtb
-        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v1-liquid.dtb
+ifeq ($(CONFIG_MACH_M8), y)
         dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v1-mtp.dtb
-        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v1-rumi.dtb
-        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v1-sim.dtb
-        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v2.0-1-cdp.dtb
-        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v2.0-1-fluid.dtb
-        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v2.0-1-liquid.dtb
         dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v2.0-1-mtp.dtb
-        dtb-$(CONFIG_ARCH_MSM8974)	+= apq8074-v2.0-1-cdp.dtb
-        dtb-$(CONFIG_ARCH_MSM8974)	+= apq8074-v2.0-1-liquid.dtb
-        dtb-$(CONFIG_ARCH_MSM8974)	+= apq8074-v2.0-1-dragonboard.dtb
-        dtb-$(CONFIG_ARCH_MSM8974)	+= apq8074-v2.2-cdp.dtb
-        dtb-$(CONFIG_ARCH_MSM8974)	+= apq8074-v2.2-liquid.dtb
-        dtb-$(CONFIG_ARCH_MSM8974)	+= apq8074-v2.2-dragonboard.dtb
-        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v2.2-cdp.dtb
-        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v2.2-fluid.dtb
-        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v2.2-liquid.dtb
         dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v2.2-mtp.dtb
-        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-cdp.dtb
-        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-fluid.dtb
-        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-fluid-hbtp.dtb
-        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-liquid.dtb
         dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-mtp.dtb
-        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ac-pm8941-cdp.dtb
-        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ac-pm8941-liquid.dtb
-        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ac-pm8941-mtp.dtb
-        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ac-pma8084-pm8941-mtp.dtb
+        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-m8.dtb
+        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-m8-xb.dtb
+        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-m8-xd.dtb
+        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-m8-xe.dtb
+        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-m8-xf.dtb
+        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-m8wl.dtb
+        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-m8wl-xb.dtb
+        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-m8wl-xc.dtb
+        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-m8wl-xd.dtb
+        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-m8wl-xe.dtb
+        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-m8whl.dtb
+        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-m8whl-xb.dtb
+        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-m8whl-xd.dtb
+        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-m8whl-xe.dtb
+        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-m8whl-xf.dtb
+else
+	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v1-cdp.dtb
+	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v1-fluid.dtb
+	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v1-liquid.dtb
+        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v1-mtp.dtb
+	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v1-rumi.dtb
+	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v1-sim.dtb
+	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v2.0-1-cdp.dtb
+	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v2.0-1-fluid.dtb
+	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v2.0-1-liquid.dtb
+        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v2.0-1-mtp.dtb
+	dtb-$(CONFIG_ARCH_MSM8974)	+= apq8074-v2.0-1-cdp.dtb
+	dtb-$(CONFIG_ARCH_MSM8974)	+= apq8074-v2.0-1-liquid.dtb
+	dtb-$(CONFIG_ARCH_MSM8974)	+= apq8074-v2.0-1-dragonboard.dtb
+	dtb-$(CONFIG_ARCH_MSM8974)	+= apq8074-v2.2-cdp.dtb
+	dtb-$(CONFIG_ARCH_MSM8974)	+= apq8074-v2.2-liquid.dtb
+	dtb-$(CONFIG_ARCH_MSM8974)	+= apq8074-v2.2-dragonboard.dtb
+	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v2.2-cdp.dtb
+	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v2.2-fluid.dtb
+	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v2.2-liquid.dtb
+        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974-v2.2-mtp.dtb
+	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-cdp.dtb
+	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-fluid.dtb
+	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-fluid-hbtp.dtb
+	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-liquid.dtb
+        dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ab-pm8941-mtp.dtb
+	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ac-pm8941-cdp.dtb
+	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ac-pm8941-liquid.dtb
+	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ac-pm8941-mtp.dtb
+	dtb-$(CONFIG_ARCH_MSM8974)	+= msm8974pro-ac-pma8084-pm8941-mtp.dtb
+endif
 
 # APQ8084
    zreladdr-$(CONFIG_ARCH_APQ8084)	:= 0x00008000

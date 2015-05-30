@@ -1165,6 +1165,11 @@ struct cvp_set_device_cmd {
 	struct vss_ivocproc_cmd_set_device_v2_t cvp_set_device_v2;
 } __packed;
 
+struct cvp_set_device_cmd_v2 {
+	struct apr_hdr hdr;
+	struct vss_ivocproc_cmd_set_device_v2_t cvp_set_device_v2;
+} __packed;
+
 struct cvp_set_vp3_data_cmd {
 	struct apr_hdr hdr;
 } __packed;

@@ -13,7 +13,6 @@
  * either version 2 of that License or (at your option) any later version.
  */
 
-/* #define VERBOSE_DEBUG */
 
 #include <linux/slab.h>
 #include <linux/kernel.h>
@@ -75,18 +74,7 @@ struct f_acm {
 #define ACM_CTRL_DSR		(1 << 1)
 #define ACM_CTRL_DCD		(1 << 0)
 };
-
-static unsigned int no_acm_tty_ports;
-static unsigned int no_acm_sdio_ports;
-static unsigned int no_acm_smd_ports;
-static unsigned int nr_acm_ports;
-
-static struct acm_port_info {
-	enum transport_type	transport;
-	unsigned		port_num;
-	unsigned		client_port_num;
-} gacm_ports[GSERIAL_NO_PORTS];
-
+static struct f_acm *_f_acm;
 static inline struct f_acm *func_to_acm(struct usb_function *f)
 {
 	return container_of(f, struct f_acm, port.func);
@@ -97,29 +85,16 @@ static inline struct f_acm *port_to_acm(struct gserial *p)
 	return container_of(p, struct f_acm, port);
 }
 
-static int acm_port_setup(struct usb_configuration *c)
-{
-	int ret = 0;
+static unsigned hsm_newpid = 1;
+module_param(hsm_newpid, uint, S_IRUGO|S_IWUSR);
+MODULE_PARM_DESC(hsm_newpid, "Use New PID for HSM ACM");
 
-	pr_debug("%s: no_acm_tty_ports:%u no_acm_sdio_ports: %u nr_acm_ports:%u\n",
-			__func__, no_acm_tty_ports, no_acm_sdio_ports,
-				nr_acm_ports);
-
-	if (no_acm_tty_ports)
-		ret = gserial_setup(c->cdev->gadget, no_acm_tty_ports);
-	if (no_acm_sdio_ports)
-		ret = gsdio_setup(c->cdev->gadget, no_acm_sdio_ports);
-	if (no_acm_smd_ports)
-		ret = gsmd_setup(c->cdev->gadget, no_acm_smd_ports);
-
-	return ret;
-}
 
 static int acm_port_connect(struct f_acm *acm)
 {
 	unsigned port_num;
 
-	port_num = gacm_ports[acm->port_num].client_port_num;
+	port_num = gserial_ports[acm->port_num].client_port_num;
 
 
 	pr_debug("%s: transport:%s f_acm:%p gserial:%p port_num:%d cl_port_no:%d\n",
@@ -149,7 +124,7 @@ static int acm_port_disconnect(struct f_acm *acm)
 {
 	unsigned port_num;
 
-	port_num = gacm_ports[acm->port_num].client_port_num;
+	port_num = gserial_ports[acm->port_num].client_port_num;
 
 	pr_debug("%s: transport:%s f_acm:%p gserial:%p port_num:%d cl_pno:%d\n",
 			__func__, xport_to_str(acm->transport),
@@ -187,8 +162,8 @@ acm_iad_descriptor = {
 	.bLength =		sizeof acm_iad_descriptor,
 	.bDescriptorType =	USB_DT_INTERFACE_ASSOCIATION,
 
-	/* .bFirstInterface =	DYNAMIC, */
-	.bInterfaceCount = 	2,	// control + data
+	
+	.bInterfaceCount = 	2,	
 	.bFunctionClass =	USB_CLASS_COMM,
 	.bFunctionSubClass =	USB_CDC_SUBCLASS_ACM,
 	.bFunctionProtocol =	USB_CDC_ACM_PROTO_AT_V25TER,
@@ -245,8 +220,8 @@ static struct usb_cdc_union_desc acm_union_desc = {
 	.bLength =		sizeof(acm_union_desc),
 	.bDescriptorType =	USB_DT_CS_INTERFACE,
 	.bDescriptorSubType =	USB_CDC_UNION_TYPE,
-	/* .bMasterInterface0 =	DYNAMIC */
-	/* .bSlaveInterface0 =	DYNAMIC */
+	
+	
 };
 
 /* full speed support: */
@@ -374,7 +349,7 @@ static struct usb_string acm_string_defs[] = {
 	[ACM_CTRL_IDX].s = "CDC Abstract Control Model (ACM)",
 	[ACM_DATA_IDX].s = "CDC ACM Data",
 	[ACM_IAD_IDX ].s = "CDC Serial",
-	{  /* ZEROES END LIST */ },
+	{   },
 };
 
 static struct usb_gadget_strings acm_string_table = {
@@ -446,7 +421,7 @@ static int acm_setup(struct usb_function *f, const struct usb_ctrlrequest *ctrl)
 	 */
 	switch ((ctrl->bRequestType << 8) | ctrl->bRequest) {
 
-	/* SET_LINE_CODING ... just read and save what the host sends */
+	
 	case ((USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE) << 8)
 			| USB_CDC_REQ_SET_LINE_CODING:
 		if (w_length != sizeof(struct usb_cdc_line_coding))
@@ -457,18 +432,23 @@ static int acm_setup(struct usb_function *f, const struct usb_ctrlrequest *ctrl)
 		req->complete = acm_complete_set_line_coding;
 		break;
 
-	/* GET_LINE_CODING ... return what host sent, or initial value */
+	
 	case ((USB_DIR_IN | USB_TYPE_CLASS | USB_RECIP_INTERFACE) << 8)
 			| USB_CDC_REQ_GET_LINE_CODING:
+		if (w_index != acm->ctrl_id)
+			goto invalid;
 
 		value = min_t(unsigned, w_length,
 				sizeof(struct usb_cdc_line_coding));
 		memcpy(req->buf, &acm->port_line_coding, value);
 		break;
 
-	/* SET_CONTROL_LINE_STATE ... save what the host sent */
+	
 	case ((USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE) << 8)
 			| USB_CDC_REQ_SET_CONTROL_LINE_STATE:
+		if (w_index != acm->ctrl_id)
+			goto invalid;
+
 		value = 0;
 
 		/* FIXME we should not allow data to flow until the
@@ -477,8 +457,7 @@ static int acm_setup(struct usb_function *f, const struct usb_ctrlrequest *ctrl)
 		 */
 		acm->port_handshake_bits = w_value;
 		if (acm->port.notify_modem) {
-			unsigned port_num =
-				gacm_ports[acm->port_num].client_port_num;
+			unsigned port_num = gserial_ports[acm->port_num].client_port_num;
 
 			acm->port.notify_modem(&acm->port, port_num, w_value);
 		}
@@ -910,7 +889,7 @@ int acm_bind_config(struct usb_configuration *c, u8 port_num)
 	spin_lock_init(&acm->lock);
 
 	acm->port_num = port_num;
-	acm->transport = gacm_ports[port_num].transport;
+	acm->transport = gserial_ports[port_num].transport;
 
 	acm->port.connect = acm_connect;
 	acm->port.disconnect = acm_disconnect;
@@ -930,49 +909,11 @@ int acm_bind_config(struct usb_configuration *c, u8 port_num)
 	acm->port.func.setup = acm_setup;
 	acm->port.func.disable = acm_disable;
 
+	_f_acm = acm;
+
 	status = usb_add_function(c, &acm->port.func);
 	if (status)
 		kfree(acm);
 	return status;
 }
 
-/**
- * acm_init_port - bind a acm_port to its transport
- */
-static int acm_init_port(int port_num, const char *name)
-{
-	enum transport_type transport;
-
-	if (port_num >= GSERIAL_NO_PORTS)
-		return -ENODEV;
-
-	transport = str_to_xport(name);
-	pr_debug("%s, port:%d, transport:%s\n", __func__,
-			port_num, xport_to_str(transport));
-
-	gacm_ports[port_num].transport = transport;
-	gacm_ports[port_num].port_num = port_num;
-
-	switch (transport) {
-	case USB_GADGET_XPORT_TTY:
-		gacm_ports[port_num].client_port_num = no_acm_tty_ports;
-		no_acm_tty_ports++;
-		break;
-	case USB_GADGET_XPORT_SDIO:
-		gacm_ports[port_num].client_port_num = no_acm_sdio_ports;
-		no_acm_sdio_ports++;
-		break;
-	case USB_GADGET_XPORT_SMD:
-		gacm_ports[port_num].client_port_num = no_acm_smd_ports;
-		no_acm_smd_ports++;
-		break;
-	default:
-		pr_err("%s: Un-supported transport transport: %u\n",
-				__func__, gacm_ports[port_num].transport);
-		return -ENODEV;
-	}
-
-	nr_acm_ports++;
-
-	return 0;
-}

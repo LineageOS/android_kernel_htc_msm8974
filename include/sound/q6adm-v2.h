@@ -70,4 +70,8 @@ void adm_set_multi_ch_map(char *channel_map);
 
 void adm_get_multi_ch_map(char *channel_map);
 
+//htc audio ++
+int q6adm_enable_effect(int port_id, uint32_t module_id, uint32_t param_id,
+		uint32_t payload_size, void *payload);
+//htc audio --
 #endif /* __Q6_ADM_V2_H__ */

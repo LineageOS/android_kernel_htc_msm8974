@@ -39,6 +39,9 @@
 #include <mach/msm_iomap.h>
 #include <mach/ramdump.h>
 
+#include <linux/pm_qos.h>
+#include <mach/devices_cmdline.h>
+
 #include "peripheral-loader.h"
 
 #define pil_err(desc, fmt, ...)						\
@@ -48,6 +51,8 @@
 
 #define PIL_IMAGE_INFO_BASE	(MSM_IMEM_BASE + 0x94c)
 
+
+struct pm_qos_request wcnss_pm_qos_req;
 /**
  * proxy_timeout - Override for proxy vote timeouts
  * -1: Use driver-specified timeout
@@ -252,6 +257,13 @@ static irqreturn_t proxy_unvote_intr_handler(int irq, void *dev_id)
 	struct pil_desc *desc = dev_id;
 	struct pil_priv *priv = desc->priv;
 
+
+    if ( strncmp(desc->name, "wcnss",5)==0) {
+        pm_qos_update_request(&wcnss_pm_qos_req, PM_QOS_DEFAULT_VALUE );
+        pil_info(desc, " release wcnss_pm_qos_req \n");
+    }
+
+
 	pil_info(desc, "Power/Clock ready interrupt received\n");
 	if (!desc->priv->unvoted_flag) {
 		desc->priv->unvoted_flag = 1;
@@ -294,6 +306,13 @@ static struct pil_seg *pil_init_seg(const struct pil_desc *desc,
 	seg = kmalloc(sizeof(*seg), GFP_KERNEL);
 	if (!seg)
 		return ERR_PTR(-ENOMEM);
+
+
+	if (!strcmp(desc->name, "venus") && reloc) {
+		reloc = false;
+		}
+
+
 	seg->num = num;
 	seg->paddr = reloc ? pil_reloc(priv, phdr->p_paddr) : phdr->p_paddr;
 	seg->filesz = phdr->p_filesz;
@@ -424,7 +443,7 @@ static int pil_setup_region(struct pil_priv *priv, const struct pil_mdt *mdt)
 		start = phdr->p_paddr;
 		end = start + phdr->p_memsz;
 
-		if (segment_is_relocatable(phdr)) {
+		if (segment_is_relocatable(phdr)&& strcmp(priv->desc->name, "venus") ) {
 			min_addr_r = min(min_addr_r, start);
 			max_addr_r = max(max_addr_r, end);
 			/*
@@ -481,6 +500,13 @@ static int pil_init_mmap(struct pil_desc *desc, const struct pil_mdt *mdt)
 	ret = pil_setup_region(priv, mdt);
 	if (ret)
 		return ret;
+
+
+    if ( strncmp(desc->name, "wcnss",5)==0) {
+        pm_qos_update_request(&wcnss_pm_qos_req, 1);
+        pil_info(desc, "request wcnss_pm_qos_req \n");
+    }
+
 
 	pil_info(desc, "loading from %pa to %pa\n", &priv->region_start,
 							&priv->region_end);
@@ -851,6 +877,8 @@ static int __init msm_pil_init(void)
 	ion = msm_ion_client_create(UINT_MAX, "pil");
 	if (IS_ERR(ion)) /* Can't support relocatable images */
 		ion = NULL;
+
+    pm_qos_add_request(&wcnss_pm_qos_req, PM_QOS_CPU_DMA_LATENCY, PM_QOS_DEFAULT_VALUE);
 	return register_pm_notifier(&pil_pm_notifier);
 }
 device_initcall(msm_pil_init);
@@ -860,6 +888,7 @@ static void __exit msm_pil_exit(void)
 	unregister_pm_notifier(&pil_pm_notifier);
 	if (ion)
 		ion_client_destroy(ion);
+    pm_qos_remove_request(&wcnss_pm_qos_req);
 }
 module_exit(msm_pil_exit);
 
