@@ -27,6 +27,7 @@
 #ifdef CONFIG_ARCH_MSM8974
 int __init krait_power_init(void);
 void secondary_cpu_hs_init(void *base_ptr, int cpu);
+void vreg_krait_get_info(int cpu, int *is_ldo_mode_ptr, int *uV_ptr);
 #else
 static inline int __init krait_power_init(void)
 {
@@ -34,6 +35,7 @@ static inline int __init krait_power_init(void)
 }
 
 static inline void secondary_cpu_hs_init(void *base_ptr, int cpu) {}
+static inline void vreg_krait_get_info(int cpu, int *is_ldo_mode_ptr, int *uV_ptr) {}
 #endif
 
 #endif

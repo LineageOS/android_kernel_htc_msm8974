@@ -25,9 +25,6 @@
 #endif
 #define pr_fmt(fmt) "%s: " fmt, __func__
 
-/*
- * This component encapsulates the ALSA devices for USB audio gadget
- */
 
 #define FILE_PCM_PLAYBACK	"/dev/snd/pcmC0D5p"
 #define FILE_PCM_CAPTURE	"/dev/snd/pcmC0D6c"
@@ -49,11 +46,7 @@ static struct gaudio *the_card;
 
 static bool audio_reinit;
 
-/*-------------------------------------------------------------------------*/
 
-/**
- * Some ALSA internal helper functions
- */
 static int snd_interval_refine_set(struct snd_interval *i, unsigned int val)
 {
 	struct snd_interval t;
@@ -113,7 +106,6 @@ static int _snd_pcm_hw_param_set(struct snd_pcm_hw_params *params,
 	}
 	return changed;
 }
-/*-------------------------------------------------------------------------*/
 
 static inline
 struct snd_interval *param_to_interval(struct snd_pcm_hw_params *p, int n)
@@ -137,21 +129,12 @@ int pcm_period_size(struct snd_pcm_hw_params *params)
 	return i->min;
 }
 
-/**
- * Set default hardware params
- */
 static int playback_prepare_params(struct gaudio_snd_dev *snd)
 {
 	struct snd_pcm_substream *substream = snd->substream;
 	struct snd_pcm_hw_params *params;
 	snd_pcm_sframes_t result;
 
-       /*
-	* SNDRV_PCM_ACCESS_RW_INTERLEAVED,
-	* SNDRV_PCM_FORMAT_S16_LE
-	* CHANNELS: 2
-	* RATE: 8000
-	*/
 	snd->access = SNDRV_PCM_ACCESS_RW_INTERLEAVED;
 	snd->format = SNDRV_PCM_FORMAT_S16_LE;
 	snd->channels = 2;
@@ -188,7 +171,7 @@ static int playback_prepare_params(struct gaudio_snd_dev *snd)
 		pr_err("Preparing playback failed: %d\n", (int)result);
 
 
-	/* Store the hardware parameters */
+	
 	snd->access = params_access(params);
 	snd->format = params_format(params);
 	snd->channels = params_channels(params);
@@ -212,12 +195,6 @@ static int capture_prepare_params(struct gaudio_snd_dev *snd)
 	unsigned long buffer_size;
 	snd_pcm_sframes_t result = 0;
 
-	/*
-	 * SNDRV_PCM_ACCESS_RW_INTERLEAVED,
-	 * SNDRV_PCM_FORMAT_S16_LE
-	 * CHANNELS: 1
-	 * RATE: 8000
-	 */
 	snd->access = SNDRV_PCM_ACCESS_RW_INTERLEAVED;
 	snd->format = SNDRV_PCM_FORMAT_S16_LE;
 	snd->channels = 1;
@@ -256,7 +233,7 @@ static int capture_prepare_params(struct gaudio_snd_dev *snd)
 	if (result < 0)
 		pr_err("Preparing capture failed: %d\n", (int)result);
 
-	/* Store the hardware parameters */
+	
 	snd->access = params_access(params);
 	snd->format = params_format(params);
 	snd->channels = params_channels(params);
@@ -264,11 +241,10 @@ static int capture_prepare_params(struct gaudio_snd_dev *snd)
 
 	runtime->frame_bits = snd_pcm_format_physical_width(runtime->format);
 
-	kfree(params);
-
 	swparams = kzalloc(sizeof(*swparams), GFP_KERNEL);
 	if (!swparams) {
 		pr_err("Failed to allocate sw params");
+		kfree(params);
 		return -ENOMEM;
 	}
 
@@ -276,6 +252,8 @@ static int capture_prepare_params(struct gaudio_snd_dev *snd)
 	period_size = pcm_period_size(params);
 	swparams->avail_min = period_size/2;
 	swparams->xfer_align = period_size/2;
+
+	kfree(params);
 
 	swparams->tstamp_mode = SNDRV_PCM_TSTAMP_NONE;
 	swparams->period_step = 1;
@@ -297,19 +275,10 @@ static int capture_prepare_params(struct gaudio_snd_dev *snd)
 	return result;
 }
 
-/**
- * Set default hardware params
- */
 static int playback_default_hw_params(struct gaudio_snd_dev *snd)
 {
 	struct snd_pcm_hw_params *params;
 
-       /*
-	* SNDRV_PCM_ACCESS_RW_INTERLEAVED,
-	* SNDRV_PCM_FORMAT_S16_LE
-	* CHANNELS: 2
-	* RATE: 8000
-	*/
 	snd->access = SNDRV_PCM_ACCESS_RW_INTERLEAVED;
 	snd->format = SNDRV_PCM_FORMAT_S16_LE;
 	snd->channels = 2;
@@ -329,7 +298,7 @@ static int playback_default_hw_params(struct gaudio_snd_dev *snd)
 	_snd_pcm_hw_param_set(params, SNDRV_PCM_HW_PARAM_RATE,
 			snd->rate, 0);
 
-	/* Store the hardware parameters */
+	
 	snd->access = params_access(params);
 	snd->format = params_format(params);
 	snd->channels = params_channels(params);
@@ -347,12 +316,6 @@ static int capture_default_hw_params(struct gaudio_snd_dev *snd)
 {
 	struct snd_pcm_hw_params *params;
 
-	/*
-	 * SNDRV_PCM_ACCESS_RW_INTERLEAVED,
-	 * SNDRV_PCM_FORMAT_S16_LE
-	 * CHANNELS: 1
-	 * RATE: 8000
-	 */
 	snd->access = SNDRV_PCM_ACCESS_RW_INTERLEAVED;
 	snd->format = SNDRV_PCM_FORMAT_S16_LE;
 	snd->channels = 1;
@@ -372,7 +335,7 @@ static int capture_default_hw_params(struct gaudio_snd_dev *snd)
 	_snd_pcm_hw_param_set(params, SNDRV_PCM_HW_PARAM_RATE,
 			snd->rate, 0);
 
-	/* Store the hardware parameters */
+	
 	snd->access = params_access(params);
 	snd->format = params_format(params);
 	snd->channels = params_channels(params);
@@ -398,7 +361,7 @@ static int gaudio_open_streams(void)
 
 	pr_debug("Initialize hw params");
 
-	/* Open PCM playback device and setup substream */
+	
 	snd = &the_card->playback;
 	res = playback_prepare_params(snd);
 	if (res) {
@@ -408,7 +371,7 @@ static int gaudio_open_streams(void)
 
 	pr_debug("Initialized playback params");
 
-	/* Open PCM capture device and setup substream */
+	
 	snd = &the_card->capture;
 	res = capture_prepare_params(snd);
 	if (res) {
@@ -426,9 +389,6 @@ void u_audio_clear(void)
 	audio_reinit = false;
 }
 
-/**
- * Playback audio buffer data by ALSA PCM device
- */
 static size_t u_audio_playback(struct gaudio *card, void *buf, size_t count)
 {
 	struct gaudio_snd_dev	*snd = &card->playback;
@@ -567,10 +527,6 @@ static int u_audio_get_capture_rate(struct gaudio *card)
 }
 
 
-/**
- * Open ALSA PCM and control device files
- * Initial the PCM or control device
- */
 static int gaudio_open_snd_dev(struct gaudio *card)
 {
 	struct snd_pcm_file *pcm_file;
@@ -581,7 +537,7 @@ static int gaudio_open_snd_dev(struct gaudio *card)
 		pr_err("%s: Card is NULL", __func__);
 		return -ENODEV;
 	}
-	/* Open control device */
+	
 	snd = &card->control;
 	snd->filp = filp_open(fn_cntl, O_RDWR, 0);
 	if (IS_ERR(snd->filp)) {
@@ -593,7 +549,7 @@ static int gaudio_open_snd_dev(struct gaudio *card)
 	}
 	snd->card = card;
 
-	/* Open PCM playback device and setup substream */
+	
 	snd = &card->playback;
 	snd->filp = filp_open(fn_play, O_WRONLY, 0);
 	if (IS_ERR(snd->filp)) {
@@ -612,7 +568,7 @@ static int gaudio_open_snd_dev(struct gaudio *card)
 		return res;
 	}
 
-	/* Open PCM capture device and setup substream */
+	
 	snd = &card->capture;
 	snd->filp = filp_open(fn_cap, O_RDONLY, 0);
 	if (IS_ERR(snd->filp)) {
@@ -634,25 +590,22 @@ static int gaudio_open_snd_dev(struct gaudio *card)
 	return res;
 }
 
-/**
- * Close ALSA PCM and control device files
- */
 static int gaudio_close_snd_dev(struct gaudio *gau)
 {
 	struct gaudio_snd_dev	*snd;
 
 	pr_debug("Enter");
-	/* Close control device */
+	
 	snd = &gau->control;
 	if (snd->filp)
 		filp_close(snd->filp, current->files);
 
-	/* Close PCM playback device and setup substream */
+	
 	snd = &gau->playback;
 	if (snd->filp)
 		filp_close(snd->filp, current->files);
 
-	/* Close PCM capture device and setup substream */
+	
 	snd = &gau->capture;
 	if (snd->filp)
 		filp_close(snd->filp, current->files);
@@ -661,13 +614,6 @@ static int gaudio_close_snd_dev(struct gaudio *gau)
 }
 
 
-/**
- * gaudio_setup - setup ALSA interface and preparing for USB transfer
- *
- * This sets up PCM, mixer or MIDI ALSA devices fore USB gadget using.
- *
- * Returns negative errno, or zero on success
- */
 int gaudio_setup(struct gaudio *card)
 {
 	int	ret;
@@ -681,11 +627,6 @@ int gaudio_setup(struct gaudio *card)
 	return ret;
 }
 
-/**
- * gaudio_cleanup - remove ALSA device interface
- *
- * This is called to free all resources allocated by @gaudio_setup().
- */
 void gaudio_cleanup(void)
 {
 	if (the_card) {

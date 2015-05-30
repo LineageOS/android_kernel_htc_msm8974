@@ -138,6 +138,7 @@ struct usb_ep_ops {
 
 	int (*fifo_status) (struct usb_ep *ep);
 	void (*fifo_flush) (struct usb_ep *ep);
+	void (*nuke) (struct usb_ep *ep);
 };
 
 /**
@@ -166,7 +167,7 @@ struct usb_ep_ops {
  */
 struct usb_ep {
 	void			*driver_data;
-
+	bool			is_ncm;
 	const char		*name;
 	const struct usb_ep_ops	*ops;
 	struct list_head	ep_list;
@@ -441,6 +442,11 @@ static inline void usb_ep_fifo_flush(struct usb_ep *ep)
 		ep->ops->fifo_flush(ep);
 }
 
+static inline void usb_ep_nuke(struct usb_ep *ep)
+{
+	if (ep->ops->nuke)
+		ep->ops->nuke(ep);
+}
 
 /*-------------------------------------------------------------------------*/
 
@@ -547,8 +553,10 @@ struct usb_gadget {
 	const char			*name;
 	struct device			dev;
 	u8				usb_core_id;
+	int             		miMaxMtu;
 	bool				l1_supported;
 	bool				streaming_enabled;
+	unsigned			ats_reset_irq_count;
 	u32				xfer_isr_count;
 };
 
@@ -840,8 +848,10 @@ struct usb_gadget_driver {
 	int			(*setup)(struct usb_gadget *,
 					const struct usb_ctrlrequest *);
 	void			(*disconnect)(struct usb_gadget *);
+	void			(*mute_disconnect)(struct usb_gadget *);
 	void			(*suspend)(struct usb_gadget *);
 	void			(*resume)(struct usb_gadget *);
+	void			(*broadcast_abnormal_usb_reset)(void);
 
 	/* FIXME support safe rmmod */
 	struct device_driver	driver;

@@ -68,6 +68,24 @@ module_param(pbl_mba_boot_timeout_ms, int, S_IRUGO | S_IWUSR);
 static int modem_auth_timeout_ms = 10000;
 module_param(modem_auth_timeout_ms, int, S_IRUGO | S_IWUSR);
 
+static void pil_msa_dump_rmb_regs(struct q6v5_data *drv) {
+#define PIL_MSA_DUMP_RMB_REG(REG) \
+	val = readl (drv->rmb_base + REG);\
+	dev_err(dev, "%s: [0x%08X] %s: 0x%08X\n", __func__, (u32)drv->rmb_base_phys + REG, #REG, val);
+
+	struct device *dev = drv->desc.dev;
+	u32 val;
+
+	PIL_MSA_DUMP_RMB_REG(RMB_MBA_IMAGE);
+	PIL_MSA_DUMP_RMB_REG(RMB_PBL_STATUS);
+	PIL_MSA_DUMP_RMB_REG(RMB_MBA_COMMAND);
+	PIL_MSA_DUMP_RMB_REG(RMB_MBA_STATUS);
+	PIL_MSA_DUMP_RMB_REG(RMB_PMI_META_DATA);
+	PIL_MSA_DUMP_RMB_REG(RMB_PMI_CODE_START);
+	PIL_MSA_DUMP_RMB_REG(RMB_PMI_CODE_LENGTH);
+#undef PIL_MSA_DUMP_RMB_REG
+}
+
 static int pil_msa_pbl_power_up(struct q6v5_data *drv)
 {
 	int ret = 0;
@@ -150,6 +168,7 @@ static int pil_msa_wait_for_mba_ready(struct q6v5_data *drv)
 		status != 0, POLL_INTERVAL_US, pbl_mba_boot_timeout_ms * 1000);
 	if (ret) {
 		dev_err(dev, "PBL boot timed out\n");
+		pil_msa_dump_rmb_regs(drv);
 		return ret;
 	}
 	if (status != STATUS_PBL_SUCCESS) {
@@ -162,11 +181,13 @@ static int pil_msa_wait_for_mba_ready(struct q6v5_data *drv)
 		status != 0, POLL_INTERVAL_US, pbl_mba_boot_timeout_ms * 1000);
 	if (ret) {
 		dev_err(dev, "MBA boot timed out\n");
+		pil_msa_dump_rmb_regs(drv);
 		return ret;
 	}
 	if (status != STATUS_XPU_UNLOCKED &&
 	    status != STATUS_XPU_UNLOCKED_SCRIBBLED) {
 		dev_err(dev, "MBA returned unexpected status %d\n", status);
+		pil_msa_dump_rmb_regs(drv);
 		return -EINVAL;
 	}
 

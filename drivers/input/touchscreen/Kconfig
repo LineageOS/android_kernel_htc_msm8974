@@ -484,6 +484,12 @@ config TOUCHSCREEN_TNETV107X
 	  To compile this driver as a module, choose M here: the
 	  module will be called tnetv107x-ts.
 
+config TOUCHSCREEN_SYNAPTICS_3K
+        tristate "Synaptics 3k serious i2c touchscreen"
+        depends on I2C
+        help
+          This enables support for Synaptics RMI4 over I2C based touchscreens.
+
 config TOUCHSCREEN_SYNAPTICS_I2C_RMI
 	tristate "Synaptics i2c touchscreen"
 	depends on I2C
@@ -1013,9 +1019,8 @@ config TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE
 
 config SECURE_TOUCH
 	bool "Secure Touch"
-	depends on TOUCHSCREEN_ATMEL_MXT
 	help
-	  Say Y here to enable Secure Touch support in the Atmel MXT
+	  Say Y here to enable Secure Touch support in touch
 	  driver.
 
 	  If unsure, say N.
