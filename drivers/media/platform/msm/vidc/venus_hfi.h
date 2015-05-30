@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -142,7 +142,6 @@ struct vidc_iface_q_info {
 	struct vidc_mem_addr q_array;
 };
 
-/* Internal data used in vidc_hal not exposed to msm_vidc*/
 
 struct hal_data {
 	u32 irq;
@@ -196,6 +195,7 @@ struct venus_hfi_device {
 	u32 device_id;
 	u32 clk_load;
 	u32 bus_load[MSM_VIDC_MAX_DEVICES];
+	unsigned long ocmem_size;
 	enum clock_state clk_state;
 	bool power_enabled;
 	enum vidc_clocks clk_gating_level;
@@ -215,7 +215,6 @@ struct venus_hfi_device {
 	struct workqueue_struct *venus_pm_workq;
 	int spur_count;
 	int reg_count;
-	int pc_num_cmds;
 	u32 base_addr;
 	u32 register_base;
 	u32 register_size;
@@ -226,6 +225,9 @@ struct venus_hfi_device {
 	struct msm_vidc_platform_resources *res;
 	struct regulator *gdsc;
 	enum venus_hfi_state state;
+	
+	struct msm_vidc_inst *inst;
+	
 };
 
 void venus_hfi_delete_device(void *device);

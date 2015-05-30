@@ -105,6 +105,14 @@
 #define USB_REQ_LOOPBACK_DATA_READ	0x16
 #define USB_REQ_SET_INTERFACE_DS	0x17
 
+
+/*
+ *	HTC requests, for the bRequest field of a SETUP packet.
+ */
+#define USB_REQ_HTC_FUNCTION		0x01
+
+#define USB_WVAL_ADB				0x01
+
 /* The Link Power Management (LPM) ECN defines USB_REQ_TEST_AND_SET command,
  * used by hubs to put ports into a new L1 suspend state, except that it
  * forgot to define its number ...
