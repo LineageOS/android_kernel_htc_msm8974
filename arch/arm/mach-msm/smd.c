@@ -56,6 +56,7 @@
 #include "smem_private.h"
 
 #define SMD_VERSION 0x00020000
+
 #define SMSM_SNAPSHOT_CNT 64
 #define SMSM_SNAPSHOT_SIZE ((SMSM_NUM_ENTRIES + 1) * 4 + sizeof(uint64_t))
 #define RSPIN_INIT_WAIT_MS 1000
@@ -197,12 +198,19 @@ void *smsm_log_ctx;
 			IPC_LOG_SMSM(KERN_INFO, x);		\
 	} while (0)
 #else
+
 #define SMD_DBG(x...) do { } while (0)
+
 #define SMSM_DBG(x...) do { } while (0)
+
 #define SMD_INFO(x...) do { } while (0)
+
 #define SMSM_INFO(x...) do { } while (0)
+
 #define SMD_POWER_INFO(x...) do { } while (0)
+
 #define SMSM_POWER_INFO(x...) do { } while (0)
+
 #endif
 
 /**
@@ -392,7 +400,7 @@ static inline void notify_wcnss_smsm(void)
 static void notify_other_smsm(uint32_t smsm_entry, uint32_t notify_mask)
 {
 	/* older protocol don't use smsm_intr_mask,
-	   but still communicates with modem */
+ 	but still communicates with modem */
 	if (!smsm_info.intr_mask ||
 	    (__raw_readl(SMSM_INTR_MASK_ADDR(smsm_entry, SMSM_MODEM))
 				& notify_mask))
@@ -425,12 +433,12 @@ static void notify_other_smsm(uint32_t smsm_entry, uint32_t notify_mask)
 		notify_dsps_smsm();
 	}
 
-	/*
-	 * Notify local SMSM callback clients without wakelock since this
-	 * code is used by power management during power-down/-up sequencing
-	 * on DEM-based targets.  Grabbing a wakelock in this case will
-	 * abort the power-down sequencing.
-	 */
+       /*
+        * Notify local SMSM callback clients without wakelock since this
+        * code is used by power management during power-down/-up sequencing
+        * on DEM-based targets.  Grabbing a wakelock in this case will
+        * abort the power-down sequencing.
+        */
 	if (smsm_info.intr_mask &&
 	    (__raw_readl(SMSM_INTR_MASK_ADDR(smsm_entry, SMSM_APPS))
 				& notify_mask)) {
@@ -478,16 +486,21 @@ void smd_diag(void)
 	}
 }
 
+int smd_smsm_erase_efs(void)
+{
+	unsigned modm = __raw_readl(SMSM_STATE_ADDR(SMSM_MODEM_STATE));
+	return (modm & SMSM_ERASE_EFS);
+}
 
 static void handle_modem_crash(void)
 {
 	pr_err("MODEM/AMSS has CRASHED\n");
 	smd_diag();
 
-	/* hard reboot if possible FIXME
-	if (msm_reset_hook)
-		msm_reset_hook();
-	*/
+       /* hard reboot if possible FIXME
+       if (msm_reset_hook)
+       »       msm_reset_hook();
+       */
 
 	/* in this case the modem or watchdog should reboot us */
 	for (;;)
@@ -604,9 +617,11 @@ static bool smd_edge_inited(int edge)
 	return edge_to_pids[edge].initialized;
 }
 
+
 /* on smp systems, the probe might get called from multiple cores,
    hence use a lock */
 static DEFINE_MUTEX(smd_probe_lock);
+
 
 /**
  * scan_alloc_table - Scans a specified SMD channel allocation table in SMEM for
@@ -982,6 +997,7 @@ void smd_channel_reset(uint32_t restart_pid)
 
 	SMD_POWER_INFO("%s: finished reset\n", __func__);
 }
+
 
 /* how many bytes are available for reading */
 static int smd_stream_read_avail(struct smd_channel *ch)
@@ -1956,14 +1972,14 @@ int smd_named_open_on_edge(const char *name, uint32_t edge,
 		list_for_each_entry(ch, &smd_ch_to_close_list, ch_list) {
 			if (!strncmp(name, ch->name, 20) &&
 				(edge == ch->type)) {
-				/* channel exists, but is being closed */
+				/* one final check to handle closing->closed race condition */
 				spin_unlock_irqrestore(&smd_lock, flags);
 				return -EAGAIN;
 			}
 		}
 		spin_unlock_irqrestore(&smd_lock, flags);
 
-		/* one final check to handle closing->closed race condition */
+		
 		ch = smd_get_channel(name, edge);
 		if (!ch)
 			return -ENODEV;
@@ -2256,6 +2272,7 @@ void smd_disable_read_intr(smd_channel_t *ch)
 }
 EXPORT_SYMBOL(smd_disable_read_intr);
 
+
 /**
  * Enable/disable receive interrupts for the remote processor used by a
  * particular channel.
@@ -2515,7 +2532,7 @@ static int smsm_init(void)
 				__raw_writel(0x0,
 					SMSM_INTR_MASK_ADDR(i, SMSM_APPS));
 
-			/* Configure legacy modem bits */
+			
 			__raw_writel(LEGACY_MODEM_SMSM_MASK,
 				SMSM_INTR_MASK_ADDR(SMSM_MODEM_STATE,
 					SMSM_APPS));
@@ -2548,7 +2565,7 @@ void smsm_reset_modem(unsigned mode)
 		mode = SMSM_RESET | SMSM_SYSTEM_DOWNLOAD;
 	} else if (mode == SMSM_MODEM_WAIT) {
 		mode = SMSM_RESET | SMSM_MODEM_WAIT;
-	} else { /* reset_mode is SMSM_RESET or default */
+	} else { 
 		mode = SMSM_RESET;
 	}
 
@@ -2851,7 +2868,7 @@ int smsm_change_state(uint32_t smsm_entry,
 	old_state = __raw_readl(SMSM_STATE_ADDR(smsm_entry));
 	new_state = (old_state & ~clear_mask) | set_mask;
 	__raw_writel(new_state, SMSM_STATE_ADDR(smsm_entry));
-	SMSM_POWER_INFO("%s %d:%08x->%08x", __func__, smsm_entry,
+	SMSM_POWER_INFO("%s %d:%08x->%08x\n", __func__, smsm_entry,
 			old_state, new_state);
 	notify_other_smsm(SMSM_APPS_STATE, (old_state ^ new_state));
 
@@ -2940,7 +2957,7 @@ void notify_smsm_cb_clients_worker(struct work_struct *work)
 			return;
 		}
 
-		/* read wakelock flag */
+
 		ret = kfifo_out(&smsm_snapshot_fifo, &use_wakelock,
 				sizeof(use_wakelock));
 		if (ret != sizeof(use_wakelock)) {
@@ -2976,7 +2993,6 @@ void notify_smsm_cb_clients_worker(struct work_struct *work)
 	}
 }
 
-
 /**
  * Registers callback for SMSM state notifications when the specified
  * bits change.
@@ -3006,7 +3022,7 @@ int smsm_state_cb_register(uint32_t smsm_entry, uint32_t mask,
 	mutex_lock(&smsm_lock);
 
 	if (!smsm_states) {
-		/* smsm not yet initialized */
+		
 		ret = -ENODEV;
 		goto cleanup;
 	}
@@ -3040,7 +3056,7 @@ int smsm_state_cb_register(uint32_t smsm_entry, uint32_t mask,
 		new_mask |= mask;
 	}
 
-	/* update interrupt notification mask */
+	
 	if (smsm_entry == SMSM_MODEM_STATE)
 		new_mask |= LEGACY_MODEM_SMSM_MASK;
 
@@ -3061,7 +3077,6 @@ cleanup:
 	return ret;
 }
 EXPORT_SYMBOL(smsm_state_cb_register);
-
 
 /**
  * Deregisters for SMSM state notifications for the specified bits.
@@ -3092,7 +3107,7 @@ int smsm_state_cb_deregister(uint32_t smsm_entry, uint32_t mask,
 	mutex_lock(&smsm_lock);
 
 	if (!smsm_states) {
-		/* smsm not yet initialized */
+		
 		mutex_unlock(&smsm_lock);
 		return -ENODEV;
 	}
@@ -3105,7 +3120,7 @@ int smsm_state_cb_deregister(uint32_t smsm_entry, uint32_t mask,
 			cb_info->mask &= ~mask;
 			ret = 1;
 			if (!cb_info->mask) {
-				/* no mask bits set, remove callback */
+				
 				list_del(&cb_info->cb_list);
 				kfree(cb_info);
 				ret = 2;
@@ -3115,7 +3130,7 @@ int smsm_state_cb_deregister(uint32_t smsm_entry, uint32_t mask,
 		new_mask |= cb_info->mask;
 	}
 
-	/* update interrupt notification mask */
+	
 	if (smsm_entry == SMSM_MODEM_STATE)
 		new_mask |= LEGACY_MODEM_SMSM_MASK;
 
@@ -3179,6 +3194,7 @@ static int restart_notifier_cb(struct notifier_block *this,
 	return NOTIFY_DONE;
 }
 
+
 /**
  * smd_post_init() - SMD post initialization
  * @is_leagcy:	1 for Leagcy/platform device init sequence
@@ -3238,6 +3254,7 @@ struct interrupt_config *smd_get_intr_config(uint32_t edge)
 	return &private_intr_config[edge_to_pids[edge].remote_pid];
 }
 
+
 /**
  * smd_get_edge_remote_pid() - Get the remote processor ID
  * @edge:	edge type identifes local and remote processor
@@ -3251,6 +3268,7 @@ int smd_edge_to_remote_pid(uint32_t edge)
 		return -EINVAL;
 	return edge_to_pids[edge].remote_pid;
 }
+
 
 /**
  * smd_set_edge_subsys_name() - Set the subsystem name
@@ -3373,6 +3391,7 @@ int __init msm_smd_init(void)
 			__func__, rc);
 		return rc;
 	}
+
 	return 0;
 }
 

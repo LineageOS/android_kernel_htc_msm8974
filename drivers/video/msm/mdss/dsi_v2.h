@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -21,7 +21,7 @@
 #include "mdss_panel.h"
 
 #define DSI_BUF_SIZE	1024
-#define DSI_MRPS	0x04  /* Maximum Return Packet Size */
+#define DSI_MRPS	0x04  
 
 struct dsi_interface {
 	int (*on)(struct mdss_panel_data *pdata);
@@ -56,5 +56,4 @@ struct mdss_panel_cfg *mdp3_panel_intf_type(int intf_val);
 
 int mdp3_panel_get_boot_cfg(void);
 
-void msm_dsi_sw_reset(void);
-#endif /* DSI_V2_H */
+#endif 

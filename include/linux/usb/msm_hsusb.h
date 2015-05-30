@@ -27,6 +27,7 @@
 #include <linux/hrtimer.h>
 #include <linux/power_supply.h>
 #include <linux/cdev.h>
+#include <mach/board.h>
 /*
  * The following are bit fields describing the usb_request.udc_priv word.
  * These bit fields are set by function drivers that wish to queue
@@ -251,6 +252,7 @@ enum usb_ext_chg_status {
  */
 struct msm_otg_platform_data {
 	int *phy_init_seq;
+	int *phy_init_seq_no_uart_switch;
 	int (*vbus_power)(bool on);
 	unsigned power_budget;
 	enum usb_mode_type mode;
@@ -294,7 +296,7 @@ struct msm_otg_platform_data {
  * currents are very minimal.
  */
 #ifdef CONFIG_USB_OTG
-#define TA_WAIT_BCON	30000	/* (1100 - 30000) */
+#define TA_WAIT_BCON	-1	/* (1100 - 30000) */
 #else
 #define TA_WAIT_BCON	-1
 #endif
@@ -410,12 +412,14 @@ struct msm_otg {
 	int async_int;
 	unsigned cur_power;
 	struct delayed_work chg_work;
+	struct delayed_work ac_detect_work;
 	struct delayed_work pmic_id_status_work;
 	struct delayed_work suspend_work;
 	enum usb_chg_state chg_state;
 	enum usb_chg_type chg_type;
 	unsigned dcd_time;
 	struct wake_lock wlock;
+	struct wake_lock cable_detect_wlock;
 	struct notifier_block usbdev_nb;
 	unsigned mA_port;
 	struct timer_list id_timer;
@@ -464,6 +468,10 @@ struct msm_otg {
 #define XO_SHUTDOWN			BIT(2)
 #define CLOCKS_DOWN			BIT(3)
 #define PHY_REGULATORS_LPM	BIT(4)
+	struct work_struct notifier_work;
+	enum usb_connect_type connect_type;
+	int connect_type_ready;
+	struct workqueue_struct *usb_wq;
 	int reset_counter;
 	unsigned long b_last_se0_sess;
 	unsigned long tmouts;
@@ -484,9 +492,11 @@ struct msm_otg {
 	bool ext_chg_opened;
 	enum usb_ext_chg_status ext_chg_active;
 	struct completion ext_chg_wait;
+	struct qpnp_vadc_chip *vadc_chip;
+	struct qpnp_vadc_chip	*vadc_dev;
+	int chg_check_count;
 	int ui_enabled;
 	bool pm_done;
-	struct qpnp_vadc_chip	*vadc_dev;
 };
 
 struct ci13xxx_platform_data {

@@ -279,6 +279,7 @@ static const char *v4l2_ioctls[] = {
 	[_IOC_NR(VIDIOC_UNSUBSCRIBE_EVENT)] = "VIDIOC_UNSUBSCRIBE_EVENT",
 	[_IOC_NR(VIDIOC_CREATE_BUFS)]      = "VIDIOC_CREATE_BUFS",
 	[_IOC_NR(VIDIOC_PREPARE_BUF)]      = "VIDIOC_PREPARE_BUF",
+	[_IOC_NR(VIDIOC_HTC_SET_CALLPIDNAME)]      = "VIDIOC_HTC_SET_CALLPIDNAME",
 };
 #define V4L2_IOCTLS ARRAY_SIZE(v4l2_ioctls)
 
@@ -2284,6 +2285,12 @@ static long __video_do_ioctl(struct file *file,
 		ret = ops->vidioc_prepare_buf(file, fh, b);
 
 		dbgarg(cmd, "index=%d", b->index);
+		break;
+	}
+	case VIDIOC_HTC_SET_CALLPIDNAME:
+	{
+		struct htc_callingpid_data *b = arg;
+		ret = ops->vidioc_htc_set_callingpid_name(file, fh, b);
 		break;
 	}
 	default:
