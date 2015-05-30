@@ -53,7 +53,7 @@ struct acdb_data {
 	struct acdb_cal_block		lsm_cal;
 
 	/* AudProc Cal */
-	uint32_t			asm_topology;
+	atomic_t			asm_topology[SESSION_MAX];
 	uint32_t			adm_topology[MAX_AUDPROC_TYPES];
 	struct acdb_cal_block		audproc_cal[MAX_AUDPROC_TYPES];
 	struct acdb_cal_block		audstrm_cal[MAX_AUDPROC_TYPES];
@@ -143,14 +143,18 @@ void store_adm_tx_topology(uint32_t topology)
 	acdb_data.adm_topology[TX_CAL] = topology;
 }
 
-uint32_t get_asm_topology(void)
+uint32_t get_asm_topology(uint32_t session)
 {
-	return acdb_data.asm_topology;
+	if(session < SESSION_MAX)
+		return atomic_read(&acdb_data.asm_topology[session]);
+	else
+		return 0;
 }
 
-void store_asm_topology(uint32_t topology)
+void store_asm_topology(uint32_t topology,uint32_t session)
 {
-	acdb_data.asm_topology = topology;
+	if(session < SESSION_MAX)
+		atomic_set(&acdb_data.asm_topology[session], topology);
 }
 
 void reset_custom_topology_flags(void)
@@ -1319,7 +1323,12 @@ static long acdb_ioctl(struct file *f,
 			pr_err("%s: fail to copy topology!\n", __func__);
 			result = -EFAULT;
 		}
-		store_asm_topology(topology);
+		{
+			int i;
+			for(i=0; i<SESSION_MAX; i++)
+				store_asm_topology(topology,i);
+		}
+
 		goto done;
 	case AUDIO_SET_SPEAKER_PROT:
 		if (copy_from_user(&acdb_data.spk_prot_cfg, (void *)arg,

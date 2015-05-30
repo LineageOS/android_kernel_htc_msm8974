@@ -245,6 +245,11 @@ void tcp_select_initial_window(int __space, __u32 mss,
 			*rcv_wnd = min(*rcv_wnd, init_cwnd * mss);
 	}
 
+#ifdef CONFIG_HTC_LARGE_TCP_INITIAL_BUFFER
+	/* Lock the initial TCP window size to 64K*/
+	*rcv_wnd = 65535;
+#endif
+
 	/* Set the clamp no higher than max representable value */
 	(*window_clamp) = min(65535U << (*rcv_wscale), *window_clamp);
 }
@@ -825,6 +830,12 @@ static int tcp_transmit_skb(struct sock *sk, struct sk_buff *skb, int clone_it,
 	inet = inet_sk(sk);
 	tp = tcp_sk(sk);
 	tcb = TCP_SKB_CB(skb);
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (IS_ERR(tcb) || (!tcb))
+		printk(KERN_ERR "[NET] tcb is NULL in %s!\n", __func__);
+#endif
+
 	memset(&opts, 0, sizeof(opts));
 
 	if (unlikely(tcb->tcp_flags & TCPHDR_SYN))
@@ -1491,6 +1502,11 @@ static int tso_fragment(struct sock *sk, struct sk_buff *skb, unsigned int len,
 	buff = sk_stream_alloc_skb(sk, 0, gfp);
 	if (unlikely(buff == NULL))
 		return -ENOMEM;
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (IS_ERR(buff) || (!buff))
+		printk(KERN_ERR "[NET] buff is NULL in %s!\n", __func__);
+#endif
 
 	sk->sk_wmem_queued += buff->truesize;
 	sk_mem_charge(sk, buff->truesize);
@@ -2253,6 +2269,11 @@ void tcp_xmit_retransmit_queue(struct sock *sk)
 		last_lost = tp->snd_una;
 	}
 
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (IS_ERR(skb) || (!skb))
+		printk(KERN_ERR "[NET] skb is NULL in %s!\n", __func__);
+#endif
+
 	tcp_for_write_queue_from(skb, sk) {
 		__u8 sacked = TCP_SKB_CB(skb)->sacked;
 
@@ -2330,6 +2351,14 @@ void tcp_send_fin(struct sock *sk)
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct sk_buff *skb = tcp_write_queue_tail(sk);
 	int mss_now;
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+    /*
+    // To avoid duplicated msg.
+	if (IS_ERR(skb) || (!skb))
+		printk(KERN_ERR "[NET] skb is NULL in %s!\n", __func__);
+	*/
+#endif
 
 	/* Optimization, tack on the FIN if we have a queue of
 	 * unsent frames.  But be careful about outgoing SACKS
@@ -2637,6 +2666,11 @@ int tcp_connect(struct sock *sk)
 	buff = alloc_skb_fclone(MAX_TCP_HEADER + 15, sk->sk_allocation);
 	if (unlikely(buff == NULL))
 		return -ENOBUFS;
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (IS_ERR(buff) || (!buff))
+		printk(KERN_ERR "[NET] buff is NULL in %s!\n", __func__);
+#endif
 
 	/* Reserve space for headers. */
 	skb_reserve(buff, MAX_TCP_HEADER);

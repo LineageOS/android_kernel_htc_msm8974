@@ -29,7 +29,6 @@
 #include <linux/mutex.h>
 #include <linux/qpnp/qpnp-adc.h>
 
-/* Config/Control registers */
 #define CHG_CURRENT_CTRL_REG		0x0
 #define CHG_OTH_CURRENT_CTRL_REG	0x1
 #define VARIOUS_FUNC_REG		0x2
@@ -42,11 +41,9 @@
 #define FAULT_INT_REG			0xC
 #define STATUS_INT_REG			0xD
 
-/* Command registers */
 #define CMD_A_REG			0x30
 #define CMD_B_REG			0x31
 
-/* IRQ status registers */
 #define IRQ_A_REG			0x35
 #define IRQ_B_REG			0x36
 #define IRQ_C_REG			0x37
@@ -54,12 +51,10 @@
 #define IRQ_E_REG			0x39
 #define IRQ_F_REG			0x3A
 
-/* Status registers */
 #define STATUS_C_REG			0x3D
 #define STATUS_D_REG			0x3E
 #define STATUS_E_REG			0x3F
 
-/* Config bits */
 #define CHG_INHI_EN_MASK			BIT(1)
 #define CHG_INHI_EN_BIT				BIT(1)
 #define CMD_A_CHG_ENABLE_BIT			BIT(1)
@@ -82,7 +77,6 @@
 #define CHG_CTRL_APSD_EN_MASK			BIT(2)
 #define CHG_ITERM_MASK				0x07
 #define CHG_PIN_CTRL_USBCS_REG_BIT		0x0
-/* This is to select if use external pin EN to control CHG */
 #define CHG_PIN_CTRL_CHG_EN_LOW_PIN_BIT		(BIT(5) | BIT(6))
 #define CHG_PIN_CTRL_CHG_EN_LOW_REG_BIT		0x0
 #define CHG_PIN_CTRL_CHG_EN_MASK		(BIT(5) | BIT(6))
@@ -111,7 +105,6 @@
 #define THERM_A_THERM_MONITOR_EN_MASK		BIT(4)
 #define VFLOAT_MASK				0x3F
 
-/* IRQ status bits */
 #define IRQ_A_HOT_HARD_BIT			BIT(6)
 #define IRQ_A_COLD_HARD_BIT			BIT(4)
 #define IRQ_A_HOT_SOFT_BIT			BIT(2)
@@ -134,7 +127,6 @@
 #define IRQ_F_OTG_OC_BIT			BIT(6)
 #define IRQ_F_POWER_OK				BIT(0)
 
-/* Status  bits */
 #define STATUS_C_CHARGING_MASK			(BIT(1) | BIT(2))
 #define STATUS_C_FAST_CHARGING			BIT(2)
 #define STATUS_C_PRE_CHARGING			BIT(1)
@@ -151,7 +143,6 @@
 #define STATUS_D_PORT_ACA_C			BIT(6)
 #define STATUS_D_PORT_ACA_DOCK			BIT(7)
 
-/* constants */
 #define USB2_MIN_CURRENT_MA		100
 #define USB2_MAX_CURRENT_MA		500
 #define USB3_MIN_CURRENT_MA		150
@@ -204,12 +195,12 @@ struct smb358_charger {
 	int			charging_disabled;
 	int			fastchg_current_max_ma;
 
-	/* debugfs related */
+	
 #if defined(CONFIG_DEBUG_FS)
 	struct dentry		*debug_root;
 	u32			peek_poke_address;
 #endif
-	/* status tracking */
+	
 	bool			batt_full;
 	bool			batt_hot;
 	bool			batt_cold;
@@ -218,22 +209,22 @@ struct smb358_charger {
 	int			charging_disabled_status;
 	int			usb_suspended;
 
-	/* power supply */
+	
 	struct power_supply	*usb_psy;
 	struct power_supply	*bms_psy;
 	struct power_supply	batt_psy;
 
-	/* otg 5V regulator */
+	
 	struct smb358_regulator	otg_vreg;
 
-	/* adc_tm paramters */
+	
 	struct qpnp_vadc_chip	*vadc_dev;
 	struct qpnp_adc_tm_chip	*adc_tm_dev;
 	struct qpnp_adc_tm_btm_param	adc_param;
 	int			cold_bat_decidegc;
 	int			hot_bat_decidegc;
 	int			bat_present_decidegc;
-	/* i2c pull up regulator */
+	
 	struct regulator	*vcc_i2c;
 };
 
@@ -260,7 +251,6 @@ static int fast_chg_current[] = {
 	200, 450, 600, 900, 1300, 1500, 1800, 2000,
 };
 
-/* add supplied to "bms" function */
 static char *pm_batt_supplied_to[] = {
 	"bms",
 };
@@ -580,7 +570,7 @@ static int smb358_regulator_init(struct smb358_charger *chip)
 		return -EINVAL;
 	}
 
-	/* Give the name, then will register */
+	
 	if (init_data->constraints.name) {
 		chip->otg_vreg.rdesc.owner = THIS_MODULE;
 		chip->otg_vreg.rdesc.type = REGULATOR_VOLTAGE;
@@ -644,7 +634,7 @@ static int smb358_charging_disable(struct smb358_charger *chip,
 		pr_err("Failed to disable charging rc = %d\n", rc);
 		return rc;
 	} else {
-	/* will not modify online status in this condition */
+	
 		power_supply_changed(&chip->batt_psy);
 	}
 
@@ -658,10 +648,6 @@ static int smb358_hw_init(struct smb358_charger *chip)
 	int rc;
 	u8 reg = 0, mask = 0;
 
-	/*
-	 * If the charger is pre-configured for autonomous operation,
-	 * do not apply additonal settings
-	 */
 	if (chip->chg_autonomous_mode) {
 		dev_dbg(chip->dev, "Charger configured for autonomous mode\n");
 		return 0;
@@ -674,7 +660,7 @@ static int smb358_hw_init(struct smb358_charger *chip)
 		return rc;
 	}
 
-	/* setup defaults for CHG_CNTRL_REG */
+	
 	reg = CHG_CTRL_BATT_MISSING_DET_THERM_IO;
 	mask = CHG_CTRL_BATT_MISSING_DET_MASK;
 	rc = smb358_masked_write(chip, CHG_CTRL_REG, mask, reg);
@@ -682,7 +668,7 @@ static int smb358_hw_init(struct smb358_charger *chip)
 		dev_err(chip->dev, "Couldn't set CHG_CTRL_REG rc=%d\n", rc);
 		return rc;
 	}
-	/* setup defaults for PIN_CTRL_REG */
+	
 	reg = CHG_PIN_CTRL_USBCS_REG_BIT | CHG_PIN_CTRL_CHG_EN_LOW_REG_BIT |
 		CHG_PIN_CTRL_APSD_IRQ_BIT | CHG_PIN_CTRL_CHG_ERR_IRQ_BIT;
 	mask = CHG_PIN_CTRL_CHG_EN_MASK | CHG_PIN_CTRL_USBCS_REG_MASK |
@@ -694,7 +680,7 @@ static int smb358_hw_init(struct smb358_charger *chip)
 		return rc;
 	}
 
-	/* setup USB suspend and APSD  */
+	
 	rc = smb358_masked_write(chip, VARIOUS_FUNC_REG,
 		VARIOUS_FUNC_USB_SUSP_MASK, VARIOUS_FUNC_USB_SUSP_EN_REG_BIT);
 	if (rc) {
@@ -712,7 +698,7 @@ static int smb358_hw_init(struct smb358_charger *chip)
 				rc);
 		return rc;
 	}
-	/* Fault and Status IRQ configuration */
+	
 	reg = FAULT_INT_HOT_COLD_HARD_BIT | FAULT_INT_HOT_COLD_SOFT_BIT
 		| FAULT_INT_INPUT_UV_BIT | FAULT_INT_AICL_COMPLETE_BIT
 		| FAULT_INT_INPUT_OV_BIT;
@@ -730,7 +716,7 @@ static int smb358_hw_init(struct smb358_charger *chip)
 		dev_err(chip->dev, "Couldn't set STATUS_INT_REG rc=%d\n", rc);
 		return rc;
 	}
-	/* setup THERM Monitor */
+	
 	rc = smb358_masked_write(chip, THERM_A_CTRL_REG,
 		THERM_A_THERM_MONITOR_EN_MASK, THERM_A_THERM_MONITOR_EN_BIT);
 	if (rc) {
@@ -738,14 +724,14 @@ static int smb358_hw_init(struct smb358_charger *chip)
 				rc);
 		return rc;
 	}
-	/* set the fast charge current limit */
+	
 	rc = smb358_fastchg_current_set(chip);
 	if (rc) {
 		dev_err(chip->dev, "Couldn't set fastchg current rc=%d\n", rc);
 		return rc;
 	}
 
-	/* set the float voltage */
+	
 	rc = smb358_float_voltage_set(chip, chip->vfloat_mv);
 	if (rc < 0) {
 		dev_err(chip->dev,
@@ -753,17 +739,17 @@ static int smb358_hw_init(struct smb358_charger *chip)
 		return rc;
 	}
 
-	/* set iterm */
+	
 	rc = smb358_term_current_set(chip);
 	if (rc)
 		dev_err(chip->dev, "Couldn't set term current rc=%d\n", rc);
 
-	/* set recharge */
+	
 	rc = smb358_recharge_set(chip);
 	if (rc)
 		dev_err(chip->dev, "Couldn't set recharge para rc=%d\n", rc);
 
-	/* enable/disable charging */
+	
 	rc = smb358_charging_disable(chip, USER, !!chip->charging_disabled);
 	if (rc)
 		dev_err(chip->dev, "Couldn't '%s' charging rc = %d\n",
@@ -973,19 +959,19 @@ static int smb358_set_usb_chg_current(struct smb358_charger *chip,
 		current_ma = USB2_MIN_CURRENT_MA;
 
 	if (current_ma == USB2_MIN_CURRENT_MA) {
-		/* USB 2.0 - 100mA */
+		
 		reg1 &= ~USB3_ENABLE_BIT;
 		reg2 &= ~CMD_B_CHG_USB_500_900_ENABLE_BIT;
 	} else if (current_ma == USB2_MAX_CURRENT_MA) {
-		/* USB 2.0 - 500mA */
+		
 		reg1 &= ~USB3_ENABLE_BIT;
 		reg2 |= CMD_B_CHG_USB_500_900_ENABLE_BIT;
 	} else if (current_ma == USB3_MAX_CURRENT_MA) {
-		/* USB 3.0 - 900mA */
+		
 		reg1 |= USB3_ENABLE_BIT;
 		reg2 |= CMD_B_CHG_USB_500_900_ENABLE_BIT;
 	} else if (current_ma > USB2_MAX_CURRENT_MA) {
-		/* HC mode  - if none of the above */
+		
 		reg2 |= CMD_B_CHG_HC_ENABLE_BIT;
 
 		for (i = ARRAY_SIZE(chg_current) - 1; i >= 0; i--) {
@@ -1014,7 +1000,7 @@ static int smb358_set_usb_chg_current(struct smb358_charger *chip,
 	if (rc < 0)
 		dev_err(chip->dev, "Couldn't set USB3 mode rc = %d\n", rc);
 
-	/* Only set suspend bit when chg present and current_ma = 2 */
+	
 	if (current_ma == 2 && chip->chg_present) {
 		rc = smb358_path_suspend(chip, CURRENT, true);
 		if (rc < 0)
@@ -1123,12 +1109,6 @@ static int apsd_complete(struct smb358_charger *chip, u8 status)
 	u8 reg = 0;
 	enum power_supply_type type = POWER_SUPPLY_TYPE_UNKNOWN;
 
-	/*
-	 * If apsd is disabled, charger detection is done by
-	 * DCIN UV irq.
-	 * status = ZERO - indicates charger removed, handled
-	 * by DCIN UV irq
-	 */
 	if (chip->disable_apsd || status == 0) {
 		dev_dbg(chip->dev, "APSD %s, status = %d\n",
 			chip->disable_apsd ? "disabled" : "enabled", !!status);
@@ -1174,7 +1154,7 @@ static int apsd_complete(struct smb358_charger *chip, u8 status)
 
 	power_supply_set_charge_type(chip->usb_psy, type);
 
-	 /* SMB is now done sampling the D+/D- lines, indicate USB driver */
+	 
 	dev_dbg(chip->dev, "%s updating usb_psy present=%d", __func__,
 			chip->chg_present);
 	power_supply_set_present(chip->usb_psy, chip->chg_present);
@@ -1184,7 +1164,7 @@ static int apsd_complete(struct smb358_charger *chip, u8 status)
 
 static int chg_uv(struct smb358_charger *chip, u8 status)
 {
-	/* use this to detect USB insertion only if !apsd */
+	
 	if (chip->disable_apsd && status == 0) {
 		chip->chg_present = true;
 		dev_dbg(chip->dev, "%s updating usb_psy present=%d",
@@ -1198,7 +1178,7 @@ static int chg_uv(struct smb358_charger *chip, u8 status)
 		chip->chg_present = false;
 		dev_dbg(chip->dev, "%s updating usb_psy present=%d",
 				__func__, chip->chg_present);
-	/* we can't set usb_psy as UNKNOWN here, will lead USERSPACE issue */
+	
 		power_supply_set_present(chip->usb_psy, chip->chg_present);
 	}
 
@@ -1245,7 +1225,7 @@ static int taper_chg(struct smb358_charger *chip, u8 status)
 static int chg_recharge(struct smb358_charger *chip, u8 status)
 {
 	dev_dbg(chip->dev, "%s, status = %d\n", __func__, !!status);
-	/* to check the status mean */
+	
 	chip->batt_full = !status;
 	return 0;
 }
@@ -1269,19 +1249,19 @@ static void smb_chg_adc_notification(enum qpnp_tm_state state, void *ctx)
 
 	if (state == ADC_TM_WARM_STATE) {
 		if (temp > chip->hot_bat_decidegc) {
-			/* Normal to hot */
+			
 			bat_hot = true;
 			bat_cold = false;
 			bat_present = true;
 
 			chip->adc_param.low_temp =
 				chip->hot_bat_decidegc - HYSTERISIS_DECIDEGC;
-			/* shall we need add high_temp here? */
+			
 			chip->adc_param.state_request =
 				ADC_TM_COOL_THR_ENABLE;
 		} else if (temp >
 			chip->cold_bat_decidegc + HYSTERISIS_DECIDEGC) {
-			/* Cool to normal */
+			
 			bat_hot = false;
 			bat_cold = false;
 			bat_present = true;
@@ -1291,7 +1271,7 @@ static void smb_chg_adc_notification(enum qpnp_tm_state state, void *ctx)
 			chip->adc_param.state_request =
 					ADC_TM_HIGH_LOW_THR_ENABLE;
 		} else if (temp > chip->bat_present_decidegc) {
-			/* Present to cold */
+			
 			bat_hot = false;
 			bat_cold = true;
 			bat_present = true;
@@ -1303,7 +1283,7 @@ static void smb_chg_adc_notification(enum qpnp_tm_state state, void *ctx)
 		}
 	} else {
 		if (temp <= chip->bat_present_decidegc) {
-			/* Cold to present */
+			
 			bat_cold = true;
 			bat_hot = false;
 			bat_present = false;
@@ -1313,20 +1293,20 @@ static void smb_chg_adc_notification(enum qpnp_tm_state state, void *ctx)
 				ADC_TM_WARM_THR_ENABLE;
 		} else if (chip->bat_present_decidegc < temp &&
 				temp < chip->cold_bat_decidegc) {
-			/* Normal to cold */
+			
 			bat_hot = false;
 			bat_cold = true;
 			bat_present = true;
 			chip->adc_param.high_temp =
 				chip->cold_bat_decidegc + HYSTERISIS_DECIDEGC;
-			/* add low_temp to enable batt present check */
+			
 			chip->adc_param.low_temp =
 				chip->bat_present_decidegc;
 			chip->adc_param.state_request =
 				ADC_TM_HIGH_LOW_THR_ENABLE;
 		} else if (temp <
 				chip->hot_bat_decidegc - HYSTERISIS_DECIDEGC) {
-			/* Warm to normal */
+			
 			bat_hot = false;
 			bat_cold = false;
 			bat_present = true;
@@ -1346,7 +1326,7 @@ static void smb_chg_adc_notification(enum qpnp_tm_state state, void *ctx)
 	if (bat_hot ^ chip->batt_hot || bat_cold ^ chip->batt_cold) {
 		chip->batt_hot = bat_hot;
 		chip->batt_cold = bat_cold;
-		/* stop charging explicitly since we use PMIC thermal pin*/
+		
 		if (bat_hot || bat_cold || chip->battery_missing)
 			smb358_charging_disable(chip, THERMAL, 1);
 		else
@@ -1360,7 +1340,6 @@ static void smb_chg_adc_notification(enum qpnp_tm_state state, void *ctx)
 		pr_err("request ADC error\n");
 }
 
-/* only for SMB thermal */
 static int hot_hard_handler(struct smb358_charger *chip, u8 status)
 {
 	pr_debug("status = 0x%02x\n", status);
@@ -1982,7 +1961,7 @@ static int determine_initial_state(struct smb358_charger *chip)
 		return rc;
 	}
 
-	/* For current design, can ignore this */
+	
 	if (reg & IRQ_A_HOT_HARD_BIT)
 		chip->batt_hot = true;
 	if (reg & IRQ_A_COLD_HARD_BIT)
@@ -2128,7 +2107,7 @@ static int smb358_charger_probe(struct i2c_client *client,
 	chip->usb_psy = usb_psy;
 	chip->fake_battery_soc = -EINVAL;
 
-	/* early for VADC get, defer probe if needed */
+	
 	chip->vadc_dev = qpnp_get_vadc(chip->dev, "chg");
 	if (IS_ERR(chip->vadc_dev)) {
 		rc = PTR_ERR(chip->vadc_dev);
@@ -2137,7 +2116,7 @@ static int smb358_charger_probe(struct i2c_client *client,
 		return rc;
 	}
 
-	/* i2c pull up Regulator configuration */
+	
 	chip->vcc_i2c = regulator_get(&client->dev, "vcc-i2c");
 	if (IS_ERR(chip->vcc_i2c)) {
 		dev_err(&client->dev,
@@ -2170,7 +2149,7 @@ static int smb358_charger_probe(struct i2c_client *client,
 	mutex_init(&chip->read_write_lock);
 	mutex_init(&chip->path_suspend_lock);
 
-	/* probe the device to check if its actually connected */
+	
 	rc = smb358_read_reg(chip, CHG_OTH_CURRENT_CTRL_REG, &reg);
 	if (rc) {
 		pr_err("Failed to detect SMB358, device absent, rc = %d\n", rc);
@@ -2183,7 +2162,7 @@ static int smb358_charger_probe(struct i2c_client *client,
 		goto err_set_vtg_i2c;
 	}
 
-	/* using adc_tm for implementing pmic therm */
+	
 	if (chip->using_pmic_therm) {
 		chip->adc_tm_dev = qpnp_get_adc_tm(chip->dev, "chg");
 		if (IS_ERR(chip->adc_tm_dev)) {
@@ -2240,7 +2219,7 @@ static int smb358_charger_probe(struct i2c_client *client,
 		goto fail_smb358_hw_init;
 	}
 
-	/* We will not use it by default */
+	
 	if (gpio_is_valid(chip->chg_valid_gpio)) {
 		rc = gpio_request(chip->chg_valid_gpio, "smb358_chg_valid");
 		if (rc) {
@@ -2272,7 +2251,7 @@ static int smb358_charger_probe(struct i2c_client *client,
 	chip->irq_gpio = of_get_named_gpio_flags(chip->dev->of_node,
 				"qcom,irq-gpio", 0, NULL);
 
-	/* STAT irq configuration */
+	
 	if (gpio_is_valid(chip->irq_gpio)) {
 		rc = gpio_request(chip->irq_gpio, "smb358_irq");
 		if (rc) {
@@ -2309,7 +2288,7 @@ static int smb358_charger_probe(struct i2c_client *client,
 	}
 
 	if (chip->using_pmic_therm) {
-		/* add hot/cold temperature monitor */
+		
 		chip->adc_param.low_temp = chip->cold_bat_decidegc;
 		chip->adc_param.high_temp = chip->hot_bat_decidegc;
 		chip->adc_param.timer_interval = ADC_MEAS2_INTERVAL_1S;
@@ -2319,7 +2298,7 @@ static int smb358_charger_probe(struct i2c_client *client,
 				smb_chg_adc_notification;
 		chip->adc_param.channel = LR_MUX1_BATT_THERM;
 
-		/* update battery missing info in tm_channel_measure*/
+		
 		rc = qpnp_adc_tm_channel_measure(chip->adc_tm_dev,
 							&chip->adc_param);
 		if (rc)
@@ -2381,7 +2360,7 @@ static int smb358_suspend(struct device *dev)
 				"Couldn't save irq cfg regs rc = %d\n", rc);
 	}
 
-	/* enable wake up IRQs */
+	
 	rc = smb358_write_reg(chip, FAULT_INT_REG,
 			FAULT_INT_HOT_COLD_HARD_BIT | FAULT_INT_INPUT_UV_BIT);
 	if (rc < 0)
@@ -2428,7 +2407,7 @@ static int smb358_resume(struct device *dev)
 	int rc;
 	int i;
 
-	/* Restore IRQ config */
+	
 	for (i = 0; i < 2; i++) {
 		rc = smb358_write_reg(chip, FAULT_INT_REG + i,
 					chip->irq_cfg_mask[i]);

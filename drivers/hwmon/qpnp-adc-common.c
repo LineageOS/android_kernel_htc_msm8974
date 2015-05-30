@@ -30,21 +30,113 @@
 #include <linux/qpnp/qpnp-adc.h>
 #include <linux/platform_device.h>
 
-/* Min ADC code represets 0V */
 #define QPNP_VADC_MIN_ADC_CODE			0x6000
-/* Max ADC code represents full-scale range of 1.8V */
 #define QPNP_VADC_MAX_ADC_CODE			0xA800
 #define KELVINMIL_DEGMIL	273160
 
-/* Units for temperature below (on x axis) is in 0.1DegC as
-   required by the battery driver. Note the resolution used
-   here to compute the table was done for DegC to milli-volts.
-   In consideration to limit the size of the table for the given
-   temperature range below, the result is linearly interpolated
-   and provided to the battery driver in the units desired for
-   their framework which is 0.1DegC. True resolution of 0.1DegC
-   will result in the below table size to increase by 10 times */
 static const struct qpnp_vadc_map_pt adcmap_btm_threshold[] = {
+#if defined(CONFIG_HTC_BATT_8960)
+	{-200,	1670},
+	{-190,	1662},
+	{-180,	1654},
+	{-170,	1645},
+	{-160,	1636},
+	{-150,	1626},
+	{-140,	1616},
+	{-130,	1606},
+	{-120,	1595},
+	{-110,	1583},
+	{-100,	1571},
+	{-90,	1559},
+	{-80,	1546},
+	{-70,	1533},
+	{-60,	1519},
+	{-50,	1505},
+	{-40,	1491},
+	{-30,	1476},
+	{-20,	1460},
+	{-10,	1444},
+	{-0,	1428},
+	{10,	1411},
+	{20,	1393},
+	{30,	1376},
+	{40,	1358},
+	{50,	1339},
+	{60,	1321},
+	{70,	1301},
+	{80,	1282},
+	{90,	1262},
+	{100,	1242},
+	{110,	1222},
+	{120,	1202},
+	{130,	1181},
+	{140,	1161},
+	{150,	1140},
+	{160,	1119},
+	{170,	1097},
+	{180,	1077},
+	{190,	1055},
+	{200,	1034},
+	{210,	1013},
+	{220,	992},
+	{230,	971},
+	{240,	950},
+	{250,	930},
+	{260,	909},
+	{270,	889},
+	{280,	869},
+	{290,	849},
+	{300,	829},
+	{310,	810},
+	{320,	790},
+	{330,	772},
+	{340,	753},
+	{350,	735},
+	{360,	717},
+	{370,	700},
+	{380,	683},
+	{390,	666},
+	{400,	649},
+	{410,	633},
+	{420,	618},
+	{430,	602},
+	{440,	587},
+	{450,	573},
+	{460,	559},
+	{470,	545},
+	{480,	531},
+	{490,	518},
+	{500,	506},
+	{510,	493},
+	{520,	481},
+	{530,	470},
+	{540,	458},
+	{550,	447},
+	{560,	437},
+	{570,	426},
+	{580,	416},
+	{590,	406},
+	{600,	397},
+	{610,	388},
+	{620,	379},
+	{630,	371},
+	{640,	362},
+	{650,	354},
+	{660,	347},
+	{670,	339},
+	{680,	332},
+	{690,	325},
+	{700,	318},
+	{710,	312},
+	{720,	306},
+	{730,	299},
+	{740,	294},
+	{750,	288},
+	{760,	282},
+	{770,	277},
+	{780,	272},
+	{790,	267}
+#else
 	{-300,	1642},
 	{-200,	1544},
 	{-100,	1414},
@@ -128,6 +220,7 @@ static const struct qpnp_vadc_map_pt adcmap_btm_threshold[] = {
 	{770,	213},
 	{780,	208},
 	{790,	203}
+#endif
 };
 
 static const struct qpnp_vadc_map_pt adcmap_qrd_btm_threshold[] = {
@@ -292,7 +385,6 @@ static const struct qpnp_vadc_map_pt adcmap_qrd_skug_btm_threshold[] = {
 	{800,	582},
 };
 
-/* Voltage to temperature */
 static const struct qpnp_vadc_map_pt adcmap_100k_104ef_104fb[] = {
 	{1758,	-40},
 	{1742,	-35},
@@ -330,7 +422,6 @@ static const struct qpnp_vadc_map_pt adcmap_100k_104ef_104fb[] = {
 	{44,	125}
 };
 
-/* Voltage to temperature */
 static const struct qpnp_vadc_map_pt adcmap_150k_104ef_104fb[] = {
 	{1738,	-40},
 	{1714,	-35},
@@ -377,7 +468,7 @@ static int32_t qpnp_adc_map_voltage_temp(const struct qpnp_vadc_map_pt *pts,
 	if (pts == NULL)
 		return -EINVAL;
 
-	/* Check if table is descending or ascending */
+	
 	if (tablesize > 1) {
 		if (pts[0].x < pts[1].x)
 			descending = 0;
@@ -385,13 +476,9 @@ static int32_t qpnp_adc_map_voltage_temp(const struct qpnp_vadc_map_pt *pts,
 
 	while (i < tablesize) {
 		if ((descending == 1) && (pts[i].x < input)) {
-			/* table entry is less than measured
-				value and table is descending, stop */
 			break;
 		} else if ((descending == 0) &&
 				(pts[i].x > input)) {
-			/* table entry is greater than measured
-				value and table is ascending, stop */
 			break;
 		} else {
 			i++;
@@ -403,8 +490,8 @@ static int32_t qpnp_adc_map_voltage_temp(const struct qpnp_vadc_map_pt *pts,
 	else if (i == tablesize)
 		*output = pts[tablesize-1].y;
 	else {
-		/* result is between search_index and search_index-1 */
-		/* interpolate linearly */
+		
+		
 		*output = (((int32_t) ((pts[i].y - pts[i-1].y)*
 			(input - pts[i-1].x))/
 			(pts[i].x - pts[i-1].x))+
@@ -423,7 +510,7 @@ static int32_t qpnp_adc_map_temp_voltage(const struct qpnp_vadc_map_pt *pts,
 	if (pts == NULL)
 		return -EINVAL;
 
-	/* Check if table is descending or ascending */
+	
 	if (tablesize > 1) {
 		if (pts[0].y < pts[1].y)
 			descending = 0;
@@ -431,12 +518,8 @@ static int32_t qpnp_adc_map_temp_voltage(const struct qpnp_vadc_map_pt *pts,
 
 	while (i < tablesize) {
 		if ((descending == 1) && (pts[i].y < input)) {
-			/* table entry is less than measured
-				value and table is descending, stop */
 			break;
 		} else if ((descending == 0) && (pts[i].y > input)) {
-			/* table entry is greater than measured
-				value and table is ascending, stop */
 			break;
 		} else {
 			i++;
@@ -448,8 +531,8 @@ static int32_t qpnp_adc_map_temp_voltage(const struct qpnp_vadc_map_pt *pts,
 	} else if (i == tablesize) {
 		*output = pts[tablesize-1].x;
 	} else {
-		/* result is between search_index and search_index-1 */
-		/* interpolate linearly */
+		
+		
 		*output = (((int32_t) ((pts[i].x - pts[i-1].x)*
 			(input - pts[i-1].y))/
 			(pts[i].y - pts[i-1].y))+
@@ -514,7 +597,7 @@ int32_t qpnp_adc_scale_pmic_therm(struct qpnp_vadc_chip *vadc,
 	pmic_voltage += chan_properties->adc_graph[CALIB_ABSOLUTE].dx;
 
 	if (pmic_voltage > 0) {
-		/* 2mV/K */
+		
 		adc_chan_result->measurement = pmic_voltage*
 			chan_properties->offset_gain_denominator;
 
@@ -523,7 +606,7 @@ int32_t qpnp_adc_scale_pmic_therm(struct qpnp_vadc_chip *vadc,
 	} else {
 		adc_chan_result->measurement = 0;
 	}
-	/* Change to .001 deg C */
+	
 	adc_chan_result->measurement -= KELVINMIL_DEGMIL;
 	adc_chan_result->physical = (int32_t)adc_chan_result->measurement;
 
@@ -547,7 +630,7 @@ int32_t qpnp_adc_scale_millidegc_pmic_voltage_thr(struct qpnp_vadc_chip *chip,
 
 	/* Convert to Kelvin and account for voltage to be written as 2mV/K */
 	low_output = (param->low_temp + KELVINMIL_DEGMIL) * 2;
-	/* Convert to voltage threshold */
+	
 	low_output = (low_output - QPNP_ADC_625_UV) * btm_param.dy;
 	if (low_output < 0) {
 		sign = 1;
@@ -561,7 +644,7 @@ int32_t qpnp_adc_scale_millidegc_pmic_voltage_thr(struct qpnp_vadc_chip *chip,
 	sign = 0;
 	/* Convert to Kelvin and account for voltage to be written as 2mV/K */
 	high_output = (param->high_temp + KELVINMIL_DEGMIL) * 2;
-	/* Convert to voltage threshold */
+	
 	high_output = (high_output - QPNP_ADC_625_UV) * btm_param.dy;
 	if (high_output < 0) {
 		sign = 1;
@@ -583,9 +666,6 @@ int32_t qpnp_adc_scale_millidegc_pmic_voltage_thr(struct qpnp_vadc_chip *chip,
 }
 EXPORT_SYMBOL(qpnp_adc_scale_millidegc_pmic_voltage_thr);
 
-/* Scales the ADC code to degC using the mapping
- * table for the XO thermistor.
- */
 int32_t qpnp_adc_tdkntcg_therm(struct qpnp_vadc_chip *chip,
 		int32_t adc_code,
 		const struct qpnp_adc_properties *adc_properties,
@@ -728,7 +808,7 @@ int32_t qpnp_adc_tm_scale_voltage_therm_pu2(struct qpnp_vadc_chip *chip,
 {
 	int64_t adc_voltage = 0;
 	struct qpnp_vadc_linear_graph param1;
-	int negative_offset;
+	int negative_offset = 0;
 
 	qpnp_get_vadc_gain_and_offset(chip, &param1, CALIB_RATIOMETRIC);
 
@@ -843,19 +923,13 @@ int32_t qpnp_adc_scale_default(struct qpnp_vadc_chip *vadc,
 	adc_chan_result->measurement = scale_voltage *
 				chan_properties->offset_gain_denominator;
 
-	/* do_div only perform positive integer division! */
+	
 	do_div(adc_chan_result->measurement,
 				chan_properties->offset_gain_numerator);
 
 	if (negative_rawfromoffset)
 		adc_chan_result->measurement = -adc_chan_result->measurement;
 
-	/*
-	 * Note: adc_chan_result->measurement is in the unit of
-	 * adc_properties.adc_reference. For generic channel processing,
-	 * channel measurement is a scale/ratio relative to the adc
-	 * reference input
-	 */
 	adc_chan_result->physical = adc_chan_result->measurement;
 
 	return 0;
@@ -969,9 +1043,9 @@ int32_t qpnp_adc_btm_scaler(struct qpnp_vadc_chip *chip,
 	do_div(high_output, btm_param.adc_vref);
 	high_output += btm_param.adc_gnd;
 
-	/* btm low temperature correspondes to high voltage threshold */
+	
 	*low_threshold = high_output;
-	/* btm high temperature correspondes to low voltage threshold */
+	
 	*high_threshold = low_output;
 
 	pr_debug("high_volt:%d, low_volt:%d\n", *high_threshold,
@@ -1190,7 +1264,7 @@ int32_t qpnp_adc_get_devicetree_data(struct spmi_device *spmi,
 			pr_err("Invalid channel fast average setup\n");
 			return -EINVAL;
 		}
-		/* Individual channel properties */
+		
 		adc_channel_list[i].name = (char *)channel_name;
 		adc_channel_list[i].channel_num = channel_num;
 		adc_channel_list[i].adc_decimation = decimation;
@@ -1201,10 +1275,11 @@ int32_t qpnp_adc_get_devicetree_data(struct spmi_device *spmi,
 			adc_channel_list[i].hw_settle_time = hw_settle_time;
 			adc_channel_list[i].calib_type = calib_type;
 		}
+		pr_err("adc_channel name=%s, num=%d cnt=%d\n", adc_channel_list[i].name,adc_channel_list[i].channel_num, i);
 		i++;
 	}
 
-	/* Get the ADC VDD reference voltage and ADC bit resolution */
+	
 	rc = of_property_read_u32(node, "qcom,adc-vdd-reference",
 			&adc_prop->adc_vdd_reference);
 	if (rc) {
@@ -1219,7 +1294,7 @@ int32_t qpnp_adc_get_devicetree_data(struct spmi_device *spmi,
 	}
 	adc_qpnp->adc_prop = adc_prop;
 
-	/* Get the peripheral address */
+	
 	res = spmi_get_resource(spmi, 0, IORESOURCE_MEM, 0);
 	if (!res) {
 		pr_err("No base address definition\n");
@@ -1229,7 +1304,7 @@ int32_t qpnp_adc_get_devicetree_data(struct spmi_device *spmi,
 	adc_qpnp->slave = spmi->sid;
 	adc_qpnp->offset = res->start;
 
-	/* Register the ADC peripheral interrupt */
+	
 	adc_qpnp->adc_irq_eoc = spmi_get_irq_byname(spmi, NULL,
 						"eoc-int-en-set");
 	if (adc_qpnp->adc_irq_eoc < 0) {

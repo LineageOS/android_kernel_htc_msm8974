@@ -77,6 +77,9 @@ static void msm_vb2_buf_queue(struct vb2_buffer *vb)
 
 	spin_lock_irqsave(&stream->stream_lock, flags);
 	list_add_tail(&msm_vb2->list, &stream->queued_list);
+	
+	stream->num_total++;
+	
 	spin_unlock_irqrestore(&stream->stream_lock, flags);
 }
 
@@ -105,6 +108,9 @@ static int msm_vb2_buf_finish(struct vb2_buffer *vb)
 		list) {
 		if (msm_vb2_entry == msm_vb2) {
 			list_del_init(&msm_vb2_entry->list);
+			
+			stream->num_total--;
+			
 			break;
 		}
 	}
@@ -117,6 +123,10 @@ static void msm_vb2_buf_cleanup(struct vb2_buffer *vb)
 	struct msm_vb2_buffer *msm_vb2;
 	struct msm_stream *stream;
 	unsigned long flags;
+	
+	struct list_head *p;
+	unsigned int num_count_list = 0;
+	
 
 	msm_vb2 = container_of(vb, struct msm_vb2_buffer, vb2_buf);
 
@@ -132,6 +142,15 @@ static void msm_vb2_buf_cleanup(struct vb2_buffer *vb)
 	}
 
 	spin_lock_irqsave(&stream->stream_lock, flags);
+	
+	list_for_each(p, &stream->queued_list) {
+		++num_count_list;
+	}
+	if (num_count_list != stream->num_total || stream->num_lend > 0)
+		pr_err("%s:%d] CAMDBUF Error some buf lost!!", __func__, __LINE__);
+	stream->num_total = 0;
+	stream->num_lend = 0;
+	
 	INIT_LIST_HEAD(&stream->queued_list);
 	spin_unlock_irqrestore(&stream->stream_lock, flags);
 }
@@ -212,6 +231,9 @@ static struct vb2_buffer *msm_vb2_get_buf(int session_id,
 			continue;
 
 		msm_vb2->in_freeq = 1;
+		
+		stream->num_lend++;
+		
 		goto end;
 	}
 	msm_vb2 = NULL;
@@ -238,6 +260,9 @@ static int msm_vb2_put_buf(struct vb2_buffer *vb, int session_id,
 			container_of(vb, struct msm_vb2_buffer, vb2_buf);
 		if (msm_vb2->in_freeq) {
 			msm_vb2->in_freeq = 0;
+			
+			stream->num_lend--;
+			
 			rc = 0;
 		} else
 			rc = -EINVAL;
@@ -277,10 +302,13 @@ static int msm_vb2_buf_done(struct vb2_buffer *vb, int session_id,
 		}
 		msm_vb2 =
 			container_of(vb, struct msm_vb2_buffer, vb2_buf);
-		/* put buf before buf done */
+		
 		if (msm_vb2->in_freeq) {
 			vb2_buffer_done(vb, VB2_BUF_STATE_DONE);
 			msm_vb2->in_freeq = 0;
+			
+			stream->num_lend--;
+			
 			rc = 0;
 		} else
 			rc = -EINVAL;
