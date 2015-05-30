@@ -61,6 +61,7 @@ enum usb_otg_event {
 	 * within TB_SRP_FAIL time.
 	 */
 	OTG_EVENT_NO_RESP_FOR_SRP,
+	OTG_EVENT_INSUFFICIENT_POWER,
 };
 
 enum usb_phy_events {
@@ -149,6 +150,9 @@ struct usb_phy {
 	int	(*set_suspend)(struct usb_phy *x,
 				int suspend);
 
+	
+	void	(*notify_usb_attached)(struct usb_phy *x);
+	void	(*notify_usb_disabled)(void);
 	/* To enable/disable phy autosuspend feature */
 	int	(*set_phy_autosuspend)(struct usb_phy *x,
 					int enable_autosuspend);

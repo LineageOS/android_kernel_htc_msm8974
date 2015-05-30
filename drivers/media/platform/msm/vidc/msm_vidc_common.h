@@ -38,7 +38,6 @@ void msm_comm_scale_clocks_and_bus(struct msm_vidc_inst *inst);
 int msm_comm_flush(struct msm_vidc_inst *inst, u32 flags);
 int msm_comm_release_scratch_buffers(struct msm_vidc_inst *inst);
 int msm_comm_release_persist_buffers(struct msm_vidc_inst *inst);
-int msm_comm_release_output_buffers(struct msm_vidc_inst *inst);
 int msm_comm_force_cleanup(struct msm_vidc_inst *inst);
 int msm_comm_suspend(int core_id);
 enum hal_extradata_id msm_comm_get_hal_extradata_index(
@@ -52,7 +51,7 @@ struct hal_buffer_requirements *get_buff_req_buffer(
 		V4L2_CTRL_DRIVER_PRIV(idx))
 
 int msm_comm_check_scaling_supported(struct msm_vidc_inst *inst);
-int msm_comm_kill_session(struct msm_vidc_inst *inst);
+int msm_comm_recover_from_session_error(struct msm_vidc_inst *inst);
 enum multi_stream msm_comm_get_stream_output_mode(struct msm_vidc_inst *inst);
 enum hal_buffer msm_comm_get_hal_output_buffer(struct msm_vidc_inst *inst);
 struct msm_smem *msm_comm_smem_alloc(struct msm_vidc_inst *inst,
