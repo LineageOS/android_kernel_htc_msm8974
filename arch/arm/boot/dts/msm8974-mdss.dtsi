@@ -100,10 +100,56 @@
 		qcom,mdss-prefill-pingpong-buffer-pixels = <4096>;
 		qcom,mdss-prefill-fbc-lines = <2>;
 
+		htc,mdss-pp-pcc-settings1 {
+				htc,pcc-mode = "normal";
+				htc,pcc-enable = <0>;
+		};
+
+		htc,mdss-pp-pcc-settings2 {
+				htc,pcc-mode = "negative";
+				htc,pcc-enable = <1>;
+				htc,pcc-configs = <0x0030 0x00007ff8>,
+					<0x0034 0x00007ff8>,
+					<0x0038 0x00007ff8>,
+					<0x0040 0x00018000>,
+					<0x0044 0x00000000>,
+					<0x0048 0x00000000>,
+					<0x0050 0x00000000>,
+					<0x0054 0x00018000>,
+					<0x0058 0x00000000>,
+					<0x0060 0x00000000>,
+					<0x0064 0x00000000>,
+					<0x0068 0x00018000>,
+					<0x0070 0x00000000>,
+					<0x0074 0x00000000>,
+					<0x0078 0x00000000>,
+					<0x0080 0x00000000>,
+					<0x0084 0x00000000>,
+					<0x0088 0x00000000>,
+					<0x0090 0x00000000>,
+					<0x0094 0x00000000>,
+					<0x0098 0x00000000>,
+					<0x00a0 0x00000000>,
+					<0x00a4 0x00000000>,
+					<0x00a8 0x00000000>,
+					<0x00b0 0x00000000>,
+					<0x00b4 0x00000000>,
+					<0x00b8 0x00000000>,
+					<0x00c0 0x00000000>,
+					<0x00c4 0x00000000>,
+					<0x00c8 0x00000000>,
+					<0x00d0 0x00000000>,
+					<0x00d4 0x00000000>,
+					<0x00d8 0x00000000>,
+					<0x00e0 0x00000000>,
+					<0x00e4 0x00000000>,
+					<0x00e8 0x00000000>;
+		};
+
 		mdss_fb0: qcom,mdss_fb_primary {
 			cell-index = <0>;
 			compatible = "qcom,mdss-fb";
-			qcom,memblock-reserve = <0x03200000 0x01E00000>;
+			htc,fbmem-heap-remapping;
 		};
 
 		mdss_fb1: qcom,mdss_fb_external {
@@ -121,17 +167,12 @@
 		compatible = "qcom,mdss-dsi-ctrl";
 		label = "MDSS DSI CTRL->0";
 		cell-index = <0>;
-		reg = 	<0xfd922800 0x1f8>,
-			<0xfd922b00 0x2b0>,
-			<0xfdf30000 0x108>;
-		reg-names = "dsi_ctrl", "dsi_phy", "mmss_misc_phys";
+		reg = <0xfd922800 0x600>;
 		vdd-supply = <&pm8941_l22>;
 		vddio-supply = <&pm8941_l12>;
 		vdda-supply = <&pm8941_l2>;
 		qcom,mdss-fb-map = <&mdss_fb0>;
 		qcom,mdss-mdp = <&mdss_mdp>;
-		qcom,platform-reset-gpio = <&pm8941_gpios 19 0>;
-		qcom,platform-enable-gpio = <&msmgpio 58 0>;
 		qcom,platform-te-gpio = <&msmgpio 12 0>;
 		qcom,platform-strength-ctrl = [ff 06];
 		qcom,platform-bist-ctrl = [00 00 b1 ff 00 00];
@@ -180,10 +221,7 @@
 		compatible = "qcom,mdss-dsi-ctrl";
 		label = "MDSS DSI CTRL->1";
 		cell-index = <1>;
-		reg = 	<0xfd922e00 0x1f8>,
-			<0xfd923100 0x2b0>,
-			<0xfdf30000 0x108>;
-		reg-names = "dsi_ctrl", "dsi_phy", "mmss_misc_phys";
+		reg = <0xfd922e00 0x600>;
 		vdd-supply = <&pm8941_l22>;
 		vddio-supply = <&pm8941_l12>;
 		vdda-supply = <&pm8941_l2>;
@@ -248,8 +286,6 @@
 		qcom,hdmi-tx-min-voltage-level = <0 0 1800000 1800000>;
 		qcom,hdmi-tx-max-voltage-level = <0 0 1800000 1800000>;
 		qcom,hdmi-tx-peak-current = <0 0 300000 0>;
-
-		qcom,hdmi-tx-cec = <&msmgpio 31 0>;
 		qcom,hdmi-tx-ddc-clk = <&msmgpio 32 0>;
 		qcom,hdmi-tx-ddc-data = <&msmgpio 33 0>;
 		qcom,hdmi-tx-hpd = <&msmgpio 34 0>;

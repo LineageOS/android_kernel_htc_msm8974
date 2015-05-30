@@ -21,7 +21,6 @@
 #include <linux/notifier.h>
 
 #include "mdss_panel.h"
-#include "mdss_mdp_splash_logo.h"
 
 #define MSM_FB_DEFAULT_PAGE_SIZE 2
 #define MFD_KEY  0x11161126
@@ -34,6 +33,8 @@
 #define WAIT_DISP_OP_TIMEOUT ((WAIT_FENCE_FIRST_TIMEOUT + \
 		WAIT_FENCE_FINAL_TIMEOUT) * MDP_MAX_FENCE_FD)
 
+#define SPLASH_THREAD_WAIT_TIMEOUT 3
+
 #ifndef MAX
 #define  MAX(x, y) (((x) > (y)) ? (x) : (y))
 #endif
@@ -42,8 +43,6 @@
 #define  MIN(x, y) (((x) < (y)) ? (x) : (y))
 #endif
 
-#define MDP_PP_AD_BL_LINEAR	0x0
-#define MDP_PP_AD_BL_LINEAR_INV	0x1
 
 /**
  * enum mdp_notify_event - Different frame events to indicate frame update state
@@ -71,6 +70,11 @@ enum mdp_notify_event {
 	MDP_NOTIFY_FRAME_TIMEOUT,
 };
 
+enum mdp_splash_event {
+	MDP_CREATE_SPLASH_OV = 0,
+	MDP_REMOVE_SPLASH_OV,
+};
+
 struct disp_info_type_suspend {
 	int op_enable;
 	int panel_power_on;
@@ -83,8 +87,6 @@ struct disp_info_notify {
 	struct mutex lock;
 	int value;
 	int is_suspend;
-	int ref_count;
-	bool init_done;
 };
 
 struct msm_sync_pt_data {
@@ -115,26 +117,26 @@ struct msm_mdp_interface {
 	int (*init_fnc)(struct msm_fb_data_type *mfd);
 	int (*on_fnc)(struct msm_fb_data_type *mfd);
 	int (*off_fnc)(struct msm_fb_data_type *mfd);
-	/* called to release resources associated to the process */
+	
 	int (*release_fnc)(struct msm_fb_data_type *mfd, bool release_all);
 	int (*kickoff_fnc)(struct msm_fb_data_type *mfd,
 					struct mdp_display_commit *data);
 	int (*ioctl_handler)(struct msm_fb_data_type *mfd, u32 cmd, void *arg);
-	void (*dma_fnc)(struct msm_fb_data_type *mfd);
+	void (*dma_fnc)(struct msm_fb_data_type *mfd, struct mdp_overlay *req,
+				int image_len, int *pipe_ndx);
 	int (*cursor_update)(struct msm_fb_data_type *mfd,
 				struct fb_cursor *cursor);
 	int (*lut_update)(struct msm_fb_data_type *mfd, struct fb_cmap *cmap);
 	int (*do_histogram)(struct msm_fb_data_type *mfd,
 				struct mdp_histogram *hist);
-	int (*ad_calc_bl)(struct msm_fb_data_type *mfd, int bl_in,
-		int *bl_out, bool *bl_out_notify);
+	int (*update_ad_input)(struct msm_fb_data_type *mfd);
 	int (*panel_register_done)(struct mdss_panel_data *pdata);
 	u32 (*fb_stride)(u32 fb_index, u32 xres, int bpp);
-	int (*splash_init_fnc)(struct msm_fb_data_type *mfd);
+	int (*splash_fnc) (struct msm_fb_data_type *mfd, int *index, int req);
 	struct msm_sync_pt_data *(*get_sync_fnc)(struct msm_fb_data_type *mfd,
 				const struct mdp_buf_sync *buf_sync);
 	void (*check_dsi_status)(struct work_struct *work, uint32_t interval);
-	int (*configure_panel)(struct msm_fb_data_type *mfd, int mode);
+	void (*display_on)(struct msm_fb_data_type *mfd);
 	void *private1;
 };
 
@@ -179,6 +181,7 @@ struct msm_fb_data_type {
 
 	u32 dst_format;
 	int panel_power_on;
+	int request_display_on;
 	struct disp_info_type_suspend suspend;
 
 	struct ion_handle *ihdl;
@@ -190,7 +193,6 @@ struct msm_fb_data_type {
 	int ext_ad_ctrl;
 	u32 ext_bl_ctrl;
 	u32 calib_mode;
-	u32 ad_bl_level;
 	u32 bl_level;
 	u32 bl_scale;
 	u32 bl_min_lvl;
@@ -199,6 +201,7 @@ struct msm_fb_data_type {
 	u32 bl_level_scaled;
 	u32 bl_level_prev_scaled;
 	struct mutex bl_lock;
+	struct mutex lock;
 
 	struct platform_device *pdev;
 
@@ -221,7 +224,8 @@ struct msm_fb_data_type {
 	wait_queue_head_t kickoff_wait_q;
 	bool shutdown_pending;
 
-	struct msm_fb_splash_info splash_info;
+	struct task_struct *splash_thread;
+	bool splash_logo_enabled;
 
 	wait_queue_head_t ioctl_q;
 	atomic_t ioctl_ref_cnt;
@@ -229,12 +233,12 @@ struct msm_fb_data_type {
 	struct msm_fb_backup_type msm_fb_backup;
 	struct completion power_set_comp;
 	u32 is_power_setting;
+	u32 is_active;
 
 	u32 dcm_state;
 	struct list_head proc_list;
 	u32 wait_for_kickoff;
-	struct ion_client *fb_ion_client;
-	struct ion_handle *fb_ion_handle;
+	int pan_pid;
 };
 
 static inline void mdss_fb_update_notify_update(struct msm_fb_data_type *mfd)
@@ -265,5 +269,6 @@ struct sync_fence *mdss_fb_sync_get_fence(struct sw_sync_timeline *timeline,
 				const char *fence_name, int val);
 int mdss_fb_register_mdp_instance(struct msm_mdp_interface *mdp);
 int mdss_fb_dcm(struct msm_fb_data_type *mfd, int req_state);
+#define DEFAULT_BRIGHTNESS 143
 int mdss_fb_suspres_panel(struct device *dev, void *data);
 #endif /* MDSS_FB_H */

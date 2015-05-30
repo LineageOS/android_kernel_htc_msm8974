@@ -20,7 +20,7 @@
 #define RESET_AND_QUEUE 1
 
 #define CHK_OVERFLOW(bufStart, start, end, length) \
-	((((bufStart) <= (start)) && ((end) - (start) >= (length))) ? 1 : 0)
+	((((bufStart) <= (start)) && ((end) - (start) >= (length)) && (length > 0)) ? 1 : 0)
 
 void diagfwd_init(void);
 void diagfwd_exit(void);
@@ -65,4 +65,9 @@ int diagfwd_disconnect(void);
 extern int diag_debug_buf_idx;
 extern unsigned char diag_debug_buf[1024];
 extern struct platform_driver msm_diag_dci_driver;
+
+#define SMD_FUNC_CLOSE 0
+#define SMD_FUNC_OPEN_DIAG 1
+#define SMD_FUNC_OPEN_BT 2
+void diag_smd_enable(smd_channel_t *ch, char *src, int mode);
 #endif
