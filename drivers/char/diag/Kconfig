@@ -39,3 +39,12 @@ config DIAGFWD_BRIDGE_CODE
 	help
 	 SMUX/HSIC Transport Layer for DIAG Router
 endmenu
+
+menu "DIAG RB Dump support for DIAG"
+
+config DIAG_RB_DUMP
+	default n
+	bool "Enable DIAG RB Dump"
+	help
+	 Support to dump diag packets to diag ring buffer on RAM
+endmenu

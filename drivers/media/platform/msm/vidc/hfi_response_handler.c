@@ -20,6 +20,9 @@
 #include "msm_vidc_debug.h"
 #include "vidc_hfi.h"
 
+#ifdef REDUCE_KERNEL_ERROR_LOG
+static int debug_kernel_count=0;
+#endif
 static enum vidc_status hfi_map_err_status(int hfi_err)
 {
 	enum vidc_status vidc_err;
@@ -215,7 +218,6 @@ static void hfi_process_session_error(
 	cmd_done.device_id = device_id;
 	cmd_done.session_id = ((struct hal_session *) pkt->session_id)->
 		session_id;
-	cmd_done.status = hfi_map_err_status(pkt->event_data1);
 	dprintk(VIDC_INFO, "Received : SESSION_ERROR with event id : %d\n",
 		pkt->event_data1);
 	switch (pkt->event_data1) {
@@ -223,7 +225,6 @@ static void hfi_process_session_error(
 	case HFI_ERR_SESSION_UNSUPPORT_BUFFERTYPE:
 	case HFI_ERR_SESSION_UNSUPPORTED_SETTING:
 	case HFI_ERR_SESSION_UPSCALE_NOT_SUPPORTED:
-		cmd_done.status = VIDC_ERR_NONE;
 		dprintk(VIDC_INFO, "Non Fatal : HFI_EVENT_SESSION_ERROR\n");
 		break;
 	default:
@@ -249,8 +250,18 @@ static void hfi_process_event_notify(
 
 	switch (pkt->event_id) {
 	case HFI_EVENT_SYS_ERROR:
-		dprintk(VIDC_ERR, "HFI_EVENT_SYS_ERROR: %d, 0x%x\n",
-			pkt->event_data1, pkt->event_data2);
+#ifdef REDUCE_KERNEL_ERROR_LOG
+		if(debug_kernel_count<=10)
+		{
+                dprintk(VIDC_ERR, "HFI_EVENT_SYS_ERROR[%u]: %d, 0x%x\n",
+                        pkt->session_id, pkt->event_data1, pkt->event_data2);
+
+		debug_kernel_count++;
+		}
+#else
+                dprintk(VIDC_ERR, "HFI_EVENT_SYS_ERROR[%u]: %d, 0x%x\n",
+                        pkt->session_id, pkt->event_data1, pkt->event_data2);
+#endif
 		hfi_process_sys_error(callback, device_id);
 		break;
 	case HFI_EVENT_SESSION_ERROR:
@@ -294,7 +305,9 @@ static void hfi_process_sys_init_done(
 	u8 *data_ptr;
 	int prop_id;
 	enum vidc_status status = VIDC_ERR_NONE;
-
+#ifdef REDUCE_KERNEL_ERROR_LOG
+	debug_kernel_count=0;
+#endif
 	dprintk(VIDC_DBG, "RECEIVED:SYS_INIT_DONE");
 	if (sizeof(struct hfi_msg_sys_init_done_packet) > pkt->size) {
 		dprintk(VIDC_ERR, "hal_process_sys_init_done:bad_pkt_size: %d",
@@ -836,9 +849,12 @@ static void hfi_process_session_init_done(
 	} else {
 		sess_close = (struct hal_session *)pkt->session_id;
 		if (sess_close) {
-			dprintk(VIDC_WARN,
-				"Sess init failed: 0x%x, 0x%p",
+			dprintk(VIDC_INFO,
+				"Sess init failed: Deleting session: 0x%x 0x%p",
 				sess_close->session_id, sess_close);
+			list_del(&sess_close->list);
+			kfree(sess_close);
+			sess_close = NULL;
 		}
 	}
 	cmd_done.size = sizeof(struct vidc_hal_session_init_done);
@@ -1068,7 +1084,9 @@ static void hfi_process_session_stop_done(
 		struct hfi_msg_session_stop_done_packet *pkt)
 {
 	struct msm_vidc_cb_cmd_done cmd_done;
-
+#ifdef REDUCE_KERNEL_ERROR_LOG
+	debug_kernel_count=0;
+#endif
 	dprintk(VIDC_DBG, "RECEIVED: SESSION_STOP_DONE[%u]\n",
 		pkt->session_id);
 
@@ -1183,6 +1201,8 @@ static void hfi_process_session_abort_done(
 				__func__, pkt ? pkt->size : 0);
 		return;
 	}
+        dprintk(VIDC_DBG, "RECEIVED:SESSION_RELEASE_BUFFER_DONE[%u]",
+                pkt->session_id);
 	memset(&cmd_done, 0, sizeof(struct msm_vidc_cb_cmd_done));
 	cmd_done.device_id = device_id;
 	cmd_done.session_id =
@@ -1266,7 +1286,6 @@ static void hfi_process_sys_get_prop_image_version(
 }
 
 static void hfi_process_sys_property_info(
-		msm_vidc_callback callback, u32 device_id,
 		struct hfi_msg_sys_property_info_packet *pkt)
 {
 	if (!pkt) {
@@ -1336,7 +1355,7 @@ u32 hfi_process_msg_packet(
 						msg_hdr);
 		break;
 	case HFI_MSG_SYS_PROPERTY_INFO:
-		hfi_process_sys_property_info(callback, device_id,
+		hfi_process_sys_property_info(
 		   (struct hfi_msg_sys_property_info_packet *)
 			msg_hdr);
 		break;

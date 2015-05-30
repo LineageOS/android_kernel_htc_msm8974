@@ -26,9 +26,8 @@
 #include <sound/q6afe-v2.h>
 #include <sound/q6audio-v2.h>
 #include <sound/apr_audio-v2.h>
-#include <q6voice.h>
+#include "q6voice.h"
 #include "audio_acdb.h"
-
 
 #ifndef CONFIG_RTAC
 
@@ -50,7 +49,6 @@ bool rtac_make_voice_callback(u32 mode, uint32_t *payload,
 
 #else
 
-/* Max size of payload (buf size - apr header) */
 #define MAX_PAYLOAD_SIZE		4076
 #define RTAC_MAX_ACTIVE_DEVICES		4
 #define RTAC_MAX_ACTIVE_VOICE_COMBOS	2
@@ -60,11 +58,8 @@ bool rtac_make_voice_callback(u32 mode, uint32_t *payload,
 #define TIMEOUT_MS	1000
 
 struct rtac_cal_block_data	rtac_cal[MAX_RTAC_BLOCKS] = {
-/* ADM_RTAC_CAL */
 	{{RTAC_BUF_SIZE, 0, 0, 0}, {0, 0, 0} },
-/* ASM_RTAC_CAL */
 	{{RTAC_BUF_SIZE, 0, 0, 0}, {0, 0, 0} },
-/* VOICE_RTAC_CAL */
 	{{RTAC_BUF_SIZE, 0, 0, 0}, {0, 0, 0} }
 };
 
@@ -75,7 +70,6 @@ struct rtac_common_data {
 
 static struct rtac_common_data		rtac_common;
 
-/* APR data */
 struct rtac_apr_data {
 	void			*apr_handle;
 	atomic_t		cmd_state;
@@ -87,7 +81,6 @@ static struct rtac_apr_data	rtac_asm_apr_data[SESSION_MAX+1];
 static struct rtac_apr_data	rtac_voice_apr_data[RTAC_VOICE_MODES];
 
 
-/* ADM info & APR */
 struct rtac_adm_data {
 	uint32_t	topology_id;
 	uint32_t	afe_port;
@@ -103,7 +96,6 @@ struct rtac_adm {
 static struct rtac_adm		rtac_adm_data;
 
 
-/* ADM V2 data */
 struct rtac_popp_data {
 	uint32_t	popp;
 	uint32_t	popp_topology;
@@ -126,11 +118,9 @@ static struct rtac_adm_v2	rtac_adm_data_v2;
 static u32			*rtac_adm_buffer;
 
 
-/* ASM APR */
 static u32			*rtac_asm_buffer;
 
 
-/* Voice info & APR */
 struct rtac_voice_data {
 	uint32_t	tx_topology_id;
 	uint32_t	rx_topology_id;
@@ -155,6 +145,7 @@ struct mutex			rtac_adm_apr_mutex;
 struct mutex			rtac_asm_apr_mutex;
 struct mutex			rtac_voice_mutex;
 struct mutex			rtac_voice_apr_mutex;
+struct mutex			rtac_ioctl_mutex;
 
 int rtac_clear_mapping(uint32_t cal_type)
 {
@@ -380,7 +371,6 @@ done:
 }
 
 
-/* ADM Info V2 */
 static void add_popp_v2(u32 dev_idx, u32 port_id, u32 popp_id)
 {
 	u32 i = 0;
@@ -396,9 +386,6 @@ static void add_popp_v2(u32 dev_idx, u32 port_id, u32 popp_id)
 	}
 	rtac_adm_data_v2.device[dev_idx].popp[
 		rtac_adm_data_v2.device[dev_idx].num_of_popp].popp = popp_id;
-	rtac_adm_data_v2.device[dev_idx].popp[
-		rtac_adm_data_v2.device[dev_idx].num_of_popp++].popp_topology =
-		get_asm_topology();
 done:
 	return;
 }
@@ -415,7 +402,7 @@ static void rtac_add_adm_device_v2(u32 port_id, u32 copp_id, u32 path_id,
 		goto done;
 	}
 
-	/* Check if device already added */
+	
 	if (rtac_adm_data_v2.num_of_dev != 0) {
 		for (; i < rtac_adm_data_v2.num_of_dev; i++) {
 			if (rtac_adm_data_v2.device[i].afe_port == port_id) {
@@ -430,7 +417,7 @@ static void rtac_add_adm_device_v2(u32 port_id, u32 copp_id, u32 path_id,
 		}
 	}
 
-	/* Add device */
+	
 	rtac_adm_data_v2.num_of_dev++;
 
 	if (path_id == ADM_PATH_PLAYBACK)
@@ -443,9 +430,15 @@ static void rtac_add_adm_device_v2(u32 port_id, u32 copp_id, u32 path_id,
 	rtac_adm_data_v2.device[i].copp = copp_id;
 	rtac_adm_data_v2.device[i].popp[
 		rtac_adm_data_v2.device[i].num_of_popp].popp = popp_id;
-	rtac_adm_data_v2.device[i].popp[
-		rtac_adm_data_v2.device[i].num_of_popp++].popp_topology =
-		get_asm_topology();
+	if(popp_id < SESSION_MAX)
+		rtac_adm_data_v2.device[i].popp[
+			rtac_adm_data_v2.device[i].num_of_popp++].popp_topology =
+			get_asm_topology(popp_id);
+	else
+		rtac_adm_data_v2.device[i].popp[
+			rtac_adm_data_v2.device[i].num_of_popp++].popp_topology =
+			get_asm_topology(0);
+
 done:
 	return;
 }
@@ -485,7 +478,7 @@ static void rtac_remove_adm_device_v2(u32 port_id)
 	s32 i;
 	pr_debug("%s: port_id = %d\n", __func__, port_id);
 
-	/* look for device */
+	
 	for (i = 0; i < rtac_adm_data_v2.num_of_dev; i++) {
 		if (rtac_adm_data_v2.device[i].afe_port == port_id) {
 			memset(&rtac_adm_data_v2.device[i], 0,
@@ -520,7 +513,6 @@ static void rtac_remove_popp_from_adm_devices_v2(u32 popp_id)
 	}
 }
 
-/* ADM Info */
 void add_popp(u32 dev_idx, u32 port_id, u32 popp_id)
 {
 	u32 i = 0;
@@ -554,7 +546,7 @@ void rtac_add_adm_device(u32 port_id, u32 copp_id, u32 path_id, u32 popp_id)
 		goto done;
 	}
 
-	/* Check if device already added */
+	
 	if (rtac_adm_data.num_of_dev != 0) {
 		for (; i < rtac_adm_data.num_of_dev; i++) {
 			if (rtac_adm_data.device[i].afe_port == port_id &&
@@ -570,7 +562,7 @@ void rtac_add_adm_device(u32 port_id, u32 copp_id, u32 path_id, u32 popp_id)
 		}
 	}
 
-	/* Add device */
+	
 	rtac_adm_data.num_of_dev++;
 
 	if (path_id == ADM_PATH_PLAYBACK)
@@ -619,7 +611,7 @@ void rtac_remove_adm_device(u32 port_id, u32 copp_id)
 	mutex_lock(&rtac_adm_mutex);
 	rtac_remove_adm_device_v2(port_id);
 
-	/* look for device */
+	
 	for (i = 0; i < rtac_adm_data.num_of_dev; i++) {
 		if (rtac_adm_data.device[i].afe_port == port_id &&
 		    rtac_adm_data.device[i].copp == copp_id) {
@@ -659,7 +651,6 @@ void rtac_remove_popp_from_adm_devices(u32 popp_id)
 	mutex_unlock(&rtac_adm_mutex);
 }
 
-/* Voice Info */
 static void set_rtac_voice_data(int idx, u32 cvs_handle, u32 cvp_handle,
 					u32 rx_afe_port, u32 tx_afe_port,
 					u32 session_id)
@@ -671,7 +662,7 @@ static void set_rtac_voice_data(int idx, u32 cvs_handle, u32 cvp_handle,
 	rtac_voice_data.voice[idx].cvs_handle = cvs_handle;
 	rtac_voice_data.voice[idx].cvp_handle = cvp_handle;
 
-	/* Store session ID for voice RTAC */
+	
 	voice_session_id[idx] = session_id;
 }
 
@@ -688,7 +679,7 @@ void rtac_add_voice(u32 cvs_handle, u32 cvp_handle, u32 rx_afe_port,
 		goto done;
 	}
 
-	/* Check if device already added */
+	
 	if (rtac_voice_data.num_of_voice_combos != 0) {
 		for (; i < rtac_voice_data.num_of_voice_combos; i++) {
 			if (rtac_voice_data.voice[i].cvs_handle ==
@@ -701,7 +692,7 @@ void rtac_add_voice(u32 cvs_handle, u32 cvp_handle, u32 rx_afe_port,
 		}
 	}
 
-	/* Add device */
+	
 	rtac_voice_data.num_of_voice_combos++;
 	set_rtac_voice_data(i, cvs_handle, cvp_handle,
 				rx_afe_port, tx_afe_port,
@@ -727,7 +718,7 @@ void rtac_remove_voice(u32 cvs_handle)
 	pr_debug("%s\n", __func__);
 
 	mutex_lock(&rtac_voice_mutex);
-	/* look for device */
+	
 	for (i = 0; i < rtac_voice_data.num_of_voice_combos; i++) {
 		if (rtac_voice_data.voice[i].cvs_handle == cvs_handle) {
 			shift_voice_devices(i);
@@ -788,7 +779,6 @@ static int get_voice_index(u32 mode, u32 handle)
 }
 
 
-/* ADM APR */
 void rtac_set_adm_handle(void *handle)
 {
 	pr_debug("%s: handle = %d\n", __func__, (unsigned int)handle);
@@ -897,8 +887,8 @@ u32 send_adm_apr(void *buf, u32 opcode)
 	}
 
 	if (opcode == ADM_CMD_SET_PP_PARAMS_V5) {
-		/* set payload size to in-band payload */
-		/* set data size to actual out of band payload size */
+		
+		
 		data_size = payload_size - 4 * sizeof(u32);
 		if (data_size > rtac_cal[ADM_RTAC_CAL].map_data.map_size) {
 			pr_err("%s: Invalid data size = %d\n",
@@ -907,7 +897,7 @@ u32 send_adm_apr(void *buf, u32 opcode)
 		}
 		payload_size = 4 * sizeof(u32);
 
-		/* Copy buffer to out-of-band payload */
+		
 		if (copy_from_user((void *)
 				rtac_cal[ADM_RTAC_CAL].cal_data.kvaddr,
 				buf + 7 * sizeof(u32), data_size)) {
@@ -915,7 +905,7 @@ u32 send_adm_apr(void *buf, u32 opcode)
 				__func__);
 			goto err;
 		}
-		/* set payload size in packet */
+		
 		rtac_adm_buffer[8] = data_size;
 	} else {
 		if (payload_size > MAX_PAYLOAD_SIZE) {
@@ -924,7 +914,7 @@ u32 send_adm_apr(void *buf, u32 opcode)
 			goto done;
 		}
 
-		/* Copy buffer to in-band payload */
+		
 		if (copy_from_user(rtac_adm_buffer +
 				sizeof(adm_params)/sizeof(u32),
 				buf + 3 * sizeof(u32), payload_size)) {
@@ -934,7 +924,7 @@ u32 send_adm_apr(void *buf, u32 opcode)
 		}
 	}
 
-	/* Pack header */
+	
 	adm_params.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
 		APR_HDR_LEN(20), APR_PKT_VER);
 	adm_params.pkt_size = APR_PKT_SIZE(APR_HDR_SIZE,
@@ -948,7 +938,7 @@ u32 send_adm_apr(void *buf, u32 opcode)
 	adm_params.token = port_id;
 	adm_params.opcode = opcode;
 
-	/* fill for out-of-band */
+	
 	rtac_adm_buffer[5] = rtac_cal[ADM_RTAC_CAL].cal_data.paddr;
 	rtac_adm_buffer[6] = 0;
 	rtac_adm_buffer[7] = rtac_cal[ADM_RTAC_CAL].map_data.map_handle;
@@ -967,7 +957,7 @@ u32 send_adm_apr(void *buf, u32 opcode)
 			__func__, port_index, copp_id);
 		goto err;
 	}
-	/* Wait for the callback */
+	
 	result = wait_event_timeout(rtac_adm_apr_data.cmd_wait,
 		(atomic_read(&rtac_adm_apr_data.cmd_state) == 0),
 		msecs_to_jiffies(TIMEOUT_MS));
@@ -1010,7 +1000,6 @@ done:
 }
 
 
-/* ASM APR */
 void rtac_set_asm_handle(u32 session_id, void *handle)
 {
 	pr_debug("%s\n", __func__);
@@ -1101,17 +1090,17 @@ u32 send_rtac_asm_apr(void *buf, u32 opcode)
 	}
 
 	if (opcode == ASM_STREAM_CMD_SET_PP_PARAMS_V2) {
-		/* set payload size to in-band payload */
-		/* set data size to actual out of band payload size */
+		
+		
 		data_size = payload_size - 4 * sizeof(u32);
 		if (data_size > rtac_cal[ASM_RTAC_CAL].map_data.map_size) {
 			pr_err("%s: Invalid data size = %d\n",
 				__func__, data_size);
-			goto done;
+			goto err; 
 		}
 		payload_size = 4 * sizeof(u32);
 
-		/* Copy buffer to out-of-band payload */
+		
 		if (copy_from_user((void *)
 				rtac_cal[ASM_RTAC_CAL].cal_data.kvaddr,
 				buf + 7 * sizeof(u32), data_size)) {
@@ -1119,17 +1108,17 @@ u32 send_rtac_asm_apr(void *buf, u32 opcode)
 				__func__);
 			goto err;
 		}
-		/* set payload size in packet */
+		
 		rtac_asm_buffer[8] = data_size;
 
 	} else {
 		if (payload_size > MAX_PAYLOAD_SIZE) {
 			pr_err("%s: Invalid payload size = %d\n",
 				__func__, payload_size);
-			goto done;
+			goto err; 
 		}
 
-		/* Copy buffer to in-band payload */
+		
 		if (copy_from_user(rtac_asm_buffer +
 				sizeof(asm_params)/sizeof(u32),
 				buf + 3 * sizeof(u32), payload_size)) {
@@ -1139,12 +1128,17 @@ u32 send_rtac_asm_apr(void *buf, u32 opcode)
 		}
 	}
 
-	/* Pack header */
+	
 	asm_params.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
 		APR_HDR_LEN(20), APR_PKT_VER);
 	asm_params.pkt_size = APR_PKT_SIZE(APR_HDR_SIZE,
 		payload_size);
 	asm_params.src_svc = q6asm_get_apr_service_id(session_id);
+	if (asm_params.src_svc == -EINVAL) {
+		pr_err("%s: Could not get service id form session %d", __func__, session_id);
+		goto err;
+	}
+
 	asm_params.src_domain = APR_DOMAIN_APPS;
 	asm_params.src_port = (session_id << 8) | 0x0001;
 	asm_params.dest_svc = APR_SVC_ASM;
@@ -1153,7 +1147,7 @@ u32 send_rtac_asm_apr(void *buf, u32 opcode)
 	asm_params.token = session_id;
 	asm_params.opcode = opcode;
 
-	/* fill for out-of-band */
+	
 	rtac_asm_buffer[5] = rtac_cal[ASM_RTAC_CAL].cal_data.paddr;
 	rtac_asm_buffer[6] = 0;
 	rtac_asm_buffer[7] = rtac_cal[ASM_RTAC_CAL].map_data.map_handle;
@@ -1173,7 +1167,7 @@ u32 send_rtac_asm_apr(void *buf, u32 opcode)
 		goto err;
 	}
 
-	/* Wait for the callback */
+	
 	result = wait_event_timeout(rtac_asm_apr_data[session_id].cmd_wait,
 		(atomic_read(&rtac_asm_apr_data[session_id].cmd_state) == 0),
 		5 * HZ);
@@ -1308,8 +1302,8 @@ u32 send_voice_apr(u32 mode, void *buf, u32 opcode)
 	}
 
 	if (opcode == VOICE_CMD_SET_PARAM) {
-		/* set payload size to in-band payload */
-		/* set data size to actual out of band payload size */
+		
+		
 		data_size = payload_size - 4 * sizeof(u32);
 		if (data_size > rtac_cal[VOICE_RTAC_CAL].map_data.map_size) {
 			pr_err("%s: Invalid data size = %d\n",
@@ -1318,7 +1312,7 @@ u32 send_voice_apr(u32 mode, void *buf, u32 opcode)
 		}
 		payload_size = 4 * sizeof(u32);
 
-		/* Copy buffer to out-of-band payload */
+		
 		if (copy_from_user((void *)
 				rtac_cal[VOICE_RTAC_CAL].cal_data.kvaddr,
 				buf + 7 * sizeof(u32), data_size)) {
@@ -1326,7 +1320,7 @@ u32 send_voice_apr(u32 mode, void *buf, u32 opcode)
 				__func__);
 			goto err;
 		}
-		/* set payload size in packet */
+		
 		rtac_voice_buffer[8] = data_size;
 	} else {
 		if (payload_size > MAX_PAYLOAD_SIZE) {
@@ -1335,7 +1329,7 @@ u32 send_voice_apr(u32 mode, void *buf, u32 opcode)
 			goto done;
 		}
 
-		/* Copy buffer to in-band payload */
+		
 		if (copy_from_user(rtac_voice_buffer +
 				sizeof(voice_params)/sizeof(u32),
 				buf + 3 * sizeof(u32), payload_size)) {
@@ -1345,7 +1339,7 @@ u32 send_voice_apr(u32 mode, void *buf, u32 opcode)
 		}
 	}
 
-	/* Pack header */
+	
 	voice_params.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
 		APR_HDR_LEN(20), APR_PKT_VER);
 	voice_params.pkt_size = APR_PKT_SIZE(APR_HDR_SIZE,
@@ -1359,7 +1353,7 @@ u32 send_voice_apr(u32 mode, void *buf, u32 opcode)
 	voice_params.token = 0;
 	voice_params.opcode = opcode;
 
-	/* fill for out-of-band */
+	
 	rtac_voice_buffer[5] = rtac_cal[VOICE_RTAC_CAL].map_data.map_handle;
 	rtac_voice_buffer[6] = rtac_cal[VOICE_RTAC_CAL].cal_data.paddr;
 	rtac_voice_buffer[7] = 0;
@@ -1378,7 +1372,7 @@ u32 send_voice_apr(u32 mode, void *buf, u32 opcode)
 			__func__, opcode);
 		goto err;
 	}
-	/* Wait for the callback */
+	
 	result = wait_event_timeout(rtac_voice_apr_data[mode].cmd_wait,
 		(atomic_read(&rtac_voice_apr_data[mode].cmd_state) == 0),
 		msecs_to_jiffies(TIMEOUT_MS));
@@ -1434,6 +1428,7 @@ static long rtac_ioctl(struct file *f,
 		goto done;
 	}
 
+	mutex_lock(&rtac_ioctl_mutex);
 	switch (cmd) {
 	case AUDIO_GET_RTAC_ADM_INFO:
 		if (copy_to_user((void *)arg, &rtac_adm_data,
@@ -1490,6 +1485,7 @@ static long rtac_ioctl(struct file *f,
 		pr_err("%s: Invalid IOCTL, command = %d!\n",
 		       __func__, cmd);
 	}
+	mutex_unlock(&rtac_ioctl_mutex);
 done:
 	return result;
 }
@@ -1513,11 +1509,11 @@ static int __init rtac_init(void)
 	int i = 0;
 	pr_debug("%s\n", __func__);
 
-	/* Driver */
+	
 	atomic_set(&rtac_common.usage_count, 0);
 	atomic_set(&rtac_common.apr_err_code, 0);
 
-	/* ADM */
+	
 	memset(&rtac_adm_data, 0, sizeof(rtac_adm_data));
 	memset(&rtac_adm_data_v2, 0, sizeof(rtac_adm_data_v2));
 	rtac_adm_apr_data.apr_handle = NULL;
@@ -1534,7 +1530,7 @@ static int __init rtac_init(void)
 		goto nomem;
 	}
 
-	/* ASM */
+	
 	for (i = 0; i < SESSION_MAX+1; i++) {
 		rtac_asm_apr_data[i].apr_handle = NULL;
 		atomic_set(&rtac_asm_apr_data[i].cmd_state, 0);
@@ -1551,7 +1547,7 @@ static int __init rtac_init(void)
 		goto nomem;
 	}
 
-	/* Voice */
+	
 	memset(&rtac_voice_data, 0, sizeof(rtac_voice_data));
 	for (i = 0; i < RTAC_VOICE_MODES; i++) {
 		rtac_voice_apr_data[i].apr_handle = NULL;
@@ -1570,6 +1566,8 @@ static int __init rtac_init(void)
 		kzfree(rtac_asm_buffer);
 		goto nomem;
 	}
+
+	mutex_init(&rtac_ioctl_mutex);
 
 	return misc_register(&rtac_misc);
 nomem:

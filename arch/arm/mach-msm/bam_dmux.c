@@ -39,6 +39,38 @@
 
 #include "bam_dmux_private.h"
 
+#ifdef CONFIG_HTC_DEBUG_RIL_PCN0006_HTC_DUMP_BAM_DMUX_LOG
+void bam_dmux_dbg_log_event(const char * event, ...);
+
+#define DBG_MSG_LEN   100UL
+
+#define DBG_MAX_MSG   256UL
+
+#define TIME_BUF_LEN  20
+
+static int bam_dmux_htc_debug_enable = 1;
+static int bam_dmux_htc_debug_dump = 1;
+static int bam_dmux_htc_debug_dump_lines = DBG_MAX_MSG;
+static int bam_dmux_htc_debug_print = 0;
+module_param_named(bam_dmux_htc_debug_enable, bam_dmux_htc_debug_enable,
+		   int, S_IRUGO | S_IWUSR | S_IWGRP);
+module_param_named(bam_dmux_htc_debug_dump, bam_dmux_htc_debug_dump,
+		   int, S_IRUGO | S_IWUSR | S_IWGRP);
+module_param_named(bam_dmux_htc_debug_dump_lines, bam_dmux_htc_debug_dump_lines,
+		   int, S_IRUGO | S_IWUSR | S_IWGRP);
+module_param_named(bam_dmux_htc_debug_print, bam_dmux_htc_debug_print,
+		   int, S_IRUGO | S_IWUSR | S_IWGRP);
+
+static struct {
+	char     (buf[DBG_MAX_MSG])[DBG_MSG_LEN];   
+	unsigned idx;   
+	rwlock_t lck;   
+} dbg_bam_dmux = {
+	.idx = 0,
+	.lck = __RW_LOCK_UNLOCKED(lck)
+};
+#endif
+
 #define BAM_CH_LOCAL_OPEN       0x1
 #define BAM_CH_REMOTE_OPEN      0x2
 #define BAM_CH_IN_RESET         0x4
@@ -52,16 +84,16 @@
 static int msm_bam_dmux_debug_enable;
 module_param_named(debug_enable, msm_bam_dmux_debug_enable,
 		   int, S_IRUGO | S_IWUSR | S_IWGRP);
-static int POLLING_MIN_SLEEP = 2950;
+int POLLING_MIN_SLEEP = 2950;
 module_param_named(min_sleep, POLLING_MIN_SLEEP,
 		   int, S_IRUGO | S_IWUSR | S_IWGRP);
-static int POLLING_MAX_SLEEP = 3050;
+int POLLING_MAX_SLEEP = 3050;
 module_param_named(max_sleep, POLLING_MAX_SLEEP,
 		   int, S_IRUGO | S_IWUSR | S_IWGRP);
 static int POLLING_INACTIVITY = 1;
 module_param_named(inactivity, POLLING_INACTIVITY,
 		   int, S_IRUGO | S_IWUSR | S_IWGRP);
-static int bam_adaptive_timer_enabled;
+int bam_adaptive_timer_enabled;
 module_param_named(adaptive_timer_enabled,
 			bam_adaptive_timer_enabled,
 		   int, S_IRUGO | S_IWUSR | S_IWGRP);
@@ -229,7 +261,7 @@ static struct srcu_struct bam_dmux_srcu;
 /* A2 power collaspe */
 #define UL_TIMEOUT_DELAY 1000	/* in ms */
 #define ENABLE_DISCONNECT_ACK	0x1
-#define SHUTDOWN_TIMEOUT_MS	500
+#define SHUTDOWN_TIMEOUT_MS	1000
 #define UL_WAKEUP_TIMEOUT_MS	2000
 static void toggle_apps_ack(void);
 static void reconnect_to_bam(void);
@@ -269,6 +301,7 @@ static DEFINE_MUTEX(smsm_cb_lock);
 static DEFINE_MUTEX(delayed_ul_vote_lock);
 static int need_delayed_ul_vote;
 static int power_management_only_mode;
+static int in_ssr;
 static int ssr_skipped_disconnect;
 static struct completion shutdown_completion;
 
@@ -328,6 +361,39 @@ static void *bam_ipc_log_txt;
  * D: 1 = Disconnect ACK active
  */
 
+#ifdef CONFIG_HTC_DEBUG_RIL_PCN0006_HTC_DUMP_BAM_DMUX_LOG
+#define BAM_DMUX_LOG(fmt, args...) \
+do { \
+	if (bam_ipc_log_txt) { \
+		ipc_log_string(bam_ipc_log_txt, \
+		"<DMUX> %c%c%c%c %c%c%c%c%d " fmt, \
+		a2_pc_disabled ? 'D' : 'd', \
+		in_global_reset ? 'R' : 'r', \
+		bam_dmux_power_state ? 'P' : 'p', \
+		bam_connection_is_active ? 'A' : 'a', \
+		bam_dmux_uplink_vote ? 'V' : 'v', \
+		bam_is_connected ?  'U' : 'u', \
+		wait_for_ack ? 'W' : 'w', \
+		ul_wakeup_ack_completion.done ? 'A' : 'a', \
+		atomic_read(&ul_ondemand_vote), \
+		args); \
+	} \
+	if (bam_dmux_htc_debug_enable) { \
+		bam_dmux_dbg_log_event( \
+		"<DMUX> %c%c%c%c %c%c%c%c%d " fmt, \
+		a2_pc_disabled ? 'D' : 'd', \
+		in_global_reset ? 'R' : 'r', \
+		bam_dmux_power_state ? 'P' : 'p', \
+		bam_connection_is_active ? 'A' : 'a', \
+		bam_dmux_uplink_vote ? 'V' : 'v', \
+		bam_is_connected ?  'U' : 'u', \
+		wait_for_ack ? 'W' : 'w', \
+		ul_wakeup_ack_completion.done ? 'A' : 'a', \
+		atomic_read(&ul_ondemand_vote), \
+		args); \
+	} \
+} while (0)
+#else
 #define BAM_DMUX_LOG(fmt, args...) \
 do { \
 	if (bam_ipc_log_txt) { \
@@ -346,6 +412,7 @@ do { \
 		args); \
 	} \
 } while (0)
+#endif
 
 #define DMUX_LOG_KERR(fmt, args...) \
 do { \
@@ -1652,6 +1719,18 @@ static int ssrestart_check(void)
 
 	DMUX_LOG_KERR("%s: modem timeout: BAM DMUX disabled for SSR\n",
 								__func__);
+	pr_err("<DMUX> %c%c%c%c %c%c%c%c%d%c  %s: Record BAM state before SSR\n" ,
+		a2_pc_disabled ? 'D' : 'd',
+		in_global_reset ? 'R' : 'r',
+		bam_dmux_power_state ? 'P' : 'p',
+		bam_connection_is_active ? 'A' : 'a',
+		bam_dmux_uplink_vote ? 'V' : 'v',
+		bam_is_connected ?  'U' : 'u',
+		wait_for_ack ? 'W' : 'w',
+		ul_wakeup_ack_completion.done ? 'A' : 'a',
+		atomic_read(&ul_ondemand_vote),
+		disconnect_ack ? 'D' : 'd',
+		__func__);
 	in_global_reset = 1;
 	ret = subsystem_restart("modem");
 	if (ret == -ENODEV)
@@ -1770,15 +1849,12 @@ static void reconnect_to_bam(void)
 {
 	int i;
 
-	if (in_global_reset) {
-		BAM_DMUX_LOG("%s: skipping due to SSR\n", __func__);
-		return;
-	}
-
+	in_global_reset = 0;
+	in_ssr = 0;
 	vote_dfab();
 	if (!power_management_only_mode) {
 		if (ssr_skipped_disconnect) {
-			/* delayed to here to prevent bus stall */
+			
 			bam_ops->sps_disconnect_ptr(bam_tx_pipe);
 			bam_ops->sps_disconnect_ptr(bam_rx_pipe);
 			__memzero(rx_desc_mem_buf.base, rx_desc_mem_buf.size);
@@ -1855,7 +1931,7 @@ static void disconnect_to_bam(void)
 
 	/* documentation/assumptions found in restart_notifier_cb */
 	if (!power_management_only_mode) {
-		if (likely(!in_global_reset)) {
+		if (likely(!in_ssr)) {
 			BAM_DMUX_LOG("%s: disconnect tx\n", __func__);
 			bam_ops->sps_disconnect_ptr(bam_tx_pipe);
 			BAM_DMUX_LOG("%s: disconnect rx\n", __func__);
@@ -1993,13 +2069,12 @@ static int restart_notifier_cb(struct notifier_block *this,
 	if (code == SUBSYS_BEFORE_SHUTDOWN) {
 		BAM_DMUX_LOG("%s: begin\n", __func__);
 		in_global_reset = 1;
-		/* sync to ensure the driver sees SSR */
+		in_ssr = 1;
+		
 		synchronize_srcu(&bam_dmux_srcu);
 		BAM_DMUX_LOG("%s: ssr signaling complete\n", __func__);
 		flush_workqueue(bam_mux_rx_workqueue);
 	}
-	if (code == SUBSYS_BEFORE_POWERUP)
-		in_global_reset = 0;
 	if (code != SUBSYS_AFTER_SHUTDOWN)
 		return NOTIFY_DONE;
 
@@ -2070,7 +2145,6 @@ static int bam_init(void)
 	void *a2_virt_addr;
 	int skip_iounmap = 0;
 
-	in_global_reset = 0;
 	vote_dfab();
 	/* init BAM */
 	a2_virt_addr = ioremap_nocache((unsigned long)(a2_phys_base),
@@ -2325,9 +2399,7 @@ static void toggle_apps_ack(void)
 static void bam_dmux_smsm_cb(void *priv, uint32_t old_state, uint32_t new_state)
 {
 	static int last_processed_state;
-	int rcu_id;
 
-	rcu_id = srcu_read_lock(&bam_dmux_srcu);
 	mutex_lock(&smsm_cb_lock);
 	bam_dmux_power_state = new_state & SMSM_A2_POWER_CONTROL ? 1 : 0;
 	DBG_INC_A2_POWER_CONTROL_IN_CNT();
@@ -2336,7 +2408,6 @@ static void bam_dmux_smsm_cb(void *priv, uint32_t old_state, uint32_t new_state)
 	if (last_processed_state == (new_state & SMSM_A2_POWER_CONTROL)) {
 		BAM_DMUX_LOG("%s: already processed this state\n", __func__);
 		mutex_unlock(&smsm_cb_lock);
-		srcu_read_unlock(&bam_dmux_srcu, rcu_id);
 		return;
 	}
 
@@ -2363,20 +2434,16 @@ static void bam_dmux_smsm_cb(void *priv, uint32_t old_state, uint32_t new_state)
 		pr_err("%s: unsupported state change\n", __func__);
 	}
 	mutex_unlock(&smsm_cb_lock);
-	srcu_read_unlock(&bam_dmux_srcu, rcu_id);
+
 }
 
 static void bam_dmux_smsm_ack_cb(void *priv, uint32_t old_state,
 						uint32_t new_state)
 {
-	int rcu_id;
-
-	rcu_id = srcu_read_lock(&bam_dmux_srcu);
 	DBG_INC_ACK_IN_CNT();
 	BAM_DMUX_LOG("%s: 0x%08x -> 0x%08x\n", __func__, old_state,
 			new_state);
 	complete_all(&ul_wakeup_ack_completion);
-	srcu_read_unlock(&bam_dmux_srcu, rcu_id);
 }
 
 /**
@@ -2405,9 +2472,6 @@ void msm_bam_dmux_deinit(void)
 {
 	restart_notifier_cb(NULL, SUBSYS_BEFORE_SHUTDOWN, NULL);
 	restart_notifier_cb(NULL, SUBSYS_AFTER_SHUTDOWN, NULL);
-	restart_notifier_cb(NULL, SUBSYS_BEFORE_POWERUP, NULL);
-	restart_notifier_cb(NULL, SUBSYS_AFTER_POWERUP, NULL);
-	in_global_reset = 0;
 }
 EXPORT_SYMBOL(msm_bam_dmux_deinit);
 
@@ -2565,6 +2629,13 @@ static int bam_dmux_probe(struct platform_device *pdev)
 	return 0;
 }
 
+void bam_change_adaptive_timer(int mode)
+{
+	bam_adaptive_timer_enabled = mode;
+	printk("\nchange bam_adaptive_timer_enabled=%d\n", bam_adaptive_timer_enabled);
+}
+EXPORT_SYMBOL(bam_change_adaptive_timer);
+
 static struct of_device_id msm_match_table[] = {
 	{.compatible = "qcom,bam_dmux"},
 	{},
@@ -2579,6 +2650,154 @@ static struct platform_driver bam_dmux_driver = {
 	},
 };
 
+#ifdef CONFIG_HTC_DEBUG_RIL_PCN0006_HTC_DUMP_BAM_DMUX_LOG
+
+static char bam_dmux_klog[PAGE_SIZE];
+
+static void bam_dmux_dbg_inc(unsigned *idx)
+{
+	*idx = (*idx + 1) & (DBG_MAX_MSG-1);
+}
+
+static char *bam_dmux_get_timestamp(char *tbuf)
+{
+	unsigned long long t;
+	unsigned long nanosec_rem;
+
+	t = cpu_clock(smp_processor_id());
+	nanosec_rem = do_div(t, 1000000000)/1000;
+	scnprintf(tbuf, TIME_BUF_LEN, "[%5lu.%06lu] ", (unsigned long)t,
+		nanosec_rem);
+	return tbuf;
+}
+
+void bam_dmux_events_print(void)
+{
+	unsigned long	flags;
+	unsigned	i;
+	unsigned lines = 0;
+
+	pr_info("### Show BAM DMUX Log Start ###\n");
+
+	read_lock_irqsave(&dbg_bam_dmux.lck, flags);
+
+	i = dbg_bam_dmux.idx;
+	for (bam_dmux_dbg_inc(&i); i != dbg_bam_dmux.idx; bam_dmux_dbg_inc(&i)) {
+		if (!strnlen(dbg_bam_dmux.buf[i], DBG_MSG_LEN))
+			continue;
+		pr_info("%s", dbg_bam_dmux.buf[i]);
+		lines++;
+		if ( lines > bam_dmux_htc_debug_dump_lines )
+			break;
+	}
+
+	read_unlock_irqrestore(&dbg_bam_dmux.lck, flags);
+
+	pr_info("### Show BAM DMUX Log End ###\n");
+}
+
+void msm_bam_dmux_dumplog(void)
+{
+	int ret = 0;
+
+	if ( !bam_dmux_htc_debug_enable ) {
+		pr_info("%s: bam_dmux_htc_debug_enable=[%d]\n", __func__, bam_dmux_htc_debug_enable);
+		return;
+	}
+
+	if ( !bam_dmux_htc_debug_dump ) {
+		pr_info("%s: bam_dmux_htc_debug_dump=[%d]\n", __func__, bam_dmux_htc_debug_dump);
+		return;
+	}
+
+	if ( !bam_ipc_log_txt ) {
+		pr_info("%s: bam_ipc_log_txt = NULL\n", __func__);
+		bam_dmux_events_print();
+		return;
+	}
+
+	pr_info("### Show BAM DMUX Log Start ###\n");
+
+	do {
+
+		memset(bam_dmux_klog, 0x0, PAGE_SIZE);
+		ret = ipc_log_extract( bam_ipc_log_txt, bam_dmux_klog, PAGE_SIZE);
+		if ( ret >= 0 ) {
+			pr_info("%s\n", bam_dmux_klog);
+		}
+
+	} while ( ret > 0 );
+
+	pr_info("### Show BAM DMUX Log End ###\n");
+
+}
+EXPORT_SYMBOL(msm_bam_dmux_dumplog);
+
+void bam_dmux_dbg_log_event(const char * event, ...)
+{
+	unsigned long flags;
+	char tbuf[TIME_BUF_LEN];
+	char dbg_buff[DBG_MSG_LEN];
+	va_list arg_list;
+	int data_size;
+
+	if ( !bam_dmux_htc_debug_enable ) {
+		return;
+	}
+
+	va_start(arg_list, event);
+	data_size = vsnprintf(dbg_buff,
+			      DBG_MSG_LEN, event, arg_list);
+	va_end(arg_list);
+
+	write_lock_irqsave(&dbg_bam_dmux.lck, flags);
+
+	scnprintf(dbg_bam_dmux.buf[dbg_bam_dmux.idx], DBG_MSG_LEN,
+		"%s %s", bam_dmux_get_timestamp(tbuf), dbg_buff);
+
+	bam_dmux_dbg_inc(&dbg_bam_dmux.idx);
+
+	if ( bam_dmux_htc_debug_print )
+		pr_info("%s", dbg_buff);
+	write_unlock_irqrestore(&dbg_bam_dmux.lck, flags);
+
+	return;
+
+}
+EXPORT_SYMBOL(bam_dmux_dbg_log_event);
+
+static int bam_dmux_events_show(struct seq_file *s, void *unused)
+{
+	unsigned long	flags;
+	unsigned	i;
+
+	read_lock_irqsave(&dbg_bam_dmux.lck, flags);
+
+	i = dbg_bam_dmux.idx;
+	for (bam_dmux_dbg_inc(&i); i != dbg_bam_dmux.idx; bam_dmux_dbg_inc(&i)) {
+		if (!strnlen(dbg_bam_dmux.buf[i], DBG_MSG_LEN))
+			continue;
+		seq_printf(s, "%s", dbg_bam_dmux.buf[i]);
+	}
+
+	read_unlock_irqrestore(&dbg_bam_dmux.lck, flags);
+
+	return 0;
+}
+
+static int bam_dmux_events_open(struct inode *inode, struct file *f)
+{
+	return single_open(f, bam_dmux_events_show, inode->i_private);
+}
+
+const struct file_operations bam_dmux_dbg_fops = {
+	.open = bam_dmux_events_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = single_release,
+};
+#endif
+
 static int __init bam_dmux_init(void)
 {
 #ifdef CONFIG_DEBUG_FS
@@ -2589,6 +2808,9 @@ static int __init bam_dmux_init(void)
 		debug_create("tbl", 0444, dent, debug_tbl);
 		debug_create("ul_pkt_cnt", 0444, dent, debug_ul_pkt_cnt);
 		debug_create("stats", 0444, dent, debug_stats);
+#ifdef CONFIG_HTC_DEBUG_RIL_PCN0006_HTC_DUMP_BAM_DMUX_LOG
+		debugfs_create_file("dumplog", S_IRUGO, dent, NULL, &bam_dmux_dbg_fops);
+#endif
 	}
 #endif
 

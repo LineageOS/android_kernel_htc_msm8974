@@ -662,6 +662,12 @@ config STM_LIS3DH
           If you say yes here you get support for STMicroelectronics's
           acceleration sensors LIS3DH.
 
+config HIMAX_PROXIMITY
+        tristate "himax proximity sensor support"
+	default n
+        help
+          if you say yes here, you get support for himax proximity sensor
+
 config BMP18X
        tristate "BMP18X digital pressure sensor"
        depends on (I2C ) && SYSFS
@@ -711,6 +717,44 @@ config SENSORS_STK3X1X
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called stk3x1x.
+
+config AK8789_HALLSENSOR
+	tristate "ak8789 hall sensor support"
+	help
+	  if you say yes here, you get support for ak8789 hall sensor
+
+config INPUT_DUMMY_KEYPAD
+       tristate "Dummy Keypad driver support"
+       help
+         Say Y here if you want to support dummy keypad driver, wheels etc...
+
+config POWER_KEY_LED
+	tristate "Power key LED"
+	help
+	  Say Y here if you want to support power key LED.
+
+config POWER_KEY_CLR_RESET
+	tristate "Power key clear reset"
+	help
+	  Say Y here if you want to support power key LED.
+
+config POWER_VOLUP_RESET
+	tristate "(power+volup) reset"
+	depends on POWER_KEY_CLR_RESET
+	help
+	  Say Y here if you want to support power key LED.
+
+config KPDPWR_S2_DVDD_RESET
+	tristate "Power key stage 2 reset while SW gets stuck"
+	depends on POWER_VOLUP_RESET
+	help
+	  Say Y here if you would like to support power key stage 2 dVdd reset when SW gets stuck.
+
+config PWRKEY_WAKESRC_LOG
+	tristate "Power key wake up source log"
+	default n
+	help
+	  Say Y here if you want to check power key wake up source log.
 
 config SENSORS_CAPELLA_CM36283
 	tristate "CM36283 proximity and light sensor"

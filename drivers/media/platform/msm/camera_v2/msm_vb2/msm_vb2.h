@@ -61,6 +61,8 @@ struct msm_stream {
 	struct vb2_queue *vb2_q;
 	spinlock_t stream_lock;
 	struct list_head queued_list;
+	unsigned int num_total;
+	unsigned int num_lend;
 };
 
 struct vb2_ops *msm_vb2_get_q_ops(void);

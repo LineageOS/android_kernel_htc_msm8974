@@ -224,6 +224,7 @@ int diag_process_smd_cntl_read_data(struct diag_smd_info *smd_info, void *buf,
 				else
 					driver->separate_cmdrsp[periph] =
 							DISABLE_SEPARATE_CMDRSP;
+				pr_info("separate_cmdrsp[%d]= %d", periph, driver->separate_cmdrsp[periph]);
 				/*
 				 * Check if apps supports hdlc encoding and the
 				 * peripheral supports apps hdlc encoding
