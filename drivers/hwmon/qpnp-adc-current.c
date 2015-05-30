@@ -1189,17 +1189,26 @@ int32_t qpnp_iadc_read(struct qpnp_iadc_chip *iadc,
 		!= channel) && (dt_index < iadc->max_channels_available))
 		dt_index++;
 
+	pr_err("channel=%d, dt_index=%d, max_chan=%d\n", channel, dt_index, iadc->max_channels_available);
+
 	if (dt_index >= iadc->max_channels_available) {
 		pr_err("not a valid IADC channel\n");
-		rc = -EINVAL;
-		goto fail;
+                dt_index = 0;
+                while (((enum qpnp_iadc_channels)
+                        iadc->adc->adc_channels[dt_index].channel_num
+                        != channel) && (dt_index < iadc->max_channels_available))
+                {
+                        pr_err("dump: adc_channel[%d].channel_num = %d", dt_index, iadc->adc->adc_channels[dt_index].channel_num);
+			dt_index++;
+                }
+                goto old_again1;
 	}
 
 	iadc->adc->amux_prop->decimation =
 			iadc->adc->adc_channels[dt_index].adc_decimation;
 	iadc->adc->amux_prop->fast_avg_setup =
 			iadc->adc->adc_channels[dt_index].fast_avg_setup;
-
+old_again1:
 	if (iadc->iadc_poll_eoc) {
 		pr_debug("acquiring iadc eoc wakelock\n");
 		pm_stay_awake(iadc->dev);
@@ -1335,17 +1344,26 @@ int32_t qpnp_iadc_vadc_sync_read(struct qpnp_iadc_chip *iadc,
 		!= i_channel) && (dt_index < iadc->max_channels_available))
 		dt_index++;
 
+	pr_err("channel=%d, dt_index=%d, max_chan=%d\n", i_channel, dt_index, iadc->max_channels_available);
+
 	if (dt_index >= iadc->max_channels_available) {
 		pr_err("not a valid IADC channel\n");
-		rc = -EINVAL;
-		goto fail;
+		dt_index = 0;
+		while (((enum qpnp_iadc_channels)
+			iadc->adc->adc_channels[dt_index].channel_num
+			!= i_channel) && (dt_index < iadc->max_channels_available))
+		{
+			pr_err("dump: adc_channel[%d].channel_num = %d", dt_index, iadc->adc->adc_channels[dt_index].channel_num);
+			dt_index++;
+		}
+		goto old_again;
 	}
 
 	iadc->adc->amux_prop->decimation =
 			iadc->adc->adc_channels[dt_index].adc_decimation;
 	iadc->adc->amux_prop->fast_avg_setup =
 			iadc->adc->adc_channels[dt_index].fast_avg_setup;
-
+old_again:
 	rc = qpnp_iadc_configure(iadc, i_channel, &raw_data, mode_sel);
 	if (rc < 0) {
 		pr_err("qpnp adc result read failed with %d\n", rc);
@@ -1466,6 +1484,7 @@ static int __devinit qpnp_iadc_probe(struct spmi_device *spmi)
 	struct resource *res;
 	int rc, count_adc_channel_list = 0, i = 0;
 
+	pr_err("Start probe...\n");
 	for_each_child_of_node(node, child)
 		count_adc_channel_list++;
 
@@ -1560,6 +1579,7 @@ static int __devinit qpnp_iadc_probe(struct spmi_device *spmi)
 	}
 
 	iadc->max_channels_available = count_adc_channel_list;
+	pr_err("iadc->max_channels_available %d\n",iadc->max_channels_available);
 	INIT_WORK(&iadc->trigger_completion_work, qpnp_iadc_trigger_completion);
 	INIT_DELAYED_WORK(&iadc->iadc_work, qpnp_iadc_work);
 	rc = qpnp_iadc_comp_info(iadc);
@@ -1586,6 +1606,8 @@ static int __devinit qpnp_iadc_probe(struct spmi_device *spmi)
 	schedule_delayed_work(&iadc->iadc_work,
 			round_jiffies_relative(msecs_to_jiffies
 					(QPNP_IADC_CALIB_SECONDS)));
+       pr_err("End probe...\n");
+
 	return 0;
 fail:
 	for_each_child_of_node(node, child) {
@@ -1594,6 +1616,7 @@ fail:
 		i++;
 	}
 	hwmon_device_unregister(iadc->iadc_hwmon);
+       pr_err("End error probe...\n");
 
 	return rc;
 }

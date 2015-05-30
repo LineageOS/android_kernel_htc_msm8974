@@ -247,6 +247,7 @@ void q6lsm_client_free(struct lsm_client *client)
 		return;
 	if (CHECK_SESSION(client->session)) {
 		pr_err("%s: Invalid Session %d", __func__, client->session);
+		kfree(client);
 		return;
 	}
 	apr_deregister(client->apr);
@@ -511,6 +512,8 @@ static int q6lsm_memory_map_regions(struct lsm_client *client,
 	int rc;
 	int cmd_size = 0;
 
+	if (!client)
+		return -EINVAL;
 	pr_debug("%s: dma_addr_p 0x%pa, dma_buf_sz %d, mmap_p 0x%p, session %d\n",
 		__func__, &dma_addr_p, dma_buf_sz, mmap_p,
 		client->session);
@@ -556,6 +559,9 @@ static int q6lsm_memory_unmap_regions(struct lsm_client *client,
 	struct avs_cmd_shared_mem_unmap_regions unmap;
 	int rc = 0;
 	int cmd_size = 0;
+
+	if (!client)
+		return -EINVAL;
 	if (CHECK_SESSION(client->session))
 		return -EINVAL;
 	cmd_size = sizeof(struct avs_cmd_shared_mem_unmap_regions);
@@ -581,6 +587,8 @@ static int q6lsm_send_cal(struct lsm_client *client)
 	struct lsm_cmd_set_params params;
 	struct acdb_cal_block lsm_cal;
 
+	if (!client)
+		return -EINVAL;
 	pr_debug("%s: Session %d\n", __func__, client->session);
 	if (CHECK_SESSION(client->session))
 		return -EINVAL;
@@ -606,6 +614,8 @@ int q6lsm_snd_model_buf_free(struct lsm_client *client)
 {
 	int rc;
 
+	if (!client)
+		return -EINVAL;
 	pr_debug("%s: Session id %d\n", __func__, client->session);
 	if (CHECK_SESSION(client->session))
 		return -EINVAL;
@@ -639,7 +649,6 @@ static struct lsm_client *q6lsm_get_lsm_client(int session_id)
 	struct lsm_client *client = NULL;
 
 	if (session_id == LSM_CONTROL_SESSION) {
-		client = &lsm_common.common_client[session_id];
 		goto done;
 	}
 
