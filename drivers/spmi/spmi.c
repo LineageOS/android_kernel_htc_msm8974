@@ -21,6 +21,7 @@
 #include <linux/spmi.h>
 #include <linux/module.h>
 #include <linux/pm_runtime.h>
+#include <mach/devices_cmdline.h>
 
 #include "spmi-dbgfs.h"
 
@@ -812,6 +813,8 @@ static int spmi_register_controller(struct spmi_controller *ctrl)
 	dev_dbg(&ctrl->dev, "Bus spmi-%d registered: dev:0x%p\n",
 					ctrl->nr, &ctrl->dev);
 
+	
+	if (get_tamper_sf() == 0 && board_is_super_cid())
 	spmi_dfs_add_controller(ctrl);
 	return 0;
 
