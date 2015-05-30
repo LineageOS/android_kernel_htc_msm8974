@@ -36,6 +36,7 @@
 
 #include <linux/usb/ch9.h>
 #include <linux/usb/gadget.h>
+#include <linux/switch.h>
 
 /*
  * USB function drivers should return USB_GADGET_DELAYED_STATUS if they
@@ -372,6 +373,14 @@ struct usb_composite_dev {
 	 * and 8mA for SS.
 	 */
 	int vbus_draw_units;
+
+	/* switch indicating Connect_to_PC App only */
+	struct switch_dev		sw_connect2pc;
+	struct delayed_work request_reset;
+	struct work_struct cdusbcmdwork;
+	struct delayed_work cdusbcmd_vzw_unmount_work;
+	struct switch_dev compositesdev;
+	int unmount_cdrom_mask;
 };
 
 extern int usb_string_id(struct usb_composite_dev *c);

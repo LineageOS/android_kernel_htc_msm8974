@@ -71,9 +71,9 @@ struct mdss_debug_inf {
 #define MDSS_IRQ_REQ		0
 
 struct mdss_intr {
-	/* requested intr */
+	
 	u32 req;
-	/* currently enabled intr */
+	
 	u32 curr;
 	int state;
 	spinlock_t lock;
@@ -127,7 +127,6 @@ struct mdss_data_type {
 	u32 has_decimation;
 	u8 has_wfd_blk;
 	u32 has_no_lut_read;
-	atomic_t sd_client_count;
 	u8 has_wb_ad;
 
 	u32 rotator_ot_limit;
@@ -161,9 +160,6 @@ struct mdss_data_type {
 	struct mdss_fudge_factor ib_factor;
 	struct mdss_fudge_factor ib_factor_overlap;
 	struct mdss_fudge_factor clk_factor;
-
-	u32 *clock_levels;
-	u32 nclk_lvl;
 
 	struct mdss_hw_settings *hw_settings;
 
@@ -207,9 +203,7 @@ struct mdss_data_type {
 
 	int handoff_pending;
 	struct mdss_prefill_data prefill_data;
-	bool ulps;
 	int iommu_ref_cnt;
-
 	u64 ab[MDSS_MAX_HW_BLK];
 	u64 ib[MDSS_MAX_HW_BLK];
 };
@@ -225,9 +219,9 @@ int mdss_register_irq(struct mdss_hw *hw);
 void mdss_enable_irq(struct mdss_hw *hw);
 void mdss_disable_irq(struct mdss_hw *hw);
 void mdss_disable_irq_nosync(struct mdss_hw *hw);
+int mdss_bus_scale_set_quota(int client, u64 ab_quota, u64 ib_quota);
 void mdss_bus_bandwidth_ctrl(int enable);
 int mdss_iommu_ctrl(int enable);
-int mdss_bus_scale_set_quota(int client, u64 ab_quota, u64 ib_quota);
 
 static inline struct ion_client *mdss_get_ionclient(void)
 {
@@ -253,12 +247,4 @@ static inline int mdss_get_iommu_domain(u32 type)
 
 	return mdss_res->iommu_map[type].domain_idx;
 }
-
-static inline int mdss_get_sd_client_cnt(void)
-{
-	if (!mdss_res)
-		return 0;
-	else
-		return atomic_read(&mdss_res->sd_client_count);
-}
-#endif /* MDSS_H */
+#endif 
