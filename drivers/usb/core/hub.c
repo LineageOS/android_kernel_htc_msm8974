@@ -2258,7 +2258,7 @@ static int hub_port_wait_reset(struct usb_hub *hub, int port1,
 
 			/* bomb out completely if the connection bounced */
 			if ((portchange & USB_PORT_STAT_C_CONNECTION))
-				return -ENOTCONN;
+				return -EAGAIN;
 
 			/* if we`ve finished resetting, then break out of
 			 * the loop
