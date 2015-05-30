@@ -18,10 +18,6 @@
 
 #include "mdss_mdp.h"
 
-	/*
-	 * number of bits for source component,
-	 * 0 = 1 bit, 1 = 2 bits, 2 = 6 bits, 3 = 8 bits
-	 */
 enum {
 	COLOR_4BIT,
 	COLOR_5BIT,
