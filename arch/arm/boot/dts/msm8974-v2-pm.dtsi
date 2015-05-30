@@ -369,6 +369,13 @@
 		qcom,start-offset = <0x190010>;
 	};
 
+       qcom,rpm-stats@fc19ffa0{
+                compatible = "qcom,rpm-stats";
+                reg = <0xfc19ffa0 0x60>;
+                reg-names = "phys_addr_base";
+                qcom,sleep-stats-version = <3>;
+        };
+
 	qcom,rpm-master-stats@fc428150 {
 		compatible = "qcom,rpm-master-stats";
 		reg = <0xfc428150 0x3200>;
