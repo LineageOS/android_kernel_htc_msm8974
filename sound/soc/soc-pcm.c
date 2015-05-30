@@ -75,6 +75,24 @@ int snd_soc_dpcm_can_be_free_stop(struct snd_soc_pcm_runtime *fe,
 }
 EXPORT_SYMBOL_GPL(snd_soc_dpcm_can_be_free_stop);
 
+//htc audio ++
+static void dump_fe_state_by_be(struct snd_soc_pcm_runtime *fe,
+		struct snd_soc_pcm_runtime *be, int stream)
+{
+	struct snd_soc_dpcm_params *dpcm_params;
+
+	pr_info("%s: update be %s fail state %d\n",__func__,be->dai_link->name,be->dpcm[stream].state);
+	pr_info("%s: current fe %s state %d\n",__func__,fe->dai_link->stream_name,fe->dpcm[stream].state);
+	list_for_each_entry(dpcm_params, &be->dpcm[stream].fe_clients, list_fe) {
+
+		if (dpcm_params->fe == fe)
+			continue;
+
+		pr_info("%s: connected fe %s state %d\n",__func__,dpcm_params->fe->dai_link->stream_name, \
+			dpcm_params->fe->dpcm[stream].state);
+	}
+}
+//htc audio --
 /*
  * We can only change hw params a BE DAI if any of it's FE are not prepared,
  * running, paused or suspended for the specified stream direction.
@@ -1169,14 +1187,24 @@ int dpcm_be_dai_startup(struct snd_soc_pcm_runtime *fe, int stream)
 			dev_err(be->dev, "too many users %s at open - state %d\n",
 				stream ? "capture" : "playback", be->dpcm[stream].state);
 
-		if (be->dpcm[stream].users++ != 0)
+		if (be->dpcm[stream].users++ != 0) {
+			if(fe->dai_link->stream_name && be->dai_link->name)
+				pr_info("fe %s ref be %s users %d \n",fe->dai_link->stream_name,\
+					be->dai_link->name,be->dpcm[stream].users);
 			continue;
+		}
+
+		if(fe->dai_link->stream_name && be->dai_link->name)
+			pr_info("fe %s connec be %s users %d \n",fe->dai_link->stream_name,\
+				be->dai_link->name,be->dpcm[stream].users);
 
 		if ((be->dpcm[stream].state != SND_SOC_DPCM_STATE_NEW) &&
 		    (be->dpcm[stream].state != SND_SOC_DPCM_STATE_CLOSE))
 			continue;
 
 		dev_dbg(be->dev, "dpcm: open BE %s\n", be->dai_link->name);
+
+		pr_info("open path  %s %s %s \n", fe->dai_link->stream_name,(stream == SNDRV_PCM_STREAM_PLAYBACK)?"->":"<-",be->dai_link->name);
 
 		be_substream->runtime = be->dpcm[stream].runtime;
 		err = soc_pcm_open(be_substream);
@@ -1309,8 +1337,16 @@ int dpcm_be_dai_shutdown(struct snd_soc_pcm_runtime *fe, int stream)
 			dev_err(be->dev, "no users %s at close - state %d\n",
 				stream ? "capture" : "playback", be->dpcm[stream].state);
 
-		if (--be->dpcm[stream].users != 0)
+		if (--be->dpcm[stream].users != 0) {
+			if(fe->dai_link->stream_name && be->dai_link->name)
+				pr_info("fe %s discon be %s users %d\n", fe->dai_link->stream_name,\
+					be->dai_link->name,be->dpcm[stream].users);
 			continue;
+		}
+
+		if(fe->dai_link->stream_name && be->dai_link->name)
+			pr_info("fe %s discon be %s users %d\n", fe->dai_link->stream_name,\
+				be->dai_link->name,be->dpcm[stream].users);
 
 		if ((be->dpcm[stream].state != SND_SOC_DPCM_STATE_HW_FREE) &&
 		    (be->dpcm[stream].state != SND_SOC_DPCM_STATE_OPEN))
@@ -1319,6 +1355,7 @@ int dpcm_be_dai_shutdown(struct snd_soc_pcm_runtime *fe, int stream)
 		dev_dbg(be->dev, "dpcm: close BE %s\n",
 			dpcm_params->fe->dai_link->name);
 
+		pr_info("close path  %s %s %s \n", fe->dai_link->stream_name,(stream == SNDRV_PCM_STREAM_PLAYBACK)?"->":"<-",be->dai_link->name);
 		soc_pcm_close(be_substream);
 		be_substream->runtime = NULL;
 
@@ -1404,6 +1441,9 @@ int dpcm_be_dai_hw_params(struct snd_soc_pcm_runtime *fe, int stream)
 		ret = soc_pcm_hw_params(be_substream, &dpcm_params->hw_params);
 		if (ret < 0) {
 			dev_err(dpcm_params->be->dev, "dpcm: hw_params BE failed %d\n", ret);
+//htc audio ++
+			dump_fe_state_by_be(fe, be, stream);
+//htc audio --
 			goto unwind;
 		}
 
@@ -2438,9 +2478,13 @@ int soc_dpcm_fe_dai_open(struct snd_pcm_substream *fe_substream)
 	mutex_lock(&fe->card->dpcm_mutex);
 	fe->dpcm[stream].runtime = fe_substream->runtime;
 
-	if (dpcm_path_get(fe, stream, &list) <= 0) {
+	if ((ret = dpcm_path_get(fe, stream, &list)) <= 0) {
 		dev_warn(fe->dev, "asoc: %s no valid %s route from source to sink\n",
 			fe->dai_link->name, stream ? "capture" : "playback");
+//htc audio ++
+		if(ret == 0 && list)
+			dpcm_path_put(&list);
+//htc audio --
 		mutex_unlock(&fe->card->dpcm_mutex);
 		return -EINVAL;
 	}
