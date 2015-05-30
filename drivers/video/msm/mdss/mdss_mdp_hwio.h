@@ -379,7 +379,6 @@ enum mdss_mdp_writeback_index {
 
 #define MDSS_MDP_MAX_AD_AL	65535
 #define MDSS_MDP_MAX_AD_STR	255
-#define MDSS_MDP_AD_BL_SCALE	4095
 
 #define MDSS_MDP_REG_AD_BYPASS				0x000
 #define MDSS_MDP_REG_AD_CTRL_0				0x004
@@ -522,8 +521,6 @@ enum mdss_mpd_intf_index {
 #define MDSS_MDP_PANEL_FORMAT_RGB888			0x213F
 #define MDSS_MDP_PANEL_FORMAT_RGB666			0x212A
 
-#define MDSS_MDP_PANEL_FORMAT_PACK_ALIGN_MSB		BIT(7)
-
 enum mdss_mdp_pingpong_index {
 	MDSS_MDP_PINGPONG0,
 	MDSS_MDP_PINGPONG1,
@@ -582,7 +579,6 @@ enum mdss_mdp_pingpong_index {
 #define MDSS_MDP_LP_MISR_SEL_LMIX4_BLEND	0x10
 #define MDSS_MDP_LP_MISR_SEL_LMIX4_GC		0x11
 
-/* following offsets are with respect to MDP VBIF base */
 #define MMSS_VBIF_XIN_HALT_CTRL0	0x200
 #define MMSS_VBIF_XIN_HALT_CTRL1	0x204
 

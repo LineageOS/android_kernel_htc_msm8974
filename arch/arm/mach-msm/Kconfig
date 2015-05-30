@@ -1351,6 +1351,16 @@ choice
 		  their output to the serial port on MSM 8226 devices.
 endchoice
 
+config HTC_BUILD_EDIAG
+   bool "Build in EDIAG fixes"
+   default n
+   help
+   For EDIAG we need to do some additional fixes.
+
+config HTC_FD_MONITOR
+	bool "fd operation monitor mechanism"
+	default y
+
 choice
 	prompt "Default Timer"
 	default MSM7X00A_USE_GP_TIMER
@@ -1493,10 +1503,86 @@ config HTC_HEADSET
 	 headset, on the trout platform. Can be used with the msm serial
 	 debugger, but not with serial console.
 
+config HTC_HEADSET_MGR
+	tristate "HTC headset manager driver"
+	default n
+	help
+	  Provides support of HTC headset manager.
+
+config HTC_HEADSET_GPIO
+	tristate "HTC GPIO headset detection driver"
+	depends on HTC_HEADSET_MGR
+	default n
+	help
+	  Provides support of HTC GPIO headset detection.
+
+config HTC_HEADSET_PMIC
+	tristate "HTC PMIC headset detection driver"
+	depends on HTC_HEADSET_MGR
+	default n
+	help
+	  Provides support of HTC PMIC headset detection.
+
+config HTC_HEADSET_8X60
+	tristate "HTC 8X60 headset detection driver"
+	depends on HTC_HEADSET_MGR
+	default n
+	help
+	  Provides support of HTC 8X60 headset detection.
+
+config HTC_HEADSET_ONE_WIRE
+	tristate "HTC 1-wire headset detection driver"
+	depends on HTC_HEADSET_MGR
+	default n
+	help
+	  Provides support of HTC 1-wire headset detection.
+
+config HTC_HEADSET_INT_REDETECT
+	tristate "HTC headset key interrupt re-detection"
+	depends on HTC_HEADSET_MGR
+	default n
+	help
+	  Support key interrupt re-detection
+
+config HTC_INSERT_NOTIFY_DELAY
+	tristate "HTC headset insert notify delay"
+	depends on HTC_HEADSET_MGR
+	default n
+	help
+	  delay headset insert notify
+
+config HTC_HEADSET_DET_DEBOUNCE
+	tristate "HTC headset detect-pin debounce"
+	depends on HTC_HEADSET_INT_REDETECT
+	default n
+	help
+	  Support headset detect-pin debounce
+
 config TROUT_BATTCHG
 	depends on MACH_TROUT && POWER_SUPPLY
 	default y
 	bool "Trout battery / charger driver"
+
+config HTC_BATT_CORE
+        depends on POWER_SUPPLY
+        default n
+        bool "HTC battery core driver"
+
+config HTC_BATT_8960
+        depends on HTC_BATT_CORE
+        default n
+        bool "HTC battery driver for 8960"
+
+config HTC_BATT_SWOLLEN_WA
+        depends on HTC_BATT_8960
+        default n
+        bool "HTC battery swollen workaround"
+
+config DUTY_CYCLE_LIMIT
+	bool "Duty cycle limit charging support"
+	default n
+	help
+		support on duty cycle limit charging
 
 config HTC_PWRSINK
 	depends on MSM_SMD
@@ -2740,6 +2826,7 @@ config SENSORS_ADSP
 
 config MSM_RTB
 	bool "Register tracing"
+	depends on (!METRICO_TP || METRICO_TP!=y)
 	help
 	  Add support for logging different events to a small uncached
 	  region. This is designed to aid in debugging reset cases where the
@@ -2858,6 +2945,14 @@ config MSM_L2_ERP_2BIT_PANIC
 
 	  For production builds, it may be acceptable to say 'N' here, since
 	  an uncorrectable error might not necessarily cause further problems.
+
+config IGNORE_L2_FALSE_ALRAM
+	bool "Ignore harmless L2 port error"
+	depends on MSM_CACHE_ERP
+	default y
+	help
+	  L2 cache will sometimes generate port error which is consider harmless.
+	  Ignore the error if trigger rate is low.
 
 config MSM_DCVS
 	bool "Use MSM DCVS for CPU/GPU Frequency control"
@@ -3036,6 +3131,7 @@ config WALL_CLK_SYSFS
 	 Support the wallclk directory in sysfs filesystem to enable the
 	 wall clock simulation and read the current SFN.
 
+
 config KRAIT_REGULATOR
 	bool "Support Kraits powered via ganged regulators in the pmic"
 	help
@@ -3043,4 +3139,133 @@ config KRAIT_REGULATOR
 	 line from the PMIC. This supply line is powered by multiple
 	 regulators running in ganged mode inside the PMIC. Enable
 	 this option to support such configurations.
+
+config MACH_M8
+        depends on ARCH_MSM8974
+        bool "MSM8974 M8"
+        help
+          Support for HTC MSM8974 M8
+
+config MACH_M8_WHL
+        depends on ARCH_MSM8974
+        bool "MSM8974 M8_WHL"
+        help
+          Support for HTC MSM8974 M8_WHL
+
+config MACH_M8_WL
+        depends on ARCH_MSM8974
+        bool "MSM8974 M8_WL"
+        help
+          Support for HTC MSM8974 M8_WL
+
+config PROJECT_NAME
+        string "Project Name"
+        default ""
+        help
+          Support for Project Name
+
 endif
+
+config HTC_MONITOR_SUBSYS_SLEEP_TIME
+    default n
+    bool "Monitor the sleep time of sub-system"
+    help
+        Support to monitor the sleep time of sub-system
+
+comment "HTC features"
+menuconfig HTC_FEATURES
+        bool "HTC Implement Features"
+        default n
+        help
+          Enable collection of HTC features.
+          This feature is enabled in defconfig.
+
+config HTC_FEATURES_FINAL_EFS_SYNC
+	bool "Final EFS SYNC"
+	depends on HTC_FEATURES
+	default n
+	help
+	  Enable the trigger of final efs sync before shutdown/reboot
+	  This feature is enabled in defconfig.
+
+config HTC_FEATURES_SSR
+       bool "HTC style ssr features"
+       depends on HTC_FEATURES && MSM_SUBSYSTEM_RESTART
+       default n
+       help
+         Say Y here if you want the HTC style ssr features
+
+config HTC_FEATURES_SSR_MODEM_ENABLE
+       bool "HTC style modem ssr features"
+       depends on HTC_FEATURES_SSR
+       default n
+       help
+         Say Y here if you want the HTC style for modem ssr features
+
+config HTC_FEATURES_SSR_LPASS_ENABLE
+       bool "HTC style lpass ssr features"
+       depends on HTC_FEATURES_SSR
+       default n
+       help
+         Say Y here if you want the HTC style for lpass ssr features
+
+config HTC_FEATURES_SSR_WCNSS_ENABLE
+       bool "HTC style wcnss ssr features"
+       depends on HTC_FEATURES_SSR
+       default n
+       help
+
+config HTC_DEBUG_FOOTPRINT
+       bool "Record footprint on some actions"
+       default n
+       depends on HTC_DEBUG
+       help
+         Record footprints for debug tracking.
+         Especially for suspend/resume and boot.
+
+config HTC_DEFAULT_ENABLED_FEATURES
+	bool "Select default enabled config for HTC projects"
+	default y
+	select COMPACTION
+	help
+	  Default y to select other configs which should be enabled by default
+	  for HTC projects.
+
+config HTC_BUILD_EDIAG
+        bool "Build in embedded diag fixes"
+        default n
+        help
+          For embedded diag we need to do some additional fixes.
+
+config ENLARGE_RADIO_BUFFER
+        bool "Enlarge radio buffer"
+        default n
+        help
+          Enlarge radio buffer for two rild project.
+
+config HTC_RPM_CMD
+	bool "HTC homebrew command interface"
+	depends on MSM_RPM || MSM_RPM_SMD
+	default n
+	help
+	  This expose HTC RPM command interface for different purpose.
+
+config HTC_POWER_HACK
+       bool "HTC POWER HACK"
+       help
+         Say Y here if HTC POWER HACK
+
+config HTC_DEBUG_RIL_PCN0005_HTC_DUMP_SMSM_LOG
+	tristate "HTC_DEBUG_RIL_PCN0005_HTC_DUMP_SMSM_LOG"
+	default n
+	depends on MSM_SMD
+	---help---
+	  Dump SMSM log message
+
+config HTC_DEBUG_RIL_PCN0006_HTC_DUMP_BAM_DMUX_LOG
+	tristate "HTC_DEBUG_RIL_PCN0006_HTC_DUMP_BAM_DMUX_LOG"
+	default n
+	depends on MSM_BAM_DMUX
+	---help---
+	  Dump BAM DMUX log message
+

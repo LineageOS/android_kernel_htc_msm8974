@@ -24,12 +24,11 @@
 #include "mdp3_ppp.h"
 #include "mdp3_hwio.h"
 
-/* SHIM Q Factor */
 #define PHI_Q_FACTOR          29
-#define PQF_PLUS_5            (PHI_Q_FACTOR + 5)	/* due to 32 phases */
+#define PQF_PLUS_5            (PHI_Q_FACTOR + 5)	
 #define PQF_PLUS_4            (PHI_Q_FACTOR + 4)
-#define PQF_PLUS_2            (PHI_Q_FACTOR + 2)	/* to get 4.0 */
-#define PQF_MINUS_2           (PHI_Q_FACTOR - 2)	/* to get 0.25 */
+#define PQF_PLUS_2            (PHI_Q_FACTOR + 2)	
+#define PQF_MINUS_2           (PHI_Q_FACTOR - 2)	
 #define PQF_PLUS_5_PLUS_2     (PQF_PLUS_5 + 2)
 #define PQF_PLUS_5_MINUS_2    (PQF_PLUS_5 - 2)
 
@@ -49,7 +48,7 @@ static int mdp_calc_scale_params(uint32_t org, uint32_t dim_in,
 	uint64_t denom = 0;
 	int64_t point5 = 1;
 	int64_t one = 1;
-	int64_t k1, k2, k3, k4;	/* linear equation coefficients */
+	int64_t k1, k2, k3, k4;	
 	uint64_t int_mask;
 	uint64_t fract_mask;
 	uint64_t Os;
@@ -61,19 +60,6 @@ static int mdp_calc_scale_params(uint32_t org, uint32_t dim_in,
 	int64_t delta;
 	uint32_t mult;
 
-	/*
-	 * The phase accumulator should really be rational for all cases in a
-	 * general purpose polyphase scaler for a tiled architecture with
-	 * non-zero * origin capability because there is no way to represent
-	 * certain scale factors in fixed point regardless of precision.
-	 * The error incurred in attempting to use fixed point is most
-	 * eggregious for SF where 1/SF is an integral multiple of 1/3.
-	 *
-	 * Set the RPA flag for this dimension.
-	 *
-	 * In order for 1/SF (dim_in/dim_out) to be an integral multiple of
-	 * 1/3, dim_out must be an integral multiple of 3.
-	 */
 	if (!(dim_out % 3)) {
 		mult = dim_out / 3;
 		rpa_on = (!(dim_in % mult));
@@ -82,80 +68,57 @@ static int mdp_calc_scale_params(uint32_t org, uint32_t dim_in,
 	numer = dim_out;
 	denom = dim_in;
 
-	/*
-	 * convert to U30.34 before division
-	 *
-	 * The K vectors carry 4 extra bits of precision
-	 * and are rounded.
-	 *
-	 * We initially go 5 bits over then round by adding
-	 * 1 and right shifting by 1
-	 * so final result is U31.33
-	 */
 	numer <<= PQF_PLUS_5;
 
-	/* now calculate the scale factor (aka k3) */
+	
 	k3 = ((mdp_do_div(numer, denom) + 1) >> 1);
 
-	/* check scale factor for legal range [0.25 - 4.0] */
+	
 	if (((k3 >> 4) < (1LL << PQF_MINUS_2)) ||
 	    ((k3 >> 4) > (1LL << PQF_PLUS_2))) {
 		return -EINVAL;
 	}
 
-	/* calculate inverse scale factor (aka k1) for phase init */
+	
 	numer = dim_in;
 	denom = dim_out;
 	numer <<= PQF_PLUS_5;
 	k1 = ((mdp_do_div(numer, denom) + 1) >> 1);
 
-	/*
-	 * calculate initial phase and ROI overfetch
-	 */
-	/* convert point5 & one to S39.24 (will always be positive) */
+	
 	point5 <<= (PQF_PLUS_4 - 1);
 	one <<= PQF_PLUS_4;
 	k2 = ((k1 - one) >> 1);
 	init_phase = (int)(k2 >> 4);
 	k4 = ((k3 - one) >> 1);
 	if (k3 != one) {
-		/* calculate the masks */
+		
 		fract_mask = one - 1;
 		int_mask = ~fract_mask;
 
 		if (!rpa_on) {
-			/*
-			 * FIXED POINT IMPLEMENTATION
-			 */
 			if (org) {
-				/*
-				 * The complicated case; ROI origin != 0
-				 * init_phase needs to be adjusted
-				 * OF is also position dependent
-				 */
 
-				/* map (org - .5) into destination space */
+				
 				Os = ((uint64_t) org << 1) - 1;
 				Od = ((k3 * Os) >> 1) + k4;
 
-				/* take the ceiling */
+				
 				Odprime = (Od & int_mask);
 				if (Odprime != Od)
 					Odprime += one;
 
-				/* now map that back to source space */
+				
 				Osprime = (k1 * (Odprime >> PQF_PLUS_4)) + k2;
 
-				/* then floor & decrement to calc the required
-				   starting coordinate */
 				Oreq = (Osprime & int_mask) - one;
 
-				/* calculate initial phase */
+				
 				init_phase_temp = Osprime - Oreq;
 				delta = ((int64_t) (org) << PQF_PLUS_4) - Oreq;
 				init_phase_temp -= delta;
 
-				/* limit to valid range before the left shift */
+				
 				delta = (init_phase_temp & (1LL << 63)) ?
 						4 : -4;
 				delta <<= PQF_PLUS_4;
@@ -163,59 +126,47 @@ static int mdp_calc_scale_params(uint32_t org, uint32_t dim_in,
 							PQF_PLUS_4)) > 4)
 					init_phase_temp += delta;
 
-				/*
-				 * right shift to account for extra bits of
-				 * precision
-				 */
 				init_phase = (int)(init_phase_temp >> 4);
 
 			}
 		} else {
-			/*
-			 * RPA IMPLEMENTATION
-			 *
-			 * init_phase needs to be calculated in all RPA_on cases
-			 * because it's a numerator, not a fixed point value.
-			 */
 
-			/* map (org - .5) into destination space */
+			
 			Os = ((uint64_t) org << PQF_PLUS_4) - point5;
 			Od = mdp_do_div((dim_out * (Os + point5)),
 					dim_in);
 			Od -= point5;
 
-			/* take the ceiling */
+			
 			Odprime = (Od & int_mask);
 			if (Odprime != Od)
 				Odprime += one;
 
-			/* now map that back to source space */
+			
 			Osprime =
 			    mdp_do_div((dim_in * (Odprime + point5)),
 				       dim_out);
 			Osprime -= point5;
 
-			/* then floor & decrement to calculate the required
-			   starting coordinate */
 			Oreq = (Osprime & int_mask) - one;
 
-			/* calculate initial phase */
+			
 			init_phase_temp = Osprime - Oreq;
 			delta = ((int64_t) (org) << PQF_PLUS_4) - Oreq;
 			init_phase_temp -= delta;
 
-			/* limit to valid range before the left shift */
+			
 			delta = (init_phase_temp & (1LL << 63)) ? 4 : -4;
 			delta <<= PQF_PLUS_4;
 			while (abs((int)(init_phase_temp >> PQF_PLUS_4)) > 4)
 				init_phase_temp += delta;
 
-			/* right shift to account for extra bits of precision */
+			
 			init_phase = (int)(init_phase_temp >> 4);
 		}
 	}
 
-	/* return the scale parameters */
+	
 	*phase_init_ptr = init_phase;
 	*phase_step_ptr = (uint32_t) (k1 >> 4);
 
@@ -246,7 +197,7 @@ inline int32_t comp_conv_rgb2yuv(int32_t comp, int32_t y_high,
 	if (comp > 255)
 		comp = 255;
 
-	/* clamp */
+	
 	if (comp < y_low)
 		comp = y_low;
 	if (comp > y_high)
@@ -289,16 +240,12 @@ static uint32_t conv_rgb2yuv(uint32_t input_pixel,
 	C_low_limit = (int32_t) clamp_vector[2];
 	C_high_limit = (int32_t) clamp_vector[3];
 
-	/*
-	 * Color Conversion
-	 * reorder input colors
-	 */
 	temp = comp_C2;
 	comp_C2 = comp_C1;
 	comp_C1 = comp_C0;
 	comp_C0 = temp;
 
-	/* matrix multiplication */
+	
 	temp1 = comp_C0 * matrix[0] + comp_C1 * matrix[1] + comp_C2 * matrix[2];
 	temp2 = comp_C0 * matrix[3] + comp_C1 * matrix[4] + comp_C2 * matrix[5];
 	temp3 = comp_C0 * matrix[6] + comp_C1 * matrix[7] + comp_C2 * matrix[8];
@@ -307,17 +254,17 @@ static uint32_t conv_rgb2yuv(uint32_t input_pixel,
 	comp_C1 = temp2 + 0x100;
 	comp_C2 = temp3 + 0x100;
 
-	/* take interger part */
+	
 	comp_C0 >>= 9;
 	comp_C1 >>= 9;
 	comp_C2 >>= 9;
 
-	/* post bias (+) */
+	
 	comp_C0 += bias_vector[0];
 	comp_C1 += bias_vector[1];
 	comp_C2 += bias_vector[2];
 
-	/* limit pixel to 8-bit */
+	
 	comp_C0 = comp_conv_rgb2yuv(comp_C0, Y_high_limit,
 			Y_low_limit, C_high_limit, C_low_limit);
 	comp_C1 = comp_conv_rgb2yuv(comp_C1, Y_high_limit,
@@ -407,10 +354,6 @@ void mdp_adjust_start_addr(struct ppp_blit_op *blit_op,
 		img->p0 = mdp_dst_adjust_rot_addr(blit_op, img->p0, bpp, 0);
 
 	if (img->p1) {
-		/*
-		 * MDP_Y_CBCR_H2V2/MDP_Y_CRCB_H2V2 cosite for now
-		 * we need to shift x direction same as y dir for offsite
-		 */
 		if ((img->color_fmt == MDP_Y_CBCR_H2V2_ADRENO ||
 				img->color_fmt == MDP_Y_CBCR_H2V2_VENUS)
 							&& layer == 0)
@@ -439,7 +382,6 @@ int load_ppp_lut(int tableType, uint32_t *lut)
 	return 0;
 }
 
-/* Configure Primary CSC Matrix */
 int load_primary_matrix(struct ppp_csc_table *csc)
 {
 	int i;
@@ -459,7 +401,6 @@ int load_primary_matrix(struct ppp_csc_table *csc)
 	return 0;
 }
 
-/* Load Secondary CSC Matrix */
 int load_secondary_matrix(struct ppp_csc_table *csc)
 {
 	int i;
@@ -486,7 +427,7 @@ int load_csc_matrix(int matrix_type, struct ppp_csc_table *csc)
 	return load_secondary_matrix(csc);
 }
 
-int config_ppp_src(struct ppp_img_desc *src, uint32_t yuv2rgb)
+int config_ppp_src(struct ppp_img_desc *src)
 {
 	uint32_t val;
 
@@ -510,12 +451,12 @@ int config_ppp_src(struct ppp_img_desc *src, uint32_t yuv2rgb)
 	val |= (src->roi.x % 2) ? PPP_SRC_BPP_ROI_ODD_X : 0;
 	val |= (src->roi.y % 2) ? PPP_SRC_BPP_ROI_ODD_Y : 0;
 	PPP_WRITEL(val, MDP3_PPP_SRC_FORMAT);
-	PPP_WRITEL(ppp_pack_pattern(src->color_fmt, yuv2rgb),
+	PPP_WRITEL(ppp_pack_pattern(src->color_fmt),
 		MDP3_PPP_SRC_UNPACK_PATTERN1);
 	return 0;
 }
 
-int config_ppp_out(struct ppp_img_desc *dst, uint32_t yuv2rgb)
+int config_ppp_out(struct ppp_img_desc *dst)
 {
 	uint32_t val;
 	bool pseudoplanr_output = false;
@@ -534,7 +475,7 @@ int config_ppp_out(struct ppp_img_desc *dst, uint32_t yuv2rgb)
 	if (pseudoplanr_output)
 		val |= PPP_DST_PLANE_PSEUDOPLN;
 	PPP_WRITEL(val, MDP3_PPP_OUT_FORMAT);
-	PPP_WRITEL(ppp_pack_pattern(dst->color_fmt, yuv2rgb),
+	PPP_WRITEL(ppp_pack_pattern(dst->color_fmt),
 		MDP3_PPP_OUT_PACK_PATTERN1);
 
 	val = ((dst->roi.height & MDP3_PPP_XY_MASK) << MDP3_PPP_XY_OFFSET) |
@@ -573,7 +514,7 @@ int config_ppp_background(struct ppp_img_desc *bg)
 
 	PPP_WRITEL(ppp_src_config(bg->color_fmt),
 		MDP3_PPP_BG_FORMAT);
-	PPP_WRITEL(ppp_pack_pattern(bg->color_fmt, 0),
+	PPP_WRITEL(ppp_pack_pattern(bg->color_fmt),
 		MDP3_PPP_BG_UNPACK_PATTERN1);
 	return 0;
 }
@@ -593,39 +534,32 @@ void ppp_edge_rep_luma_pixel(struct ppp_blit_op *blit_op,
 			er->dst_roi_height = blit_op->dst.roi.height;
 		}
 
-		/*
-		 * Find out the luma pixels needed for scaling in the
-		 * x direction (LEFT and RIGHT).  Locations of pixels are
-		 * relative to the ROI. Upper-left corner of ROI corresponds
-		 * to coordinates (0,0). Also set the number of luma pixel
-		 * to repeat.
-		 */
 		if (blit_op->src.roi.width > 3 * er->dst_roi_width) {
-			/* scale factor < 1/3 */
+			
 			er->luma_interp_point_right =
 				(blit_op->src.roi.width - 1);
 		} else if (blit_op->src.roi.width == 3 * er->dst_roi_width) {
-			/* scale factor == 1/3 */
+			
 			er->luma_interp_point_right =
 				(blit_op->src.roi.width - 1) + 1;
 			er->luma_repeat_right = 1;
 		} else if ((blit_op->src.roi.width > er->dst_roi_width) &&
 			   (blit_op->src.roi.width < 3 * er->dst_roi_width)) {
-			/* 1/3 < scale factor < 1 */
+			
 			er->luma_interp_point_left = -1;
 			er->luma_interp_point_right =
 				(blit_op->src.roi.width - 1) + 1;
 			er->luma_repeat_left = 1;
 			er->luma_repeat_right = 1;
 		} else if (blit_op->src.roi.width == er->dst_roi_width) {
-			/* scale factor == 1 */
+			
 			er->luma_interp_point_left = -1;
 			er->luma_interp_point_right =
 				(blit_op->src.roi.width - 1) + 2;
 			er->luma_repeat_left = 1;
 			er->luma_repeat_right = 2;
 		} else {
-			  /* scale factor > 1 */
+			  
 			er->luma_interp_point_left = -2;
 			er->luma_interp_point_right =
 				(blit_op->src.roi.width - 1) + 2;
@@ -633,13 +567,6 @@ void ppp_edge_rep_luma_pixel(struct ppp_blit_op *blit_op,
 			er->luma_repeat_right = 2;
 		}
 
-		/*
-		 * Find out the number of pixels needed for scaling in the
-		 * y direction (TOP and BOTTOM).  Locations of pixels are
-		 * relative to the ROI. Upper-left corner of ROI corresponds
-		 * to coordinates (0,0). Also set the number of luma pixel
-		 * to repeat.
-		 */
 		if (blit_op->src.roi.height > 3 * er->dst_roi_height) {
 			er->luma_interp_point_bottom =
 				(blit_op->src.roi.height - 1);
@@ -668,18 +595,11 @@ void ppp_edge_rep_luma_pixel(struct ppp_blit_op *blit_op,
 			er->luma_repeat_bottom = 2;
 		}
 	} else {
-		/*
-		 * Since no scaling needed, Tile Fetch does not require any
-		 * more luma pixel than what the ROI contains.
-		 */
 		er->luma_interp_point_right =
 			(int32_t) (blit_op->src.roi.width - 1);
 		er->luma_interp_point_bottom =
 			(int32_t) (blit_op->src.roi.height - 1);
 	}
-	/* After adding the ROI offsets, we have locations of
-	 * luma_interp_points relative to the image.
-	 */
 	er->luma_interp_point_left += (int32_t) (blit_op->src.roi.x);
 	er->luma_interp_point_right += (int32_t) (blit_op->src.roi.x);
 	er->luma_interp_point_top += (int32_t) (blit_op->src.roi.y);
@@ -692,7 +612,7 @@ void ppp_edge_rep_chroma_pixel(struct ppp_blit_op *blit_op,
 	bool chroma_edge_enable = true;
 	uint32_t is_yuv_offsite_vertical = 0;
 
-	/* find out which chroma pixels are needed for chroma upsampling. */
+	
 	switch (blit_op->src.color_fmt) {
 	case MDP_Y_CBCR_H2V1:
 	case MDP_Y_CRCB_H2V1:
@@ -729,13 +649,13 @@ void ppp_edge_rep_chroma_pixel(struct ppp_blit_op *blit_op,
 	}
 
 	if (chroma_edge_enable) {
-		/* Defines which chroma pixels belongs to the roi */
+		
 		switch (blit_op->src.color_fmt) {
 		case MDP_Y_CBCR_H2V1:
 		case MDP_Y_CRCB_H2V1:
 		case MDP_YCRYCB_H2V1:
 			er->chroma_bound_left = blit_op->src.roi.x / 2;
-			/* there are half as many chroma pixel as luma pixels */
+			
 			er->chroma_bound_right =
 			    (blit_op->src.roi.width +
 				blit_op->src.roi.x - 1) / 2;
@@ -747,11 +667,6 @@ void ppp_edge_rep_chroma_pixel(struct ppp_blit_op *blit_op,
 		case MDP_Y_CBCR_H2V2_ADRENO:
 		case MDP_Y_CBCR_H2V2_VENUS:
 		case MDP_Y_CRCB_H2V2:
-			/*
-			 * cosite in horizontal dir, and offsite in vertical dir
-			 * width of chroma ROI is 1/2 of size of luma ROI
-			 * height of chroma ROI is 1/2 of size of luma ROI
-			 */
 			er->chroma_bound_left = blit_op->src.roi.x / 2;
 			er->chroma_bound_right =
 			    (blit_op->src.roi.width +
@@ -763,10 +678,6 @@ void ppp_edge_rep_chroma_pixel(struct ppp_blit_op *blit_op,
 			break;
 
 		default:
-			/*
-			 * If no valid chroma sub-sampling format specified,
-			 * assume 4:4:4 ( i.e. fully sampled).
-			 */
 			er->chroma_bound_left = blit_op->src.roi.x;
 			er->chroma_bound_right = blit_op->src.roi.width +
 				blit_op->src.roi.x - 1;
@@ -776,14 +687,6 @@ void ppp_edge_rep_chroma_pixel(struct ppp_blit_op *blit_op,
 			break;
 		}
 
-		/*
-		 * Knowing which chroma pixels are needed, and which chroma
-		 * pixels belong to the ROI (i.e. available for fetching ),
-		 * calculate how many chroma pixels Tile Fetch needs to
-		 * duplicate.  If any required chroma pixels falls outside
-		 * of the ROI, Tile Fetch must obtain them by replicating
-		 * pixels.
-		 */
 		if (er->chroma_bound_left > er->chroma_interp_point_left)
 			er->chroma_repeat_left =
 			    er->chroma_bound_left -
@@ -829,17 +732,13 @@ int config_ppp_edge_rep(struct ppp_blit_op *blit_op)
 
 	ppp_edge_rep_luma_pixel(blit_op, &er);
 
-	/*
-	 * After adding the ROI offsets, we have locations of
-	 * chroma_interp_points relative to the image.
-	 */
 	er.chroma_interp_point_left = er.luma_interp_point_left;
 	er.chroma_interp_point_right = er.luma_interp_point_right;
 	er.chroma_interp_point_top = er.luma_interp_point_top;
 	er.chroma_interp_point_bottom = er.luma_interp_point_bottom;
 
 	ppp_edge_rep_chroma_pixel(blit_op, &er);
-	/* ensure repeats are >=0 and no larger than 3 pixels */
+	
 	if ((er.chroma_repeat_left < 0) || (er.chroma_repeat_right < 0) ||
 	    (er.chroma_repeat_top < 0) || (er.chroma_repeat_bottom < 0))
 		return -EINVAL;
@@ -1108,7 +1007,6 @@ int config_ppp_rotation(uint32_t mdp_op, uint32_t *pppop_reg_ptr)
 
 int config_ppp_op_mode(struct ppp_blit_op *blit_op)
 {
-	uint32_t yuv2rgb;
 	uint32_t ppp_operation_reg = 0;
 	int sv_slice, sh_slice;
 	int dv_slice, dh_slice;
@@ -1154,7 +1052,6 @@ int config_ppp_op_mode(struct ppp_blit_op *blit_op)
 
 	config_ppp_csc(blit_op->src.color_fmt,
 		blit_op->dst.color_fmt, &ppp_operation_reg);
-	yuv2rgb = ppp_operation_reg & PPP_OP_CONVERT_YCBCR2RGB;
 
 	if (blit_op->mdp_op & MDPOP_DITHER)
 		ppp_operation_reg |= PPP_OP_DITHER_EN;
@@ -1189,8 +1086,8 @@ int config_ppp_op_mode(struct ppp_blit_op *blit_op)
 	}
 
 	blit_op->bg = blit_op->dst;
-	/* Jumping from Y-Plane to Chroma Plane */
-	/* first pixel addr calculation */
+	
+	
 	mdp_adjust_start_addr(blit_op, &blit_op->src, sv_slice, sh_slice, 0);
 	mdp_adjust_start_addr(blit_op, &blit_op->bg, dv_slice, dh_slice, 1);
 	mdp_adjust_start_addr(blit_op, &blit_op->dst, dv_slice, dh_slice, 2);
@@ -1199,8 +1096,8 @@ int config_ppp_op_mode(struct ppp_blit_op *blit_op)
 
 	config_ppp_blend(blit_op, &ppp_operation_reg);
 
-	config_ppp_src(&blit_op->src, yuv2rgb);
-	config_ppp_out(&blit_op->dst, yuv2rgb);
+	config_ppp_src(&blit_op->src);
+	config_ppp_out(&blit_op->dst);
 	PPP_WRITEL(ppp_operation_reg, MDP3_PPP_OP_MODE);
 	mb();
 	return 0;

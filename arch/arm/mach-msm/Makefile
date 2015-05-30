@@ -23,6 +23,7 @@ endif
 endif
 
 obj-y += acpuclock.o
+obj-y += radio_feedback.o
 obj-$(CONFIG_MSM_CORTEX_A7) += clock-a7.o
 obj-$(CONFIG_HW_PERF_EVENTS) += perf_trace_counters.o
 obj-$(CONFIG_ARCH_MSM_KRAIT) += clock-krait.o
@@ -66,6 +67,11 @@ obj-$(CONFIG_MSM_JTAG_MM) +=  jtag-fuse.o jtag-mm.o
 msm-etm-objs := etm.o
 obj-$(CONFIG_MSM_ETM) += msm-etm.o
 
+
+# ++SSD_RIL: Garbage_Filter_TCP
+obj-$(CONFIG_MSM_SMD) += htc_port_list.o
+# --SSD_RIL: Garbage_Filter_TCP
+
 quiet_cmd_mkrpcsym = MKCAP   $@
       cmd_mkrpcsym = $(PERL) $(srctree)/$(src)/mkrpcsym.pl $< $@
 
@@ -76,7 +82,7 @@ $(obj)/smd_rpc_sym.c: $(src)/smd_rpc_sym $(src)/mkrpcsym.pl
 obj-$(CONFIG_MSM_SMD) += smd.o smd_debug.o remote_spinlock.o smd_private.o smem.o smd_init_dt.o smd_init_plat.o
 obj-$(CONFIG_MSM_SMP2P) += smp2p.o smp2p_debug.o smp2p_gpio.o
 obj-$(CONFIG_MSM_SMP2P_TEST) += smp2p_loopback.o smp2p_test.o smp2p_gpio_test.o smp2p_spinlock_test.o
-obj-$(CONFIG_MSM_SCM) += scm.o scm-boot.o
+obj-$(CONFIG_MSM_SCM) += scm.o scm-boot.o htc_simlock.o htc_drm.o htc_sdservice.o htc_rmtmsg.o
 obj-$(CONFIG_MSM_XPU_ERR_FATAL) += scm-xpu.o
 obj-$(CONFIG_MSM_SECURE_IO) += scm-io.o
 obj-$(CONFIG_MSM_PIL) += peripheral-loader.o
@@ -85,7 +91,7 @@ obj-$(CONFIG_MSM_PIL_QDSP6V3) += pil-q6v3.o
 obj-$(CONFIG_MSM_PIL_LPASS_QDSP6V4) += pil-q6v4.o pil-q6v4-lpass.o
 obj-$(CONFIG_MSM_PIL_MODEM_QDSP6V4) += pil-q6v4.o pil-q6v4-mss.o
 obj-$(CONFIG_MSM_PIL_LPASS_QDSP6V5) += pil-q6v5.o pil-q6v5-lpass.o
-obj-$(CONFIG_MSM_PIL_MSS_QDSP6V5) += pil-q6v5.o pil-msa.o pil-q6v5-mss.o
+obj-$(CONFIG_MSM_PIL_MSS_QDSP6V5) += pil-q6v5.o pil-msa.o pil-q6v5-mss.o pil-q6v5-mss-debug.o
 obj-$(CONFIG_MSM_PIL_RIVA) += pil-riva.o
 obj-$(CONFIG_MSM_PIL_TZAPPS) += pil-tzapps.o
 obj-$(CONFIG_MSM_PIL_VIDC) += pil-vidc.o
@@ -106,6 +112,7 @@ ifdef CONFIG_DEBUG_FS
 obj-$(CONFIG_MSM_IPC_LOGGING) += ipc_logging_debug.o
 endif
 obj-y += socinfo.o
+obj-y += htc_sysinfo.o
 obj-$(CONFIG_ARCH_MSM7X01A) += nand_partitions.o
 obj-$(CONFIG_ARCH_MSM7X25) += nand_partitions.o
 obj-$(CONFIG_ARCH_MSM7X27) += nand_partitions.o
@@ -273,25 +280,38 @@ obj-$(CONFIG_ARCH_MSM9615) += board-9615.o devices-9615.o board-9615-regulator.o
 obj-$(CONFIG_ARCH_MSM9615) += clock-local.o clock-9615.o acpuclock-9615.o clock-rpm.o clock-pll.o
 obj-$(CONFIG_ARCH_APQ8084) += board-8084.o board-8084-gpiomux.o
 obj-$(CONFIG_ARCH_APQ8084) += clock-8084.o
-obj-$(CONFIG_ARCH_MSM8974) += board-8974.o board-8974-gpiomux.o
+obj-$(CONFIG_ARCH_MSM8974) += board-8974.o board-8974-gpiomux.o  htc_wifi_nvs.o
 obj-$(CONFIG_ARCH_MSM8974) += clock-krait-8974.o
 obj-$(CONFIG_ARCH_MSM8974) += clock-local2.o clock-pll.o clock-8974.o clock-rpm.o clock-voter.o clock-mdss-8974.o
+obj-$(CONFIG_ARCH_MSM8974) += devices_cmdline.o devices_dtb.o
 obj-$(CONFIG_ARCH_MSM8974) += gdsc.o
 obj-$(CONFIG_ARCH_MSM9625) += gdsc.o
-obj-$(CONFIG_ARCH_MSM8226) += gdsc.o
+obj-$(CONFIG_ARCH_MSM8226) += gdsc.o devices_dtb.o devices_cmdline.o
 obj-$(CONFIG_ARCH_MSM8610) += gdsc.o
 obj-$(CONFIG_ARCH_MPQ8092) += gdsc.o
 obj-$(CONFIG_ARCH_APQ8084) += gdsc.o
 obj-$(CONFIG_KRAIT_REGULATOR) += krait-regulator.o  krait-regulator-pmic.o
+obj-$(CONFIG_ARCH_MSM8974) += htc_awb_cal.o
+obj-$(CONFIG_ARCH_MSM8226) += htc_awb_cal.o
+ifdef CONFIG_BT
+  obj-$(CONFIG_ARCH_MSM8974) += htc_bdaddress.o
+endif #CONFIG_BT
 obj-$(CONFIG_ARCH_MSMKRYPTON) += board-krypton.o board-krypton-gpiomux.o
 obj-$(CONFIG_ARCH_MSMSAMARIUM) += board-samarium.o board-samarium-gpiomux.o
 obj-$(CONFIG_ARCH_MSM9625) += board-9625.o board-9625-gpiomux.o
 obj-$(CONFIG_ARCH_MSM9625) += clock-local2.o clock-pll.o clock-9625.o clock-rpm.o clock-voter.o acpuclock-9625.o acpuclock-cortex.o
 obj-$(CONFIG_ARCH_MPQ8092) += board-8092.o board-8092-gpiomux.o
 obj-$(CONFIG_ARCH_MPQ8092) += clock-8092.o
+obj-$(CONFIG_ARCH_MSM8226) += board-8226.o board-8226-gpiomux.o htc_wifi_nvs.o
+ifdef CONFIG_BT
+  obj-$(CONFIG_ARCH_MSM8226) += htc_bdaddress.o
+endif #CONFIG_BT
+obj-$(CONFIG_ARCH_MSM8226) += board-htc-8x26.o htc_acoustic_alsa.o
+obj-$(CONFIG_ARCH_MSM8226) += board-8226-audio.o
 obj-$(CONFIG_ARCH_MSM8226) += board-8226.o board-8226-gpiomux.o
 obj-$(CONFIG_ARCH_MSM8226) += clock-local2.o clock-pll.o clock-8226.o clock-rpm.o clock-voter.o clock-mdss-8974.o
 obj-$(CONFIG_ARCH_MSM8226) += acpuclock-8226.o acpuclock-cortex.o
+obj-$(CONFIG_ARCH_MSM8226) += devices_cmdline.o devices_dtb.o
 obj-$(CONFIG_ARCH_MSM8610) += board-8610.o board-8610-gpiomux.o
 obj-$(CONFIG_ARCH_MSM8610) += clock-local2.o clock-pll.o clock-8610.o clock-rpm.o clock-voter.o
 obj-$(CONFIG_ARCH_MSM8610) += acpuclock-8226.o acpuclock-cortex.o
@@ -311,6 +331,8 @@ CFLAGS_board-9615.o += -Idrivers/usb/gadget
 obj-$(CONFIG_ARCH_FSM9XXX) += board-fsm9xxx.o
 
 obj-$(CONFIG_TROUT_BATTCHG) += htc_battery.o
+obj-$(CONFIG_HTC_BATT_CORE) += htc_battery_core.o
+obj-$(CONFIG_HTC_BATT_8960) += htc_battery_8960.o htc_battery_cell.o
 
 obj-$(CONFIG_HTC_PWRSINK) += htc_pwrsink.o
 obj-$(CONFIG_HTC_HEADSET) += htc_headset.o
@@ -336,6 +358,9 @@ obj-$(CONFIG_ARCH_MSM8064)	+= devices-iommu.o
 endif
 
 obj-$(CONFIG_MSM_EVENT_TIMER)		+= event_timer.o
+
+obj-$(CONFIG_HTC_HEADSET) += htc_headset.o
+obj-$(CONFIG_HTC_HEADSET_MGR) += htc_headset_mgr.o
 
 ifdef CONFIG_VCM
 obj-$(CONFIG_ARCH_MSM8X60) += board-msm8x60-vcm.o
@@ -369,6 +394,7 @@ obj-$(CONFIG_BT_MSM_PINTEST)  += btpintest.o
 obj-$(CONFIG_MSM_FAKE_BATTERY) += fish_battery.o
 obj-$(CONFIG_MSM_RPC_VIBRATOR) += msm_vibrator.o
 obj-$(CONFIG_MSM_NATIVE_RESTART) += restart.o
+obj-$(CONFIG_MSM_NATIVE_RESTART) += htc_restart_handler.o
 obj-$(CONFIG_MSM_MODEM_RESTART) += restart_7k.o
 
 obj-$(CONFIG_MSM_PROC_COMM_REGULATOR) += proccomm-regulator.o
@@ -417,5 +443,21 @@ obj-$(CONFIG_MSM_DEVFREQ_CPUBW) += devfreq_cpubw.o
 
 obj-$(CONFIG_WALL_CLK) += wallclk.o
 obj-$(CONFIG_WALL_CLK_SYSFS) += wallclk_sysfs.o
+
+obj-y += display/
+obj-$(CONFIG_ARCH_MSM8974) += board-htc-8974.o htc_acoustic_alsa.o htc_lpm.o
+obj-$(CONFIG_MACH_M8) += board-m8-gpiomux.o board-m8-audio.o
+obj-$(CONFIG_MACH_M8_WHL) += board-m8-gpiomux.o board-m8-audio.o
+obj-$(CONFIG_MACH_M8_WL) += board-m8-gpiomux.o board-m8-audio.o
+
+
+obj-$(CONFIG_HTC_HEADSET_PMIC) += htc_headset_pmic.o
+obj-$(CONFIG_HTC_HEADSET_GPIO) += htc_headset_gpio.o
+obj-$(CONFIG_HTC_HEADSET_ONE_WIRE) += htc_headset_one_wire.o
+
+obj-y += smlog.o
+
 obj-$(CONFIG_ARCH_RANDOM) += early_random.o
 obj-$(CONFIG_PERFMAP) += perfmap.o
+obj-$(CONFIG_HTC_RPM_CMD) += rpm_htc_cmd.o
+obj-$(CONFIG_HTC_MONITOR) += htc_monitor.o

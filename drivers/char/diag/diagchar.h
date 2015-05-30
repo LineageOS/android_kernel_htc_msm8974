@@ -19,11 +19,14 @@
 #include <linux/mutex.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
+#include <linux/wakelock.h>
 #include <linux/workqueue.h>
 #include <linux/sched.h>
 #include <linux/wakelock.h>
 #include <mach/msm_smd.h>
 #include <asm/atomic.h>
+#include <mach/usbdiag.h>
+#include <asm/mach-types.h>
 
 /* Size of the USB buffers used for read and write*/
 #define USB_MAX_OUT_BUF 4096
@@ -78,13 +81,10 @@
 #define HSIC_DATA		5
 #define HSIC_2_DATA		6
 #define SMUX_DATA		10
+#define MODEM_PROC		0
 #define APPS_PROC		1
-/*
- * Each row contains First (uint32_t), Last (uint32_t), Actual
- * last (uint32_t) values along with the range of SSIDs
- * (MAX_SSID_PER_RANGE*uint32_t).
- * And there are MSG_MASK_TBL_CNT rows.
- */
+#define LPASS_PROC		2
+#define WCNSS_PROC		3
 #define MSG_MASK_SIZE		((MAX_SSID_PER_RANGE+3) * 4 * MSG_MASK_TBL_CNT)
 #define MAX_EQUIP_ID		16
 #define MAX_ITEMS_PER_EQUIP_ID	512
@@ -235,6 +235,7 @@ struct diag_write_device {
 struct diag_client_map {
 	char name[20];
 	int pid;
+	int timeout;
 };
 
 struct real_time_vote_t {
@@ -279,6 +280,9 @@ struct diag_smd_info {
 
 	unsigned int buf_in_1_raw_size;
 	unsigned int buf_in_2_raw_size;
+
+	unsigned int buf_full;
+	unsigned int buf_release;
 
 	struct diag_request *write_ptr_1;
 	struct diag_request *write_ptr_2;
@@ -340,6 +344,27 @@ struct diagchar_dev {
 	int dci_state;
 	struct workqueue_struct *diag_dci_wq;
 	/* Memory pool parameters */
+#if defined(CONFIG_DIAG_SDIO_PIPE) || defined(CONFIG_DIAGFWD_BRIDGE_CODE)
+	struct cdev *cdev_mdm;
+	int num_mdmclients;
+	struct mutex diagcharmdm_mutex;
+	wait_queue_head_t mdmwait_q;
+	struct diag_client_map *mdmclient_map;
+	int *mdmdata_ready;
+	int mdm_logging_process_id;
+	unsigned char *user_space_mdm_data;
+
+	struct cdev *cdev_qsc;
+	int num_qscclients;
+	struct mutex diagcharqsc_mutex;
+	wait_queue_head_t qscwait_q;
+	struct diag_client_map *qscclient_map;
+	int *qscdata_ready;
+	int qsc_logging_process_id;
+	unsigned char *user_space_qsc_data;
+#endif
+
+	
 	unsigned int itemsize;
 	unsigned int poolsize;
 	unsigned int itemsize_hdlc;
@@ -401,6 +426,14 @@ struct diagchar_dev {
 	struct mutex real_time_mutex;
 	struct work_struct diag_real_time_work;
 	struct workqueue_struct *diag_real_time_wq;
+#if DIAG_XPST
+	unsigned char nohdlc;
+	unsigned char in_busy_dmrounter;
+	struct mutex smd_lock;
+	unsigned char init_done;
+	unsigned char is2ARM11;
+	int debug_dmbytes_recv;
+#endif
 #ifdef CONFIG_DIAG_OVER_USB
 	int usb_connected;
 	struct usb_diag_ch *legacy_ch;
@@ -411,6 +444,7 @@ struct diagchar_dev {
 #endif
 	struct workqueue_struct *diag_wq;
 	struct workqueue_struct *diag_usb_wq;
+	struct wake_lock wake_lock;
 	struct work_struct diag_drain_work;
 	struct workqueue_struct *diag_cntl_wq;
 	uint8_t *msg_masks;
@@ -459,6 +493,10 @@ struct diagchar_dev {
 	int smux_connected;
 	struct diag_request *write_ptr_mdm;
 #endif
+	int qxdm2sd_drop;
+	int qxdmusb_drop;
+	struct timeval st0;
+	struct timeval st1;
 	/* Wakeup source related variables */
 	spinlock_t ws_lock;
 	int ws_ref_count;
@@ -469,11 +507,30 @@ extern struct diag_bridge_dev *diag_bridge;
 extern struct diag_hsic_dev *diag_hsic;
 extern struct diagchar_dev *driver;
 
+#define DIAG_DBG_READ	1
+#define DIAG_DBG_WRITE	2
+#define DIAG_DBG_DROP	3
+
+extern unsigned diag7k_debug_mask;
+extern unsigned diag9k_debug_mask;
+#define DIAGFWD_7K_RAWDATA(buf, src, flag) \
+	__diagfwd_dbg_raw_data(buf, src, flag, diag7k_debug_mask)
+#define DIAGFWD_9K_RAWDATA(buf, src, flag) \
+	__diagfwd_dbg_raw_data(buf, src, flag, diag9k_debug_mask)
+void __diagfwd_dbg_raw_data(void *buf, const char *src, unsigned dbg_flag, unsigned mask);
+
 extern int wrap_enabled;
 extern uint16_t wrap_count;
-
+#if defined(CONFIG_ARCH_MSM8X60) || defined(CONFIG_ARCH_MSM8960) \
+   || defined(CONFIG_ARCH_MSM8974) || defined(CONFIG_ARCH_MSM8226)
+#define    SMDDIAG_NAME "DIAG"
+#else
+#define    SMDDIAG_NAME "SMD_DIAG"
+#endif
+extern struct diagchar_dev *driver;
 void diag_get_timestamp(char *time_str);
 int diag_find_polling_reg(int i);
 void check_drain_timer(void);
 
+void check_drain_timer(void);
 #endif
