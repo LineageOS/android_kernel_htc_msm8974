@@ -756,4 +756,22 @@ config SENSORS_CAPELLA_CM36283
 	  To compile this driver as a module, choose M here: the
 	  module will be called CM36283.
 
+config INPUT_CWSTM32
+       tristate "CyWee CWSTM32 Sensor HUB"
+       depends on I2C && INPUT
+       select INPUT_POLLDEV
+       help
+         This driver provides support for CWSTM32 Sensor HUB.
+
+config INPUT_CAPELLA_CM32181
+        tristate "CM32181 light sensor"
+        help
+          Say Y here to enable the CM32181 Ambient Light Sensor.
+
+config SYNC_TOUCH_STATUS
+        bool "Sync touch i2c switch status to sensor hub"
+        default n
+        help
+          Sync touch i2c switch status to sensor hub
+
 endif
