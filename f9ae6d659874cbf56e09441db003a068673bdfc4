@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "7ffa3b31_8d30cd09",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 2
+      },
+      "lineNbr": 8,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2015-07-06T02:53:00Z",
+      "side": 1,
+      "message": "Trailing whitespace, also, git expects a newline after the commit title.",
+      "revId": "f9ae6d659874cbf56e09441db003a068673bdfc4",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
