@@ -50,6 +50,24 @@
       "revId": "fb8be0a02b9601b0c663809b6ca85ef2165b831e",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
       "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "5ff73747_91610c3d",
+        "filename": "arch/arm/mach-msm/display/Makefile",
+        "patchSetId": 4
+      },
+      "lineNbr": 16,
+      "author": {
+        "id": 13648
+      },
+      "writtenOn": "2015-07-09T19:35:39Z",
+      "side": 1,
+      "message": "Don\u0027t know why this happened. I used gedit, just added the new line and saved the file.",
+      "parentUuid": "5ff73747_a62a8c8d",
+      "revId": "fb8be0a02b9601b0c663809b6ca85ef2165b831e",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
     }
   ]
 }
