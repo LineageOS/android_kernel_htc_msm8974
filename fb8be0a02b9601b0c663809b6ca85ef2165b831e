@@ -2,6 +2,23 @@
   "comments": [
     {
       "key": {
+        "uuid": "5ff73747_661ec471",
+        "filename": "arch/arm/configs/cm_m8_defconfig",
+        "patchSetId": 4
+      },
+      "lineNbr": 543,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2015-07-09T01:18:54Z",
+      "side": 1,
+      "message": "Might as well not have this change here and rely on regenerating the defconfig to add this.",
+      "revId": "fb8be0a02b9601b0c663809b6ca85ef2165b831e",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "5ff73747_a6e28c2e",
         "filename": "arch/arm/mach-msm/Makefile.boot",
         "patchSetId": 4
@@ -13,6 +30,23 @@
       "writtenOn": "2015-07-08T20:41:24Z",
       "side": 1,
       "message": "these are really the only changes in this patch that do anything since you\u0027re not enabling CONFIG_MACH_M8_DUG",
+      "revId": "fb8be0a02b9601b0c663809b6ca85ef2165b831e",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "5ff73747_a62a8c8d",
+        "filename": "arch/arm/mach-msm/display/Makefile",
+        "patchSetId": 4
+      },
+      "lineNbr": 16,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2015-07-09T01:18:54Z",
+      "side": 1,
+      "message": "Unnecessary trailing character removal?",
       "revId": "fb8be0a02b9601b0c663809b6ca85ef2165b831e",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
       "unresolved": false
