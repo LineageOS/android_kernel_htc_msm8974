@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "df140735_3804607b",
+        "filename": "arch/arm/mach-msm/display/htc_a5-panel.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 491,
+      "author": {
+        "id": 6521
+      },
+      "writtenOn": "2015-07-26T06:56:25Z",
+      "side": 1,
+      "message": "Will remove whitespace here.",
+      "range": {
+        "startLine": 491,
+        "startChar": 0,
+        "endLine": 491,
+        "endChar": 3
+      },
+      "revId": "c39c1e3d0f99c1395e52c41bc267d1f074463142",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
