@@ -16,6 +16,24 @@
       "revId": "a962c0a1277ebe5f52288fdca643d792716ea089",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
       "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "9f0e0f27_56b125e1",
+        "filename": "arch/arm/mach-msm/display/Makefile",
+        "patchSetId": 6
+      },
+      "lineNbr": 16,
+      "author": {
+        "id": 13648
+      },
+      "writtenOn": "2015-08-08T02:28:14Z",
+      "side": 1,
+      "message": "Again, don\u0027t know what gedit is doing there after saving the file. Did an edit directly in gerrit review and in the new patch set it is okay.",
+      "parentUuid": "9f0e0f27_b65081d6",
+      "revId": "a962c0a1277ebe5f52288fdca643d792716ea089",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
     }
   ]
 }
