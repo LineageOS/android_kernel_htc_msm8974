@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "9f0e0f27_b65081d6",
+        "filename": "arch/arm/mach-msm/display/Makefile",
+        "patchSetId": 6
+      },
+      "lineNbr": 16,
+      "author": {
+        "id": 2936
+      },
+      "writtenOn": "2015-08-08T00:55:51Z",
+      "side": 1,
+      "message": "Something weird happened on this line again.",
+      "revId": "a962c0a1277ebe5f52288fdca643d792716ea089",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
