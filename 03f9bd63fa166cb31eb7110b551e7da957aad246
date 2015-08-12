@@ -1,0 +1,175 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "7f231b9d_6a51df0e",
+        "filename": "arch/arm/boot/dts/msm8974-camera.dtsi",
+        "patchSetId": 33
+      },
+      "lineNbr": 179,
+      "author": {
+        "id": 3671
+      },
+      "writtenOn": "2015-08-12T02:29:28Z",
+      "side": 1,
+      "message": "move back to msm8974-camera-sensor-mtp.dtsi ?",
+      "range": {
+        "startLine": 179,
+        "startChar": 17,
+        "endLine": 179,
+        "endChar": 18
+      },
+      "revId": "03f9bd63fa166cb31eb7110b551e7da957aad246",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7f231b9d_4a562309",
+        "filename": "arch/arm/boot/dts/msm8974-camera.dtsi",
+        "patchSetId": 33
+      },
+      "lineNbr": 205,
+      "author": {
+        "id": 3671
+      },
+      "writtenOn": "2015-08-12T02:29:28Z",
+      "side": 1,
+      "message": "gross",
+      "range": {
+        "startLine": 205,
+        "startChar": 0,
+        "endLine": 205,
+        "endChar": 5
+      },
+      "revId": "03f9bd63fa166cb31eb7110b551e7da957aad246",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7f231b9d_ca491361",
+        "filename": "arch/arm/boot/dts/msm8974-camera.dtsi",
+        "patchSetId": 33
+      },
+      "lineNbr": 242,
+      "author": {
+        "id": 3671
+      },
+      "writtenOn": "2015-08-12T02:29:28Z",
+      "side": 1,
+      "message": "love me some whitespace",
+      "revId": "03f9bd63fa166cb31eb7110b551e7da957aad246",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7f231b9d_ca6233d9",
+        "filename": "arch/arm/boot/dts/msm8974-ion.dtsi",
+        "patchSetId": 33
+      },
+      "lineNbr": 67,
+      "author": {
+        "id": 3671
+      },
+      "writtenOn": "2015-08-12T02:29:28Z",
+      "side": 1,
+      "message": "hey guise, lets change this one line, then comment it out with multi line comments....ok now i\u0027m just being a dick",
+      "revId": "03f9bd63fa166cb31eb7110b551e7da957aad246",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7f231b9d_aa5ff70c",
+        "filename": "arch/arm/boot/dts/msm8974-m8-common.dtsi",
+        "patchSetId": 33
+      },
+      "lineNbr": 37,
+      "author": {
+        "id": 3671
+      },
+      "writtenOn": "2015-08-12T02:29:28Z",
+      "side": 1,
+      "message": "i can just imagine that meeting now:\nguy 1: \"i want tabs\"\nguy 2: \"i want spaces\"\n\n+2 verified, merged",
+      "range": {
+        "startLine": 37,
+        "startChar": 12,
+        "endLine": 37,
+        "endChar": 20
+      },
+      "revId": "03f9bd63fa166cb31eb7110b551e7da957aad246",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7f231b9d_6a9f9fb4",
+        "filename": "arch/arm/boot/dts/msm8974-regulator.dtsi",
+        "patchSetId": 33
+      },
+      "lineNbr": 211,
+      "author": {
+        "id": 3671
+      },
+      "writtenOn": "2015-08-12T02:29:28Z",
+      "side": 1,
+      "message": "i imagine crap like this can be left stock...",
+      "revId": "03f9bd63fa166cb31eb7110b551e7da957aad246",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7f231b9d_4aa4e308",
+        "filename": "arch/arm/boot/dts/msm8974-v2.0-1-mtp.dts",
+        "patchSetId": 33
+      },
+      "lineNbr": 32,
+      "author": {
+        "id": 3671
+      },
+      "writtenOn": "2015-08-12T02:29:28Z",
+      "side": 1,
+      "message": "move back to msm8974-v2.dtsi",
+      "revId": "03f9bd63fa166cb31eb7110b551e7da957aad246",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7f231b9d_2aa9a7de",
+        "filename": "arch/arm/boot/dts/msm8974-v2.2-mtp.dts",
+        "patchSetId": 33
+      },
+      "lineNbr": 32,
+      "author": {
+        "id": 3671
+      },
+      "writtenOn": "2015-08-12T02:29:28Z",
+      "side": 1,
+      "message": "msm8974-v2.dtsi",
+      "revId": "03f9bd63fa166cb31eb7110b551e7da957aad246",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "7f231b9d_cab7d33a",
+        "filename": "arch/arm/boot/dts/msm8974pro-pm8941.dtsi",
+        "patchSetId": 33
+      },
+      "lineNbr": 45,
+      "author": {
+        "id": 3671
+      },
+      "writtenOn": "2015-08-12T02:29:28Z",
+      "side": 1,
+      "message": "y u do dis?",
+      "revId": "03f9bd63fa166cb31eb7110b551e7da957aad246",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
