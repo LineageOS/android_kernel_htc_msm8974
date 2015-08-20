@@ -23,25 +23,30 @@ struct mmc_command {
 #define MMC_CMD23_ARG_PACKED	((0 << 31) | (1 << 30))
 #define MMC_CMD23_ARG_TAG_REQ	(1 << 29)
 	u32			resp[4];
-	unsigned int		flags;		
-#endif 
+	unsigned int		flags;		/* expected response type */
+#endif /* __KERNEL__ */
 #define MMC_RSP_PRESENT	(1 << 0)
-#define MMC_RSP_136	(1 << 1)		
-#define MMC_RSP_CRC	(1 << 2)		
-#define MMC_RSP_BUSY	(1 << 3)		
-#define MMC_RSP_OPCODE	(1 << 4)		
+#define MMC_RSP_136	(1 << 1)		/* 136 bit response */
+#define MMC_RSP_CRC	(1 << 2)		/* expect valid crc */
+#define MMC_RSP_BUSY	(1 << 3)		/* card may send busy */
+#define MMC_RSP_OPCODE	(1 << 4)		/* response contains opcode */
 
-#define MMC_CMD_MASK	(3 << 5)		
+#define MMC_CMD_MASK	(3 << 5)		/* non-SPI command type */
 #define MMC_CMD_AC	(0 << 5)
 #define MMC_CMD_ADTC	(1 << 5)
 #define MMC_CMD_BC	(2 << 5)
 #define MMC_CMD_BCR	(3 << 5)
 
-#define MMC_RSP_SPI_S1	(1 << 7)		
-#define MMC_RSP_SPI_S2	(1 << 8)		
-#define MMC_RSP_SPI_B4	(1 << 9)		
-#define MMC_RSP_SPI_BUSY (1 << 10)		
+#define MMC_RSP_SPI_S1	(1 << 7)		/* one status byte */
+#define MMC_RSP_SPI_S2	(1 << 8)		/* second byte */
+#define MMC_RSP_SPI_B4	(1 << 9)		/* four data bytes */
+#define MMC_RSP_SPI_BUSY (1 << 10)		/* card may send busy */
 
+/*
+ * These are the native response types, and correspond to valid bit
+ * patterns of the above flags.  One additional valid pattern
+ * is all zeros, which means we don't expect a response.
+ */
 #define MMC_RSP_NONE	(0)
 #define MMC_RSP_R1	(MMC_RSP_PRESENT|MMC_RSP_CRC|MMC_RSP_OPCODE)
 #define MMC_RSP_R1B	(MMC_RSP_PRESENT|MMC_RSP_CRC|MMC_RSP_OPCODE|MMC_RSP_BUSY)
@@ -55,6 +60,11 @@ struct mmc_command {
 #ifdef __KERNEL__
 #define mmc_resp_type(cmd)	((cmd)->flags & (MMC_RSP_PRESENT|MMC_RSP_136|MMC_RSP_CRC|MMC_RSP_BUSY|MMC_RSP_OPCODE))
 
+/*
+ * These are the SPI response types for MMC, SD, and SDIO cards.
+ * Commands return R1, with maybe more info.  Zero is an error type;
+ * callers must always provide the appropriate MMC_RSP_SPI_Rx flags.
+ */
 #define MMC_RSP_SPI_R1	(MMC_RSP_SPI_S1)
 #define MMC_RSP_SPI_R1B	(MMC_RSP_SPI_S1|MMC_RSP_SPI_BUSY)
 #define MMC_RSP_SPI_R2	(MMC_RSP_SPI_S1|MMC_RSP_SPI_S2)
@@ -66,26 +76,42 @@ struct mmc_command {
 #define mmc_spi_resp_type(cmd)	((cmd)->flags & \
 		(MMC_RSP_SPI_S1|MMC_RSP_SPI_BUSY|MMC_RSP_SPI_S2|MMC_RSP_SPI_B4))
 
+/*
+ * These are the command types.
+ */
 #define mmc_cmd_type(cmd)	((cmd)->flags & MMC_CMD_MASK)
 
-	unsigned int		retries;	
-	unsigned int		error;		
+	unsigned int		retries;	/* max number of retries */
+	unsigned int		error;		/* command error */
 
+/*
+ * Standard errno values are used for errors, but some have specific
+ * meaning in the MMC layer:
+ *
+ * ETIMEDOUT    Card took too long to respond
+ * EILSEQ       Basic format problem with the received or sent data
+ *              (e.g. CRC check failed, incorrect opcode in response
+ *              or bad end bit)
+ * EINVAL       Request cannot be performed because of restrictions
+ *              in hardware and/or the driver
+ * ENOMEDIUM    Host can determine that the slot is empty and is
+ *              actively failing requests
+ */
 
-	unsigned int		cmd_timeout_ms;	
-	
+	unsigned int		cmd_timeout_ms;	/* in milliseconds */
+	/* Set this flag only for commands which can be HPIed */
 	bool			ignore_timeout;
 
-	struct mmc_data		*data;		
-	struct mmc_request	*mrq;		
+	struct mmc_data		*data;		/* data segment associated with cmd */
+	struct mmc_request	*mrq;		/* associated request */
 };
 
 struct mmc_data {
-	unsigned int		timeout_ns;	
-	unsigned int		timeout_clks;	
-	unsigned int		blksz;		
-	unsigned int		blocks;		
-	unsigned int		error;		
+	unsigned int		timeout_ns;	/* data timeout (in ns, max 80ms) */
+	unsigned int		timeout_clks;	/* data timeout (in clocks) */
+	unsigned int		blksz;		/* data block size */
+	unsigned int		blocks;		/* number of blocks */
+	unsigned int		error;		/* data error */
 	unsigned int		flags;
 
 #define MMC_DATA_WRITE	(1 << 8)
@@ -94,24 +120,24 @@ struct mmc_data {
 
 	unsigned int		bytes_xfered;
 
-	struct mmc_command	*stop;		
-	struct mmc_request	*mrq;		
+	struct mmc_command	*stop;		/* stop command */
+	struct mmc_request	*mrq;		/* associated request */
 
-	unsigned int		sg_len;		
-	struct scatterlist	*sg;		
-	s32			host_cookie;	
-	bool			fault_injected; 
+	unsigned int		sg_len;		/* size of scatter list */
+	struct scatterlist	*sg;		/* I/O scatter list */
+	s32			host_cookie;	/* host private data */
+	bool			fault_injected; /* fault injected */
 };
 
 struct mmc_host;
 struct mmc_request {
-	struct mmc_command	*sbc;		
+	struct mmc_command	*sbc;		/* SET_BLOCK_COUNT for multiblock */
 	struct mmc_command	*cmd;
 	struct mmc_data		*data;
 	struct mmc_command	*stop;
 
 	struct completion	completion;
-	void			(*done)(struct mmc_request *);
+	void			(*done)(struct mmc_request *);/* completion function */
 	struct mmc_host		*host;
 };
 
@@ -129,8 +155,6 @@ extern int mmc_wait_for_cmd(struct mmc_host *, struct mmc_command *, int);
 extern int mmc_app_cmd(struct mmc_host *, struct mmc_card *);
 extern int mmc_wait_for_app_cmd(struct mmc_host *, struct mmc_card *,
 	struct mmc_command *, int);
-extern int mmc_card_start_bkops(struct mmc_card *host);
-extern int mmc_card_stop_bkops(struct mmc_card *card);
 extern void mmc_start_bkops(struct mmc_card *card, bool from_exception);
 extern void mmc_start_delayed_bkops(struct mmc_card *card);
 extern void mmc_start_idle_time_bkops(struct work_struct *work);
@@ -143,8 +167,11 @@ extern int mmc_switch_ignore_timeout(struct mmc_card *, u8, u8, u8,
 extern int mmc_send_ext_csd(struct mmc_card *card, u8 *ext_csd);
 
 #define MMC_ERASE_ARG		0x00000000
+#define MMC_SECURE_ERASE_ARG	0x80000000
 #define MMC_TRIM_ARG		0x00000001
 #define MMC_DISCARD_ARG		0x00000003
+#define MMC_SECURE_TRIM1_ARG	0x80000001
+#define MMC_SECURE_TRIM2_ARG	0x80008000
 
 #define MMC_SECURE_ARGS		0x80000000
 #define MMC_TRIM_ARGS		0x00008001
@@ -182,6 +209,12 @@ extern void mmc_blk_init_bkops_statistics(struct mmc_card *card);
 extern void mmc_rpm_hold(struct mmc_host *host, struct device *dev);
 extern void mmc_rpm_release(struct mmc_host *host, struct device *dev);
 
+/**
+ *	mmc_claim_host - exclusively claim a host
+ *	@host: mmc host to claim
+ *
+ *	Claim a host for a set of operations.
+ */
 static inline void mmc_claim_host(struct mmc_host *host)
 {
 	__mmc_claim_host(host, NULL);
@@ -189,5 +222,5 @@ static inline void mmc_claim_host(struct mmc_host *host)
 
 extern u32 mmc_vddrange_to_ocrmask(int vdd_min, int vdd_max);
 
-#endif 
-#endif 
+#endif /* __KERNEL__ */
+#endif /* LINUX_MMC_CORE_H */
