@@ -28,7 +28,6 @@
 #include "ext4_jbd2.h"
 #include "xattr.h"
 #include "acl.h"
-#include <trace/events/mmcio.h>
 
 static int ext4_release_file(struct inode *inode, struct file *filp)
 {
@@ -92,8 +91,6 @@ ext4_file_write(struct kiocb *iocb, const struct iovec *iov,
 	struct inode *inode = iocb->ki_filp->f_path.dentry->d_inode;
 	int unaligned_aio = 0;
 	int ret;
-
-	trace_ext4_file_write(iocb->ki_filp->f_path.dentry, iocb->ki_left);
 
 	if (!(ext4_test_inode_flag(inode, EXT4_INODE_EXTENTS))) {
 		struct ext4_sb_info *sbi = EXT4_SB(inode->i_sb);
