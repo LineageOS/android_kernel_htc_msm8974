@@ -122,6 +122,24 @@
     },
     {
       "key": {
+        "uuid": "3f1d235d_a656fd05",
+        "filename": "arch/arm/boot/dts/msm8974-regulator.dtsi",
+        "patchSetId": 33
+      },
+      "lineNbr": 211,
+      "author": {
+        "id": 6471
+      },
+      "writtenOn": "2015-09-05T01:32:25Z",
+      "side": 1,
+      "message": "https://www.codeaurora.org/cgit/quic/la/kernel/msm/tree/arch/arm/boot/dts/msm8974-hammerhead/msm8974-hammerhead.dtsi?h\u003daosp-new/android-msm-hammerhead-3.4-m-preview#n726",
+      "parentUuid": "7f231b9d_6a9f9fb4",
+      "revId": "03f9bd63fa166cb31eb7110b551e7da957aad246",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "7f231b9d_4aa4e308",
         "filename": "arch/arm/boot/dts/msm8974-v2.0-1-mtp.dts",
         "patchSetId": 33
