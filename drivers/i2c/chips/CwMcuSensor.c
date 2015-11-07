@@ -3393,7 +3393,7 @@ static struct device_attribute attributes[] = {
 	__ATTR(calibrator_data_light, 0666, get_k_value_light_f, NULL),
 	__ATTR(calibrator_data_proximity, 0666, get_k_value_proximity_f, set_k_value_proximity_f),
 	__ATTR(calibrator_data_barometer, 0666, get_k_value_barometer_f, set_k_value_barometer_f),
-	__ATTR(gesture_motion, 0660, get_gesture_motion, set_gesture_motion),
+	__ATTR(gesture_motion, 0666, get_gesture_motion, set_gesture_motion),
 	__ATTR(data_barometer, 0666, get_barometer, NULL),
 	__ATTR(data_proximity, 0666, get_proximity, NULL),
 	__ATTR(data_proximity_polling, 0666, get_proximity_polling, NULL),
