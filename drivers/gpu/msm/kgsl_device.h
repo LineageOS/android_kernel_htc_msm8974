@@ -17,6 +17,7 @@
 #include <linux/idr.h>
 #include <linux/pm_qos.h>
 #include <linux/sched.h>
+#include <linux/workqueue.h>
 
 #include "kgsl.h"
 #include "kgsl_mmu.h"
@@ -46,16 +47,20 @@
 
 #define KGSL_IS_PAGE_ALIGNED(addr) (!((addr) & (~PAGE_MASK)))
 
-
-#define KGSL_EVENT_TIMESTAMP_RETIRED 0
-#define KGSL_EVENT_CANCELLED 1
+enum kgsl_event_results {
+	KGSL_EVENT_RETIRED = 1,
+	KGSL_EVENT_CANCELLED = 2,
+};
 
 #define KGSL_FLAG_WAKE_ON_TOUCH BIT(0)
 
 
 #define KGSL_EVENT_TYPES \
-	{ KGSL_EVENT_TIMESTAMP_RETIRED, "retired" }, \
+	{ KGSL_EVENT_RETIRED, "retired" }, \
 	{ KGSL_EVENT_CANCELLED, "cancelled" }
+
+#define KGSL_CONTEXT_ID(_context) \
+	((_context != NULL) ? (_context)->id : KGSL_MEMSTORE_GLOBAL)
 
 struct kgsl_device;
 struct platform_device;
@@ -105,6 +110,8 @@ struct kgsl_functable {
 						uint32_t *flags);
 	int (*drawctxt_detach) (struct kgsl_context *context);
 	void (*drawctxt_destroy) (struct kgsl_context *context);
+	void (*drawctxt_dump) (struct kgsl_device *device,
+		struct kgsl_context *context);
 	long (*ioctl) (struct kgsl_device_private *dev_priv,
 		unsigned int cmd, void *data);
 	int (*setproperty) (struct kgsl_device_private *dev_priv,
@@ -126,16 +133,37 @@ struct kgsl_mh {
 	int              mpu_range;
 };
 
-typedef void (*kgsl_event_func)(struct kgsl_device *, void *, u32, u32, u32);
+typedef void (*kgsl_event_func)(struct kgsl_device *, struct kgsl_context *,
+		void *, int);
 
 struct kgsl_event {
+	struct kgsl_device *device;
 	struct kgsl_context *context;
-	uint32_t timestamp;
+	unsigned int timestamp;
 	kgsl_event_func func;
 	void *priv;
-	struct list_head list;
-	void *owner;
+	struct list_head node;
 	unsigned int created;
+	struct work_struct work;
+	int result;
+};
+
+struct kgsl_event_group {
+	struct kgsl_context *context;
+	spinlock_t lock;
+	struct list_head events;
+	struct list_head group;
+	unsigned int processed;
+};
+
+#define MEMOBJ_PREAMBLE BIT(0)
+#define MEMOBJ_SKIP BIT(1)
+
+struct kgsl_memobj_node {
+	struct list_head node;
+	unsigned long gpuaddr;
+	size_t sizedwords;
+	unsigned long priv;
 };
 
 struct kgsl_cmdbatch {
@@ -147,12 +175,13 @@ struct kgsl_cmdbatch {
 	unsigned long priv;
 	unsigned long fault_policy;
 	unsigned long fault_recovery;
-	uint32_t ibcount;
-	struct kgsl_ibdesc *ibdesc;
 	unsigned long expires;
 	struct kref refcount;
+	struct list_head cmdlist;
+	struct list_head memlist;
 	struct list_head synclist;
 	struct timer_list timer;
+	unsigned int marker_timestamp;
 };
 
 
@@ -160,6 +189,7 @@ enum kgsl_cmdbatch_priv {
 	CMDBATCH_FLAG_SKIP = 0,
 	CMDBATCH_FLAG_FORCE_PREAMBLE,
 	CMDBATCH_FLAG_WFI,
+	CMDBATCH_FLAG_FENCE_LOG,
 };
 
 struct kgsl_device {
@@ -235,10 +265,7 @@ struct kgsl_device {
 	int pm_dump_enable;
 	struct kgsl_pwrscale pwrscale;
 	struct kobject pwrscale_kobj;
-	struct work_struct ts_expired_ws;
-	struct list_head events;
-	struct list_head events_pending_list;
-	unsigned int events_last_timestamp;
+	struct work_struct event_work;
 
 	
 	int pm_regs_enabled;
@@ -247,22 +274,24 @@ struct kgsl_device {
 	int reset_counter; 
 	int cff_dump_enable;
 
+	struct workqueue_struct *events_wq;
+
+	struct kgsl_event_group global_events;
+	struct kgsl_event_group iommu_events;
+
 	
 	int gpu_fault_no_panic;
 };
 
-void kgsl_process_events(struct work_struct *work);
 
 #define KGSL_DEVICE_COMMON_INIT(_dev) \
 	.hwaccess_gate = COMPLETION_INITIALIZER((_dev).hwaccess_gate),\
 	.cmdbatch_gate = COMPLETION_INITIALIZER((_dev).cmdbatch_gate),\
 	.idle_check_ws = __WORK_INITIALIZER((_dev).idle_check_ws,\
 			kgsl_idle_check),\
-	.ts_expired_ws  = __WORK_INITIALIZER((_dev).ts_expired_ws,\
+	.event_work  = __WORK_INITIALIZER((_dev).event_work,\
 			kgsl_process_events),\
 	.context_idr = IDR_INIT((_dev).context_idr),\
-	.events = LIST_HEAD_INIT((_dev).events),\
-	.events_pending_list = LIST_HEAD_INIT((_dev).events_pending_list), \
 	.wait_queue = __WAIT_QUEUE_HEAD_INITIALIZER((_dev).wait_queue),\
 	.active_cnt_wq = __WAIT_QUEUE_HEAD_INITIALIZER((_dev).active_cnt_wq),\
 	.mutex = __MUTEX_INITIALIZER((_dev).mutex),\
@@ -287,8 +316,7 @@ struct kgsl_context {
 	unsigned int reset_status;
 	bool wait_on_invalid_ts;
 	struct sync_timeline *timeline;
-	struct list_head events;
-	struct list_head events_list;
+	struct kgsl_event_group events;
 	unsigned int pagefault_ts;
 	unsigned int flags;
 	struct kgsl_pwr_constraint pwr_constraint;
@@ -330,27 +358,25 @@ struct kgsl_device_private {
 
 struct kgsl_device *kgsl_get_device(int dev_idx);
 
-int kgsl_add_event(struct kgsl_device *device, u32 id, u32 ts,
-	kgsl_event_func func, void *priv, void *owner);
-
-void kgsl_cancel_event(struct kgsl_device *device, struct kgsl_context *context,
-		unsigned int timestamp, kgsl_event_func func, void *priv);
-
 static inline void kgsl_process_add_stats(struct kgsl_process_private *priv,
 	unsigned int type, size_t size)
 {
 	if (type >= KGSL_MEM_ENTRY_MAX)
 		return;
 
+	mutex_lock(&priv->process_private_mutex);
 	priv->stats[type].cur += size;
 	if (priv->stats[type].max < priv->stats[type].cur)
 		priv->stats[type].max = priv->stats[type].cur;
+	mutex_unlock(&priv->process_private_mutex);
 }
 
 static inline void kgsl_process_sub_stats(struct kgsl_process_private *priv,
 	unsigned int type, size_t size)
 {
+	mutex_lock(&priv->process_private_mutex);
 	priv->stats[type].cur -= size;
+	mutex_unlock(&priv->process_private_mutex);
 }
 
 static inline void kgsl_regread(struct kgsl_device *device,
@@ -445,6 +471,27 @@ int kgsl_device_snapshot_init(struct kgsl_device *device);
 int kgsl_device_snapshot(struct kgsl_device *device, int hang);
 void kgsl_device_snapshot_close(struct kgsl_device *device);
 
+void kgsl_events_init(void);
+void kgsl_events_exit(void);
+
+void kgsl_del_event_group(struct kgsl_event_group *group);
+void kgsl_add_event_group(struct kgsl_event_group *group,
+		struct kgsl_context *context);
+
+void kgsl_cancel_events_timestamp(struct kgsl_device *device,
+		struct kgsl_event_group *group, unsigned int timestamp);
+void kgsl_cancel_events(struct kgsl_device *device,
+		struct kgsl_event_group *group);
+void kgsl_cancel_event(struct kgsl_device *device,
+		struct kgsl_event_group *group, unsigned int timestamp,
+		kgsl_event_func func, void *priv);
+int kgsl_add_event(struct kgsl_device *device, struct kgsl_event_group *group,
+		unsigned int timestamp, kgsl_event_func func, void *priv);
+void kgsl_process_event_group(struct kgsl_device *device,
+	struct kgsl_event_group *group);
+
+void kgsl_process_events(struct work_struct *work);
+
 static inline struct kgsl_device_platform_data *
 kgsl_device_get_drvdata(struct kgsl_device *dev)
 {
@@ -459,6 +506,8 @@ void kgsl_context_destroy(struct kref *kref);
 int kgsl_context_init(struct kgsl_device_private *, struct kgsl_context
 		*context);
 int kgsl_context_detach(struct kgsl_context *context);
+
+void kgsl_context_dump(struct kgsl_context *context);
 
 int kgsl_memfree_find_entry(pid_t pid, unsigned long *gpuaddr,
 	unsigned long *size, unsigned int *flags);
@@ -529,17 +578,8 @@ static inline struct kgsl_context *kgsl_context_get_owner(
 	return context;
 }
 
-static inline void kgsl_context_cancel_events(struct kgsl_device *device,
-	struct kgsl_context *context)
-{
-	kgsl_signal_events(device, context, KGSL_EVENT_CANCELLED);
-}
-
-static inline void kgsl_cancel_events_timestamp(struct kgsl_device *device,
-	struct kgsl_context *context, unsigned int timestamp)
-{
-	kgsl_signal_event(device, context, timestamp, KGSL_EVENT_CANCELLED);
-}
+void kgsl_dump_syncpoints(struct kgsl_device *device,
+	struct kgsl_cmdbatch *cmdbatch);
 
 void kgsl_cmdbatch_destroy(struct kgsl_cmdbatch *cmdbatch);
 

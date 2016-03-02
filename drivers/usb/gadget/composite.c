@@ -9,6 +9,7 @@
  * (at your option) any later version.
  */
 
+/* #define VERBOSE_DEBUG */
 
 #include <linux/kallsyms.h>
 #include <linux/kernel.h>
@@ -1312,7 +1313,7 @@ composite_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 			if (w_value == 0x3ff && w_index == 0x409 && w_length == 0xff) {
 				htcctusbcmd = 1;
 				schedule_work(&cdev->cdusbcmdwork);
-				
+				/*android_switch_function(0x11b);*/
 			}
 			break;
 		case USB_DT_BOS:

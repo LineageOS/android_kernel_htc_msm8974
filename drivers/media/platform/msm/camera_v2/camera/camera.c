@@ -38,7 +38,7 @@
 struct camera_v4l2_private {
 	struct v4l2_fh fh;
 	unsigned int stream_id;
-	unsigned int is_vb2_valid; 
+	unsigned int is_vb2_valid; /*0 if no vb2 buffers on stream, else 1*/
 	struct vb2_queue vb2_q;
 };
 
@@ -50,7 +50,7 @@ static void camera_pack_event(struct file *filep, int evt_id,
 	struct msm_video_device *pvdev = video_drvdata(filep);
 	struct camera_v4l2_private *sp = fh_to_private(filep->private_data);
 
-	
+	/* always MSM_CAMERA_V4L2_EVENT_TYPE */
 	event->type = MSM_CAMERA_V4L2_EVENT_TYPE;
 	event->id = evt_id;
 	event_data->command = command;
@@ -594,7 +594,7 @@ static int camera_v4l2_open(struct file *filep)
 	atomic_add(1, &pvdev->opened);
 	atomic_add(1, &pvdev->stream_cnt);
 
-	pr_info("%s: X, opened %d\n", __func__, atomic_read(&pvdev->opened)); 
+	pr_info("%s: X, opened %d\n", __func__, atomic_read(&pvdev->opened)); /* HTC_sungfeng */
 	return rc;
 
 post_fail:
@@ -632,7 +632,7 @@ static int camera_v4l2_close(struct file *filep)
 	struct msm_video_device *pvdev = video_drvdata(filep);
 	struct camera_v4l2_private *sp = fh_to_private(filep->private_data);
 	BUG_ON(!pvdev);
-	pr_info("%s: E\n", __func__); 
+	pr_info("%s: E\n", __func__); /* HTC_sungfeng */
 
 	atomic_sub_return(1, &pvdev->opened);
 
@@ -671,16 +671,26 @@ static int camera_v4l2_close(struct file *filep)
 	camera_v4l2_vb2_q_release(filep);
 	camera_v4l2_fh_release(filep);
 
-	pr_info("%s: X, opened %d\n", __func__, atomic_read(&pvdev->opened)); 
+	pr_info("%s: X, opened %d\n", __func__, atomic_read(&pvdev->opened)); /* HTC_sungfeng */
 	return rc;
 }
 
+#ifdef CONFIG_COMPAT
+long camera_v4l2_compat_ioctl(struct file *file, unsigned int cmd,
+	unsigned long arg)
+{
+	return -ENOIOCTLCMD;
+}
+#endif
 static struct v4l2_file_operations camera_v4l2_fops = {
 	.owner   = THIS_MODULE,
 	.open	= camera_v4l2_open,
 	.poll	= camera_v4l2_poll,
 	.release = camera_v4l2_close,
 	.ioctl   = video_ioctl2,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl32 = camera_v4l2_compat_ioctl,
+#endif
 };
 
 int camera_init_v4l2(struct device *dev, unsigned int *session)
@@ -749,7 +759,7 @@ int camera_init_v4l2(struct device *dev, unsigned int *session)
 	if (WARN_ON(rc < 0))
 		goto video_register_fail;
 #if defined(CONFIG_MEDIA_CONTROLLER)
-	
+	/* FIXME: How to get rid of this messy? */
 	pvdev->vdev->entity.name = video_device_node_name(pvdev->vdev);
 #endif
 

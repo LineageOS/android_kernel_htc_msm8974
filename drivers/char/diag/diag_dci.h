@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -40,6 +40,9 @@
 #define DIAG_DCI_DEBUG_LEN	100
 #endif
 
+/* 16 log code categories, each has:
+ * 1 bytes equip id + 1 dirty byte + 512 byte max log mask
+ */
 #define DCI_LOG_MASK_SIZE		(16*514)
 #define DCI_EVENT_MASK_SIZE		512
 #define DCI_MASK_STREAM			2
@@ -118,10 +121,19 @@ struct diag_dci_health_stats_proc {
 	int proc;
 };
 
+/* This is used for querying DCI Log
+   or Event Mask */
 struct diag_log_event_stats {
 	uint16_t code;
 	int is_set;
 };
+
+struct diag_dci_pkt_rsp_header_t {
+	int type;
+	int length;
+	uint8_t delete_flag;
+	int uid;
+} __packed;
 
 struct diag_dci_pkt_header_t {
 	uint8_t start;
@@ -132,16 +144,17 @@ struct diag_dci_pkt_header_t {
 } __packed;
 
 enum {
-	DIAG_DCI_NO_ERROR = 1001,	
-	DIAG_DCI_NO_REG,		
-	DIAG_DCI_NO_MEM,		
-	DIAG_DCI_NOT_SUPPORTED,	
-	DIAG_DCI_HUGE_PACKET,	
-	DIAG_DCI_SEND_DATA_FAIL,
-	DIAG_DCI_TABLE_ERR	
+	DIAG_DCI_NO_ERROR = 1001,	/* No error */
+	DIAG_DCI_NO_REG,		/* Could not register */
+	DIAG_DCI_NO_MEM,		/* Failed memory allocation */
+	DIAG_DCI_NOT_SUPPORTED,	/* This particular client is not supported */
+	DIAG_DCI_HUGE_PACKET,	/* Request/Response Packet too huge */
+	DIAG_DCI_SEND_DATA_FAIL,/* writing to kernel or peripheral fails */
+	DIAG_DCI_TABLE_ERR	/* Error dealing with registration tables */
 };
 
 #ifdef CONFIG_DEBUG_FS
+/* To collect debug information during each smd read */
 struct diag_dci_data_info {
 	unsigned long iteration;
 	int data_size;
@@ -168,6 +181,7 @@ int diag_process_dci_transaction(unsigned char *buf, int len);
 void extract_dci_pkt_rsp(unsigned char *buf, int len, int data_source,
 			 struct diag_smd_info *smd_info);
 struct diag_dci_client_tbl *diag_dci_get_client_entry(void);
+/* DCI Log streaming functions */
 void create_dci_log_mask_tbl(unsigned char *tbl_buf);
 void update_dci_cumulative_log_mask(int offset, unsigned int byte_index,
 						uint8_t byte_mask);
@@ -176,6 +190,7 @@ int diag_send_dci_log_mask(void);
 void extract_dci_log(unsigned char *buf, int len, int data_source);
 int diag_dci_clear_log_mask(void);
 int diag_dci_query_log_mask(uint16_t log_code);
+/* DCI event streaming functions */
 void update_dci_cumulative_event_mask(int offset, uint8_t byte_mask);
 void diag_dci_invalidate_cumulative_event_mask(void);
 int diag_send_dci_event_mask(void);
@@ -188,6 +203,7 @@ void diag_dci_smd_record_info(int read_bytes, uint8_t ch_type,
 uint8_t diag_dci_get_cumulative_real_time(void);
 int diag_dci_set_real_time(uint8_t real_time);
 int diag_dci_copy_health_stats(struct diag_dci_health_stats *stats, int proc);
+/* Functions related to DCI wakeup sources */
 void diag_dci_try_activate_wakeup_source(void);
 void diag_dci_try_deactivate_wakeup_source(void);
 int diag_dci_write_proc(int peripheral, int pkt_type, char *buf, int len);

@@ -115,6 +115,7 @@ void htc_acoustic_register_hs_amp(int (*aud_hs_amp_f)(int, int), struct file_ope
 int htc_acoustic_hs_amp_ctrl(int on, int dsp);
 void htc_acoustic_register_spk_amp(enum SPK_AMP_TYPE type,int (*aud_spk_amp_f)(int, int), struct file_operations* ops);
 int htc_acoustic_spk_amp_ctrl(enum SPK_AMP_TYPE type,int on, int dsp);
+/* To query if feature is enable */
 int htc_acoustic_query_feature(enum HTC_FEATURE feature);
 void htc_acoustic_register_hs_notify(enum HS_NOTIFY_TYPE type, struct hs_notify_t *notify);
 

@@ -35,6 +35,7 @@
 #include <linux/debugfs.h>
 #endif
 
+/* Clock inputs coming into Krait subsystem */
 DEFINE_FIXED_DIV_CLK(hfpll_src_clk, 1, NULL);
 DEFINE_FIXED_DIV_CLK(acpu_aux_clk, 2, NULL);
 
@@ -156,7 +157,7 @@ DEFINE_KPSS_DIV2_CLK(hfpll_l2_div_clk, &hfpll_l2_clk.c, 0x500, false);
 	.shift = 2,			\
 	MUX_SRC_LIST(			\
 		{&acpu_aux_clk.c, 2},	\
-		{NULL , 0},	\
+		{NULL /* QSB */, 0},	\
 	)
 
 static struct mux_clk krait0_sec_mux_clk = {
@@ -310,6 +311,15 @@ static DEFINE_VDD_REGS_INIT(vdd_krait2, 1);
 static DEFINE_VDD_REGS_INIT(vdd_krait3, 1);
 static DEFINE_VDD_REGS_INIT(vdd_l2, 1);
 
+/*
+ * This clock is mostly a dummy clock in the sense it can't really gate the
+ * CPU/L2 clocks or affect their frequency. It exists solely to:
+ *
+ * - Capture the PVS requirements for each CPU.
+ * - Implement HW clock gating disable ops needed for measuring the freq of
+ *   Krait/L2 properly.
+ * - Implement AVS requirement.
+ */
 static struct kpss_core_clk krait0_clk = {
 	.id	= 0,
 	.avs_tbl = &avs_table,
@@ -453,7 +463,7 @@ static void get_krait_bin_format_b(struct platform_device *pdev,
 	pte_efuse = readl_relaxed(base);
 	redundant_sel = (pte_efuse >> 24) & 0x7;
 	*speed = pte_efuse & 0x7;
-	
+	/* 4 bits of PVS are in efuse register bits 31, 8-6. */
 	*pvs = ((pte_efuse >> 28) & 0x8) | ((pte_efuse >> 6) & 0x7);
 	*pvs_ver = (pte_efuse >> 4) & 0x3;
 
@@ -466,7 +476,7 @@ static void get_krait_bin_format_b(struct platform_device *pdev,
 		break;
 	}
 
-	
+	/* Check SPEED_BIN_BLOW_STATUS */
 	if (pte_efuse & BIT(3)) {
 		dev_info(&pdev->dev, "Speed bin: %d\n", *speed);
 	} else {
@@ -474,7 +484,7 @@ static void get_krait_bin_format_b(struct platform_device *pdev,
 		*speed = 0;
 	}
 
-	
+	/* Check PVS_BLOW_STATUS */
 	pte_efuse = readl_relaxed(base + 0x4) & BIT(21);
 	if (pte_efuse) {
 		dev_info(&pdev->dev, "PVS bin: %d\n", *pvs);
@@ -630,9 +640,9 @@ static void krait_update_uv(int *uv, int num, int boost_uv)
 	int i;
 
 	switch (read_cpuid_id()) {
-	case 0x511F04D0: 
-	case 0x511F04D1: 
-	case 0x510F06F0: 
+	case 0x511F04D0: /* KR28M2A20 */
+	case 0x511F04D1: /* KR28M2A21 */
+	case 0x510F06F0: /* KR28M4A10 */
 		for (i = 0; i < num; i++)
 			uv[i] = max(1150000, uv[i]);
 	};
@@ -753,7 +763,7 @@ static int clock_krait_8974_driver_probe(struct platform_device *pdev)
 	rows = parse_tbl(dev, table_name, 3,
 			(u32 **) &freq, (u32 **) &uv, (u32 **) &ua);
 	if (rows < 0) {
-		
+		/* Fall back to most conservative PVS table */
 		dev_err(dev, "Unable to load voltage plan %s!\n", table_name);
 		ret = parse_tbl(dev, "qcom,speed0-pvs0-bin-v0", 3,
 				(u32 **) &freq, (u32 **) &uv, (u32 **) &ua);
@@ -778,7 +788,7 @@ static int clock_krait_8974_driver_probe(struct platform_device *pdev)
 	if (clk_init_vdd_class(dev, &krait3_clk.c, rows, freq, uv, ua))
 		return -ENOMEM;
 
-	
+	/* AVS is optional */
 	rows = parse_tbl(dev, "qcom,avs-tbl", 2, (u32 **) &freq, &dscr, NULL);
 	if (rows > 0) {
 		avs_table.rate = freq;
@@ -798,12 +808,30 @@ static int clock_krait_8974_driver_probe(struct platform_device *pdev)
 
 	msm_clock_register(kpss_clocks_8974, ARRAY_SIZE(kpss_clocks_8974));
 
+	/*
+	 * We don't want the CPU or L2 clocks to be turned off at late init
+	 * if CPUFREQ or HOTPLUG configs are disabled. So, bump up the
+	 * refcount of these clocks. Any cpufreq/hotplug manager can assume
+	 * that the clocks have already been prepared and enabled by the time
+	 * they take over.
+	 */
 	for_each_online_cpu(cpu) {
 		clk_prepare_enable(&l2_clk.c);
 		WARN(clk_prepare_enable(cpu_clk[cpu]),
 			"Unable to turn on CPU%d clock", cpu);
 	}
 
+	/*
+	 * Force reinit of HFPLLs and muxes to overwrite any potential
+	 * incorrect configuration of HFPLLs and muxes by the bootloader.
+	 * While at it, also make sure the cores are running at known rates
+	 * and print the current rate.
+	 *
+	 * The clocks are set to aux clock rate first to make sure the
+	 * secondary mux is not sourcing off of QSB. The rate is then set to
+	 * two different rates to force a HFPLL reinit under all
+	 * circumstances.
+	 */
 	cur_rate = clk_get_rate(&l2_clk.c);
 	aux_rate = clk_get_rate(&acpu_aux_clk.c);
 	if (!cur_rate) {

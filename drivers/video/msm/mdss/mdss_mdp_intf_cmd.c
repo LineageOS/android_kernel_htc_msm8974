@@ -315,14 +315,11 @@ void mdss_mdp_post_commit_dsi_cmd(struct mdss_mdp_ctl *ctl)
 {
 	struct dcs_cmd_req cmdreq;
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
-	struct mdss_panel_data *pdata;
 	ctrl_pdata = container_of(ctl->panel_data, struct mdss_dsi_ctrl_pdata,
 								panel_data);
 
 	if (ctrl_pdata->frame_suffix_cmds.cmd_cnt == 0)
 		return;
-
-	pdata = ctl->panel_data;
 
 	memset(&cmdreq, 0, sizeof(cmdreq));
 	cmdreq.cmds = ctrl_pdata->frame_suffix_cmds.cmds;

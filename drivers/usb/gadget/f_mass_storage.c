@@ -70,7 +70,7 @@
 #define FSG_DRIVER_DESC		"Mass Storage Function"
 #define FSG_DRIVER_VERSION	"2009/09/11"
 
-static const char fsg_string_interface[] = "Mass Storage";
+static const char fsg_string_interface[] = "Mass Storage Android";
 
 #define FSG_NO_DEVICE_STRINGS    1
 #define FSG_NO_OTG               1
@@ -963,7 +963,7 @@ static int do_synchronize_cache(struct fsg_common *common)
 static void invalidate_sub(struct fsg_lun *curlun)
 {
 	struct file	*filp = curlun->filp;
-	struct inode	*inode = filp->f_path.dentry->d_inode;
+	struct inode	*inode = file_inode(filp);
 	unsigned long	rc;
 
 	rc = invalidate_mapping_pages(inode->i_mapping, 0, -1);

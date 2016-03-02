@@ -239,10 +239,10 @@ struct mhl_dev_context {
 	union misc_flags_u		misc_flags;
 
 	uint8_t     			numEdidExtensions;
-	#ifndef OLD_KEYMAP_TABLE 
+	#ifndef OLD_KEYMAP_TABLE //(
 	void 				*timer_T_press_mode;
 	void				*timer_T_hold_maintain;
-	#endif 
+	#endif //)
 
 	void				*drv_context;	/* pointer aligned start of mhl
 	 	 	 	 	 	 	 	 	 	   transmitter driver context area */

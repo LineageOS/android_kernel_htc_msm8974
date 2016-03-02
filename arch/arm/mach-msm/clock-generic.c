@@ -22,6 +22,7 @@
 #include <mach/clk-provider.h>
 #include <mach/clock-generic.h>
 
+/* ==================== Mux clock ==================== */
 
 int parent_to_src_sel(struct clk_src *parents, int num_parents, struct clk *p)
 {
@@ -48,6 +49,10 @@ static int mux_set_parent(struct clk *c, struct clk *p)
 			rc = clk_set_parent(mux->parents[i].src, p);
 			if (!rc) {
 				sel = mux->parents[i].sel;
+				/*
+				 * This is necessary to ensure prepare/enable
+				 * counts get propagated correctly.
+				 */
 				p = mux->parents[i].src;
 				break;
 			}

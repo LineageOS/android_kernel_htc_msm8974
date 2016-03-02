@@ -32,18 +32,18 @@
 #define YAS_REG_TEST2			(0x89)
 #define YAS_REG_CAL			(0x90)
 #define YAS_REG_MEASURE_DATA		(0xb0)
-#define YAS_YAS530_DEVICE_ID		(0x01)	
-#define YAS_YAS530_VERSION_A		(0)	
-#define YAS_YAS530_VERSION_B		(1)	
+#define YAS_YAS530_DEVICE_ID		(0x01)	/* YAS530  (MS-3E) */
+#define YAS_YAS530_VERSION_A		(0)	/* YAS530  (MS-3E Aver) */
+#define YAS_YAS530_VERSION_B		(1)	/* YAS530B (MS-3E Bver) */
 #define YAS_YAS530_VERSION_A_COEF	(380)
 #define YAS_YAS530_VERSION_B_COEF	(550)
 #define YAS_YAS530_DATA_CENTER		(2048)
 #define YAS_YAS530_DATA_UNDERFLOW	(0)
 #define YAS_YAS530_DATA_OVERFLOW	(4095)
 
-#define YAS_YAS532_DEVICE_ID		(0x02)	
-#define YAS_YAS532_VERSION_AB		(0) 
-#define YAS_YAS532_VERSION_AC		(1) 
+#define YAS_YAS532_DEVICE_ID		(0x02)	/* YAS532_533   (MS-3R/3F) */
+#define YAS_YAS532_VERSION_AB		(0) /* YAS532_533AB (MS-3R/3F ABver) */
+#define YAS_YAS532_VERSION_AC		(1) /* YAS532_533AC (MS-3R/3F ACver) */
 #define YAS_YAS532_VERSION_AB_COEF	(1800)
 #define YAS_YAS532_VERSION_AC_COEF_X	(850)
 #define YAS_YAS532_VERSION_AC_COEF_Y1	(750)
@@ -56,7 +56,7 @@
 #define YAS_MAG_STATE_INIT_COIL		(1)
 #define YAS_MAG_STATE_MEASURE_OFFSET	(2)
 #define YAS_MAG_NOTRANS_POSITION	(3)
-#define YAS_MAG_INITCOIL_TIMEOUT	(500)	
+#define YAS_MAG_INITCOIL_TIMEOUT	(500)	/* msec */
 #define YAS_MAG_TEMPERATURE_LOG		(10)
 
 #define set_vector(to, from) \
@@ -384,9 +384,9 @@ static int yas_cdrv_measure(int32_t *xyz, int16_t *xy1y2, int32_t *xy1y2_linear,
 	for (i = 0; i < 3; i++) {
 		xyz_tmp[i] -= xyz_tmp[i] % 10;
 		if (ouflow & (1<<(i*2)))
-			xyz_tmp[i] += 1; 
+			xyz_tmp[i] += 1; /* set overflow */
 		if (ouflow & (1<<(i*2+1)))
-			xyz_tmp[i] += 2; 
+			xyz_tmp[i] += 2; /* set underflow */
 	}
 	set_vector(xyz, xyz_tmp);
 	if (busy)
@@ -472,7 +472,7 @@ static int yas_measure(struct yas_mag_data *data, int temp_correction) {
 			driver.measure_state = YAS_MAG_STATE_NORMAL;
 			break;
 		}
-		
+		/* FALLTHRU */
 	case YAS_MAG_STATE_MEASURE_OFFSET:
 		set_vector(hard_offset, driver.hard_offset);
 		rt = yas_cdrv_measure_and_set_offset();

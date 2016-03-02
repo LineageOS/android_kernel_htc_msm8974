@@ -47,6 +47,7 @@
 
 #define HSPMIC_DT_DELAYINIT 	msecs_to_jiffies(3000)
 #define HSPMIC_DT_DELAYTIMEOUT 	msecs_to_jiffies(5000)
+
 struct htc_hs_pmic_data {
 	struct device *dev;
 	struct workqueue_struct *wq_raw;
@@ -104,6 +105,13 @@ static enum hrtimer_restart hs_hpin_irq_enable_func(struct hrtimer *timer)
 	enable_irq(hi->pdata.hpin_irq);
 	return HRTIMER_NORESTART;
 }
+
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+static int hs_pmic_water_detect_rising(void)
+{
+	return jiffies;
+}
+#endif
 
 static int hs_pmic_hpin_state(void)
 {
@@ -280,13 +288,13 @@ static int hs_pmic_adc_to_keycode(int adc)
 
 	if (adc >= hi->pdata.adc_remote[0] &&
 	    adc <= hi->pdata.adc_remote[1])
-		key_code = HS_MGR_KEY_PLAY;
+		key_code = HS_MGR_KEY1;
 	else if (adc >= hi->pdata.adc_remote[2] &&
 		 adc <= hi->pdata.adc_remote[3])
-		key_code = HS_MGR_KEY_BACKWARD;
+		key_code = HS_MGR_KEY2;
 	else if (adc >= hi->pdata.adc_remote[4] &&
 		 adc <= hi->pdata.adc_remote[5])
-		key_code = HS_MGR_KEY_FORWARD;
+		key_code = HS_MGR_KEY3;
 	else if (adc > hi->pdata.adc_remote[5])
 		key_code = HS_MGR_KEY_NONE;
 
@@ -318,6 +326,7 @@ static void hs_pmic_key_enable(int enable)
 
 static void detect_pmic_work_func(struct work_struct *work)
 {
+
 	struct detect_pmic_work_info *detect_pmic_work_ptr;
 	detect_pmic_work_ptr = container_of(work, struct detect_pmic_work_info, hpin_work.work);
 
@@ -330,8 +339,15 @@ static irqreturn_t detect_irq_handler(int irq, void *data)
 {
 	unsigned int irq_mask = IRQF_TRIGGER_HIGH | IRQF_TRIGGER_LOW;
 	unsigned int hpin_count_local;
+
 	disable_irq_nosync(hi->pdata.hpin_irq);
 	HS_LOG("Disable HPIN IRQ");
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+	if(get_debounce_state() == DEBOUNCE_ON)
+	{
+		set_keep_mic_flag(0);
+	}
+#endif
 	hrtimer_start(&hi->timer, ktime_set(0, 200*NSEC_PER_MSEC), HRTIMER_MODE_REL);
 	hpin_count_local = hpin_count_global++;
 	detect_pmic_work.insert = gpio_get_value(hi->pdata.hpin_gpio);
@@ -421,6 +437,18 @@ static void hs_pmic_key_int_enable(int enable)
 	}
 	HS_LOG("enable_count = %d", enable_count);
 }
+
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+static void hs_pmic_disable_int(void)
+{
+	disable_irq_nosync(hi->pdata.hpin_irq);
+}
+
+static void hs_pmic_enable_int(void)
+{
+	enable_irq(hi->pdata.hpin_irq);
+}
+#endif
 
 static int hs_pmic_request_irq(unsigned int gpio, unsigned int *irq,
 			       irq_handler_t handler, unsigned long flags,
@@ -520,6 +548,20 @@ static void hs_pmic_register(void)
 		notifier.func = hs_pmic_key_int_enable;
 		headset_notifier_register(&notifier);
 	}
+
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+	notifier.id = HEADSET_REG_HS_DISABLE_INT;
+	notifier.func = hs_pmic_disable_int;
+	headset_notifier_register(&notifier);
+
+	notifier.id = HEADSET_REG_HS_ENABLE_INT;
+	notifier.func = hs_pmic_enable_int;
+	headset_notifier_register(&notifier);
+
+	notifier.id = HEADSET_REG_WATER_DETECT_RISING;
+	notifier.func = hs_pmic_water_detect_rising;
+	headset_notifier_register(&notifier);
+#endif
 }
 
 static ssize_t pmic_adc_debug_show(struct device *dev,
@@ -646,7 +688,6 @@ static int htc_headset_pmic_probe(struct platform_device *pdev)
 #ifdef HTC_HEADSET_CONFIG_MSM_RPC
 	uint32_t vers = 0;
 #endif
-
 	HS_LOG("++++++++++++++++++++");
 
 	hi = kzalloc(sizeof(struct htc_35mm_pmic_info), GFP_KERNEL);

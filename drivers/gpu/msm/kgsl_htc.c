@@ -51,7 +51,7 @@ unsigned int kgsl_get_alloc_size(int detailed)
 		schedule_work(&kgsl_driver.priv.work);
 	}
 
-	return kgsl_driver.stats.page_alloc;
+	return atomic_read(&kgsl_driver.stats.page_alloc);
 }
 
 static void do_print_mem_detail(struct work_struct *work)
@@ -63,8 +63,8 @@ static void do_print_mem_detail(struct work_struct *work)
 	struct kgsl_process_private *private;
 	int i;
 
-	printk("kgsl: kgsl_driver.stats.page_alloc = %u\n", driver->stats.page_alloc);
-	printk("kgsl: kgsl_driver.stats.page_alloc_kernel = %u\n", driver->stats.vmalloc);
+	printk("kgsl: kgsl_driver.stats.page_alloc = %u\n", atomic_read(&driver->stats.page_alloc));
+	printk("kgsl: kgsl_driver.stats.page_alloc_kernel = %u\n", atomic_read(&driver->stats.vmalloc));
 
 	mutex_lock(&driver->process_mutex);
 	list_for_each_entry(private, &driver->process_list, list) {

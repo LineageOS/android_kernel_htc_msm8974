@@ -18,7 +18,7 @@
 #include <uapi/linux/avtimer.h>
 
 int avcs_core_open(void);
-int avcs_core_disable_power_collapse(int disable);
+int avcs_core_disable_power_collapse(int disable);/* true or flase */
 int avcs_core_query_timer(uint64_t *avtimer_tick);
 
 #endif

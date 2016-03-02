@@ -29,10 +29,10 @@
 #include <linux/dma-mapping.h>
 #include <trace/events/kmem.h>
 
-static unsigned int high_order_gfp_flags = (GFP_HIGHUSER | __GFP_ZERO |
+static unsigned int high_order_gfp_flags = (GFP_HIGHUSER |
 					    __GFP_NOWARN | __GFP_NORETRY |
 					    __GFP_NO_KSWAPD) & ~__GFP_WAIT;
-static unsigned int low_order_gfp_flags  = (GFP_HIGHUSER | __GFP_ZERO |
+static unsigned int low_order_gfp_flags  = (GFP_HIGHUSER |
 					 __GFP_NOWARN);
 static const unsigned int orders[] = {9, 8, 4, 0};
 static const int num_orders = ARRAY_SIZE(orders);
@@ -59,13 +59,15 @@ struct ion_system_heap {
 
 struct page_info {
 	struct page *page;
+	bool from_pool;
 	unsigned int order;
 	struct list_head list;
 };
 
 static struct page *alloc_buffer_page(struct ion_system_heap *heap,
 				      struct ion_buffer *buffer,
-				      unsigned long order)
+				      unsigned long order,
+				      bool *from_pool)
 {
 	bool cached = ion_buffer_cached(buffer);
 	bool split_pages = ion_buffer_fault_user_mappings(buffer);
@@ -76,7 +78,7 @@ static struct page *alloc_buffer_page(struct ion_system_heap *heap,
 		pool = heap->uncached_pools[order_to_index(order)];
 	else
 		pool = heap->cached_pools[order_to_index(order)];
-	page = ion_page_pool_alloc(pool);
+	page = ion_page_pool_alloc(pool, from_pool);
 	if (!page)
 		return 0;
 
@@ -120,14 +122,14 @@ static struct page_info *alloc_largest_available(struct ion_system_heap *heap,
 	struct page *page;
 	struct page_info *info;
 	int i;
-
+	bool from_pool;
 	for (i = 0; i < num_orders; i++) {
 		if (size < order_to_size(orders[i]))
 			continue;
 		if (max_order < orders[i])
 			continue;
 
-		page = alloc_buffer_page(heap, buffer, orders[i]);
+		page = alloc_buffer_page(heap, buffer, orders[i], &from_pool);
 		if (!page)
 			continue;
 
@@ -135,10 +137,33 @@ static struct page_info *alloc_largest_available(struct ion_system_heap *heap,
 		if (info) {
 			info->page = page;
 			info->order = orders[i];
+			info->from_pool = from_pool;
 		}
 		return info;
 	}
 	return NULL;
+}
+static unsigned int process_info(struct page_info *info,
+				 struct scatterlist *sg,
+				 struct scatterlist *sg_sync,
+				 struct pages_mem *data, unsigned int i)
+{
+	struct page *page = info->page;
+	unsigned int j;
+
+	if (sg_sync) {
+		sg_set_page(sg_sync, page, (1 << info->order) * PAGE_SIZE, 0);
+		sg_dma_address(sg_sync) = page_to_phys(page);
+	}
+	sg_set_page(sg, page, (1 << info->order) * PAGE_SIZE, 0);
+	sg_dma_address(sg) = page_to_phys(page);
+	if (data) {
+		for (j = 0; j < (1 << info->order); ++j)
+			data->pages[i++] = nth_page(page, j);
+	}
+	list_del(&info->list);
+	kfree(info);
+	return i;
 }
 
 static int ion_system_heap_allocate(struct ion_heap *heap,
@@ -150,29 +175,54 @@ static int ion_system_heap_allocate(struct ion_heap *heap,
 							struct ion_system_heap,
 							heap);
 	struct sg_table *table;
+	struct sg_table table_sync;
 	struct scatterlist *sg;
+	struct scatterlist *sg_sync;
 	int ret;
 	struct list_head pages;
+	struct list_head pages_from_pool;
 	struct page_info *info, *tmp_info;
 	int i = 0;
+	unsigned int nents_sync = 0;
 	unsigned long size_remaining = PAGE_ALIGN(size);
+	size_t total_pages = 0;
 	unsigned int max_order = orders[0];
+	struct pages_mem data;
+	unsigned int sz;
 	bool split_pages = ion_buffer_fault_user_mappings(buffer);
 
+	memset(&table_sync, 0, sizeof(table_sync));
+	data.size = 0;
 	INIT_LIST_HEAD(&pages);
+	INIT_LIST_HEAD(&pages_from_pool);
 	while (size_remaining > 0) {
 		info = alloc_largest_available(sys_heap, buffer, size_remaining, max_order);
 		if (!info)
 			goto err;
-		list_add_tail(&info->list, &pages);
-		size_remaining -= (1 << info->order) * PAGE_SIZE;
+
+		sz = (1 << info->order) * PAGE_SIZE;
+
+		if (info->from_pool) {
+			list_add_tail(&info->list, &pages_from_pool);
+		} else {
+			list_add_tail(&info->list, &pages);
+			data.size += sz;
+			++nents_sync;
+		}
+		size_remaining -= sz;
+		total_pages += 1 << info->order;
 		max_order = info->order;
 		i++;
 	}
 
-	table = kzalloc(sizeof(struct sg_table), GFP_KERNEL);
-	if (!table)
+	ret = ion_heap_alloc_pages_mem(&data);
+
+	if (ret)
 		goto err;
+
+	table = kmalloc(sizeof(struct sg_table), GFP_KERNEL);
+	if (!table)
+		goto err_free_data_pages;
 
 	if (split_pages)
 		ret = sg_alloc_table(table, PAGE_ALIGN(size) / PAGE_SIZE,
@@ -183,30 +233,83 @@ static int ion_system_heap_allocate(struct ion_heap *heap,
 	if (ret)
 		goto err1;
 
-	sg = table->sgl;
-	list_for_each_entry_safe(info, tmp_info, &pages, list) {
-		struct page *page = info->page;
-		ion_alloc_inc_usage(ION_IN_USE, 1 << info->order);
-		if (split_pages) {
-			for (i = 0; i < (1 << info->order); i++) {
-				sg_set_page(sg, page + i, PAGE_SIZE, 0);
-				sg = sg_next(sg);
-			}
-		} else {
-			sg_set_page(sg, page, (1 << info->order) * PAGE_SIZE,
-				    0);
-			sg = sg_next(sg);
-		}
-		list_del(&info->list);
-		kfree(info);
+	if (nents_sync) {
+		ret = sg_alloc_table(&table_sync, nents_sync, GFP_KERNEL);
+		if (ret)
+			goto err_free_sg;
 	}
 
+	i = 0;
+	sg = table->sgl;
+	sg_sync = table_sync.sgl;
+
+	do {
+		if (!list_empty(&pages))
+			info = list_first_entry(&pages, struct page_info, list);
+		else
+			info = NULL;
+		if (!list_empty(&pages_from_pool))
+			tmp_info = list_first_entry(&pages_from_pool,
+							struct page_info, list);
+		else
+			tmp_info = NULL;
+
+		if (info && tmp_info) {
+			if (info->order >= tmp_info->order) {
+				i = process_info(info, sg, sg_sync, &data, i);
+				sg_sync = sg_next(sg_sync);
+			} else {
+				i = process_info(tmp_info, sg, 0, 0, i);
+			}
+		} else if (info) {
+			i = process_info(info, sg, sg_sync, &data, i);
+			sg_sync = sg_next(sg_sync);
+		} else if (tmp_info) {
+			i = process_info(tmp_info, sg, 0, 0, i);
+		} else {
+			BUG();
+		}
+		sg = sg_next(sg);
+
+	} while (sg);
+
+	ret = ion_heap_pages_zero(data.pages, data.size >> PAGE_SHIFT);
+	if (ret) {
+		pr_err("Unable to zero pages\n");
+		goto err_free_sg2;
+	}
+
+	if (nents_sync)
+		dma_sync_sg_for_device(NULL, table_sync.sgl, table_sync.nents,
+				       DMA_BIDIRECTIONAL);
+
 	buffer->priv_virt = table;
+	ion_alloc_inc_usage(ION_IN_USE, total_pages);
+	if (nents_sync)
+		sg_free_table(&table_sync);
+	ion_heap_free_pages_mem(&data);
 	return 0;
+err_free_sg2:
+	
+	buffer->flags |= ION_FLAG_FREED_FROM_SHRINKER;
+
+	for_each_sg(table->sgl, sg, table->nents, i)
+		free_buffer_page(sys_heap, buffer, sg_page(sg),
+				get_order(sg->length));
+	if (nents_sync)
+		sg_free_table(&table_sync);
+err_free_sg:
+	sg_free_table(table);
 err1:
 	kfree(table);
+err_free_data_pages:
+	ion_heap_free_pages_mem(&data);
 err:
 	list_for_each_entry_safe(info, tmp_info, &pages, list) {
+		free_buffer_page(sys_heap, buffer, info->page, info->order);
+		kfree(info);
+	}
+	list_for_each_entry_safe(info, tmp_info, &pages_from_pool, list) {
 		free_buffer_page(sys_heap, buffer, info->page, info->order);
 		kfree(info);
 	}

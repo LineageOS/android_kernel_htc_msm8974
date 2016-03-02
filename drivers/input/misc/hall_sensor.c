@@ -239,7 +239,7 @@ static void report_cover_event(int pole, int irq, struct ak_hall_data *hl)
 {
 	uint8_t val_n = 0, val_s = 0;
 
-	if(pole == 0) 
+	if(pole == 0) // N-pole
 	{
 		val_n = gpio_get_value(hl->gpio_att);
 		irq_set_irq_type(irq, val_n?IRQF_TRIGGER_LOW|IRQF_ONESHOT : IRQF_TRIGGER_HIGH|IRQF_ONESHOT);
@@ -253,7 +253,7 @@ static void report_cover_event(int pole, int irq, struct ak_hall_data *hl)
 			blocking_notifier_call_chain(&hallsensor_notifier_list, (0 << 1) |(!val_n), NULL);
 		}
 
-	}else if(pole == 1) 
+	}else if(pole == 1) //S-pole
 	{
 		val_s = gpio_get_value(hl->gpio_att_s);
 		irq_set_irq_type(irq, val_s?IRQF_TRIGGER_LOW|IRQF_ONESHOT : IRQF_TRIGGER_HIGH|IRQF_ONESHOT);

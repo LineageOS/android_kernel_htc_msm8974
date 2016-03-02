@@ -25,6 +25,7 @@
 #include <linux/of_gpio.h>
 #include <mach/socinfo.h>
 
+//#include <mach/qpnp.h>
 #include <linux/qpnp/vibrator.h>
 #include "../staging/android/timed_output.h"
 
@@ -121,7 +122,7 @@ static int qpnp_reg_write_u8(struct spmi_device *spmi, u8 data, u32 reg)
 static int qpnp_vib_pwm_config(struct qpnp_vib_pwm *vib)
 {
 	if ( vib->pwm_config == DTSI_PWM_CONFIG_DEFAULT ) {
-		
+		/* qct case 01329369 + 12.5k HZ + PWM 512 scale + VIN 1v8 */
 		u32 pwm_value_scale;
 		u8 pwm_value_lsb, pwm_value_msb;
 
@@ -292,7 +293,7 @@ static int qpnp_vibrator_pwm_suspend(struct device *dev)
 
 	hrtimer_cancel(&vib->vib_timer);
 	cancel_work_sync(&vib->work);
-	
+	/* turn-off vibrator */
 	qpnp_vib_pwm_set(vib, 0);
 
 	if (vib->power_en)

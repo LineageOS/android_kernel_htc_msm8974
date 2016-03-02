@@ -53,6 +53,8 @@
 #define STM_RSP_SMD_COMPLY_INDEX	9
 #define STM_RSP_NUM_BYTES		10
 
+#define STM_COMMAND_VALID 1
+
 #define SMD_DRAIN_BUF_SIZE 4096
 
 int diag_debug_buf_idx;
@@ -344,77 +346,58 @@ static int check_bufsize_for_encoding(struct diag_smd_info *smd_info, void *buf,
 	return buf_size;
 }
 
-void process_lock_enabling(struct diag_nrt_wake_lock *lock, int real_time)
+void diag_ws_on_notify()
 {
-	unsigned long read_lock_flags;
-
-	spin_lock_irqsave(&lock->read_spinlock, read_lock_flags);
-	if (real_time)
-		lock->enabled = 0;
-	else
-		lock->enabled = 1;
-	lock->ref_count = 0;
-	lock->copy_count = 0;
-	wake_unlock(&lock->read_lock);
-	spin_unlock_irqrestore(&lock->read_spinlock, read_lock_flags);
+	pm_stay_awake(driver->diag_dev);
 }
 
-void process_lock_on_notify(struct diag_nrt_wake_lock *lock)
+void diag_ws_on_read(int pkt_len)
 {
-	unsigned long read_lock_flags;
+	unsigned long flags;
 
-	spin_lock_irqsave(&lock->read_spinlock, read_lock_flags);
-	if (lock->enabled && !wake_lock_active(&lock->read_lock))
-		wake_lock(&lock->read_lock);
-	spin_unlock_irqrestore(&lock->read_spinlock, read_lock_flags);
-}
-
-void process_lock_on_read(struct diag_nrt_wake_lock *lock, int pkt_len)
-{
-	unsigned long read_lock_flags;
-
-	spin_lock_irqsave(&lock->read_spinlock, read_lock_flags);
-	if (lock->enabled) {
-		if (pkt_len > 0) {
-			lock->ref_count++;
-			if (!wake_lock_active(&lock->read_lock))
-				wake_lock(&lock->read_lock);
-		} else {
-			if (lock->ref_count < 1) {
-				if (wake_lock_active(&lock->read_lock))
-					wake_unlock(&lock->read_lock);
-				lock->ref_count = 0;
-				lock->copy_count = 0;
-			}
+	spin_lock_irqsave(&driver->ws_lock, flags);
+	if (pkt_len > 0) {
+		driver->ws_ref_count++;
+	} else {
+		if (driver->ws_ref_count < 1) {
+			pm_relax(driver->diag_dev);
+			driver->ws_ref_count = 0;
+			driver->copy_count = 0;
 		}
 	}
-	spin_unlock_irqrestore(&lock->read_spinlock, read_lock_flags);
+	spin_unlock_irqrestore(&driver->ws_lock, flags);
 }
 
-void process_lock_on_copy(struct diag_nrt_wake_lock *lock)
+void diag_ws_on_copy()
 {
-	unsigned long read_lock_flags;
-
-	spin_lock_irqsave(&lock->read_spinlock, read_lock_flags);
-	if (lock->enabled)
-		lock->copy_count++;
-	spin_unlock_irqrestore(&lock->read_spinlock, read_lock_flags);
+	unsigned long flags;
+	spin_lock_irqsave(&driver->ws_lock, flags);
+	driver->copy_count++;
+	spin_unlock_irqrestore(&driver->ws_lock, flags);
 }
 
-void process_lock_on_copy_complete(struct diag_nrt_wake_lock *lock)
+void diag_ws_on_copy_complete()
 {
-	unsigned long read_lock_flags;
-
-	spin_lock_irqsave(&lock->read_spinlock, read_lock_flags);
-	if (lock->enabled) {
-		lock->ref_count -= lock->copy_count;
-		if (lock->ref_count < 1) {
-			wake_unlock(&lock->read_lock);
-			lock->ref_count = 0;
-		}
-		lock->copy_count = 0;
+	unsigned long flags;
+	spin_lock_irqsave(&driver->ws_lock, flags);
+	driver->ws_ref_count -= driver->copy_count;
+	if (driver->ws_ref_count < 1) {
+		pm_relax(driver->diag_dev);
+		driver->ws_ref_count = 0;
 	}
-	spin_unlock_irqrestore(&lock->read_spinlock, read_lock_flags);
+	driver->copy_count = 0;
+	spin_unlock_irqrestore(&driver->ws_lock, flags);
+}
+
+void diag_ws_reset()
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&driver->ws_lock, flags);
+	pm_relax(driver->diag_dev);
+	driver->ws_ref_count = 0;
+	driver->copy_count = 0;
+	spin_unlock_irqrestore(&driver->ws_lock, flags);
 }
 
 int diag_process_smd_read_data(struct diag_smd_info *smd_info, void *buf,
@@ -433,7 +416,7 @@ int diag_process_smd_read_data(struct diag_smd_info *smd_info, void *buf,
 		
 		pr_err("diag, In %s, received data on non-designated command channel: %d\n",
 			__func__, smd_info->peripheral);
-		return 0;
+		goto err;
 	}
 
 	
@@ -447,6 +430,7 @@ int diag_process_smd_read_data(struct diag_smd_info *smd_info, void *buf,
 		} else {
 			pr_err("diag: In %s, no match for in_busy_1, peripheral: %d\n",
 				__func__, smd_info->peripheral);
+			goto err;
 		}
 		if (smd_info->peripheral == MODEM_DATA) {
 			DIAGFWD_7K_RAWDATA(buf, "modem", DIAG_DBG_READ);
@@ -467,11 +451,12 @@ int diag_process_smd_read_data(struct diag_smd_info *smd_info, void *buf,
 			*in_busy_ptr = 1;
 			err = diag_device_write(buf, smd_info->peripheral,
 						write_ptr_modem);
+			spin_unlock_irqrestore(&smd_info->in_busy_lock, flags);
 			if (err) {
 				pr_err_ratelimited("diag: In %s, diag_device_write error: %d\n",
 					__func__, err);
+				goto err;
 			}
-			spin_unlock_irqrestore(&smd_info->in_busy_lock, flags);
 		}
 	} else {
 		
@@ -484,6 +469,7 @@ int diag_process_smd_read_data(struct diag_smd_info *smd_info, void *buf,
 		} else {
 			pr_err("diag: In %s, no match for in_busy_1, peripheral: %d\n",
 				__func__, smd_info->peripheral);
+			goto err;
 		}
 
 		if (write_ptr_modem) {
@@ -499,26 +485,73 @@ int diag_process_smd_read_data(struct diag_smd_info *smd_info, void *buf,
 				success = diag_add_hdlc_encoding(smd_info, buf,
 							total_recd, write_buf,
 							&write_length);
-				spin_lock_irqsave(&smd_info->in_busy_lock,
-						  flags);
 				if (success) {
+					spin_lock_irqsave(
+						&smd_info->in_busy_lock, flags);
 					write_ptr_modem->length = write_length;
 					*in_busy_ptr = 1;
 					err = diag_device_write(write_buf,
 							smd_info->peripheral,
 							write_ptr_modem);
+					spin_unlock_irqrestore(
+						&smd_info->in_busy_lock, flags);
 					if (err) {
 						pr_err_ratelimited("diag: In %s, diag_device_write error: %d\n",
 								__func__, err);
+						goto err;
 					}
 				}
-				spin_unlock_irqrestore(&smd_info->in_busy_lock,
-						       flags);
+			} else {
+				goto err;
 			}
 		}
 	}
 
 	return 0;
+err:
+	if ((smd_info->type == SMD_DATA_TYPE ||
+	     smd_info->type == SMD_CMD_TYPE) &&
+	     driver->logging_mode == MEMORY_DEVICE_MODE)
+		diag_ws_on_read(0);
+
+	return 0;
+}
+
+void diag_smd_queue_read(struct diag_smd_info *smd_info)
+{
+	if (!smd_info || !smd_info->ch)
+		return;
+
+	if ((smd_info->type == SMD_DATA_TYPE ||
+	     smd_info->type == SMD_CMD_TYPE) &&
+	     driver->logging_mode == MEMORY_DEVICE_MODE) {
+		diag_ws_on_notify();
+	}
+
+	switch (smd_info->type) {
+	case SMD_DCI_TYPE:
+	case SMD_DCI_CMD_TYPE:
+		queue_work(driver->diag_dci_wq,
+			   &(smd_info->diag_read_smd_work));
+		break;
+	case SMD_DATA_TYPE:
+		queue_work(smd_info->wq,
+			   &(smd_info->diag_read_smd_work));
+		break;
+	case SMD_CNTL_TYPE:
+	case SMD_CMD_TYPE:
+		queue_work(driver->diag_wq,
+			   &(smd_info->diag_read_smd_work));
+		break;
+	default:
+		pr_err("diag: In %s, invalid type: %d\n", __func__,
+			smd_info->type);
+		if ((smd_info->type == SMD_DATA_TYPE ||
+		     smd_info->type == SMD_CMD_TYPE) &&
+		     driver->logging_mode == MEMORY_DEVICE_MODE)
+			diag_ws_on_read(0);
+		return;
+	}
 }
 
 static int diag_smd_resize_buf(struct diag_smd_info *smd_info, void **buf,
@@ -743,8 +776,11 @@ drop:
 				}
 			}
 		}
-		if (!driver->real_time_mode && smd_info->type == SMD_DATA_TYPE)
-			process_lock_on_read(&smd_info->nrt_lock, pkt_len);
+
+		if ((smd_info->type == SMD_DATA_TYPE ||
+		     smd_info->type == SMD_CMD_TYPE) &&
+		     driver->logging_mode == MEMORY_DEVICE_MODE)
+			diag_ws_on_read(total_recd);
 
 		
 		if (smd_info->peripheral == MODEM_DATA &&
@@ -788,10 +824,21 @@ drop:
 	} else if (smd_info->ch && !buf &&
 		(driver->logging_mode == MEMORY_DEVICE_MODE)) {
 			chk_logging_wakeup();
+	} else {
+		if ((smd_info->type == SMD_DATA_TYPE ||
+		     smd_info->type == SMD_CMD_TYPE) &&
+		     driver->logging_mode == MEMORY_DEVICE_MODE) {
+			diag_ws_on_read(0);
+		}
 	}
 	return;
 
 fail_return:
+	if ((smd_info->type == SMD_DATA_TYPE ||
+	     smd_info->type == SMD_CMD_TYPE) &&
+	     driver->logging_mode == MEMORY_DEVICE_MODE)
+		diag_ws_on_read(0);
+
 	if (smd_info->type == SMD_DCI_TYPE ||
 					smd_info->type == SMD_DCI_CMD_TYPE)
 		diag_dci_try_deactivate_wakeup_source();
@@ -1126,15 +1173,6 @@ void diag_update_sleeping_process(int process_id, int data_type)
 	mutex_unlock(&driver->diagchar_mutex);
 }
 
-static int diag_check_mode_reset(unsigned char *buf)
-{
-	int is_mode_reset = 0;
-	if (chk_apps_master() && (int)(*(char *)buf) == MODE_CMD)
-		if ((int)(*(char *)(buf+1)) == RESET_ID)
-			is_mode_reset = 1;
-	return is_mode_reset;
-}
-
 int diag_send_data(struct diag_master_table entry, unsigned char *buf,
 					 int len, int type)
 {
@@ -1159,12 +1197,6 @@ int diag_send_data(struct diag_master_table entry, unsigned char *buf,
 					pr_debug("diag: In %s, feature mask for peripheral: %d not received yet\n",
 						__func__, entry.client_id);
 					return 0;
-				}
-				if ((index == MODEM_DATA) &&
-					diag_check_mode_reset(buf)) {
-					pr_info("diag: mode reset command received\n");
-					
-					
 				}
 				smd_info = (driver->separate_cmdrsp[index] &&
 						index < NUM_SMD_CMD_CHANNELS) ?
@@ -1224,7 +1256,6 @@ int diag_process_stm_cmd(unsigned char *buf, unsigned char *dest_buf)
 	uint8_t version, mask, cmd;
 	uint8_t rsp_supported = 0;
 	uint8_t rsp_smd_comply = 0;
-	int valid_command = 1;
 	int i;
 
 	if (!buf || !dest_buf) {
@@ -1237,10 +1268,19 @@ int diag_process_stm_cmd(unsigned char *buf, unsigned char *dest_buf)
 	mask = *(buf + STM_CMD_MASK_OFFSET);
 	cmd = *(buf + STM_CMD_DATA_OFFSET);
 
-	
-	if ((version != 1) || (mask == 0) || (0 != (mask >> 4)) ||
-			(cmd != ENABLE_STM && cmd != DISABLE_STM)) {
-		valid_command = 0;
+	if ((version != 1) || (cmd > STATUS_STM) ||
+		((cmd != STATUS_STM) && ((mask == 0) || (0 != (mask >> 4))))) {
+		
+		dest_buf[0] = BAD_PARAM_RESPONSE_MESSAGE;
+		for (i = 0; i < STM_CMD_NUM_BYTES; i++)
+			dest_buf[i+1] = *(buf + i);
+		return STM_CMD_NUM_BYTES+1;
+	} else if (cmd == STATUS_STM) {
+		for (i = 0; i < NUM_SMD_CONTROL_CHANNELS; i++)
+			if (driver->peripheral_supports_stm[i])
+				rsp_supported |= 1 << i;
+
+		rsp_supported |= DIAG_STM_APPS;
 	} else {
 		if (mask & DIAG_STM_MODEM)
 			diag_process_stm_mask(cmd, DIAG_STM_MODEM, MODEM_DATA,
@@ -1262,7 +1302,7 @@ int diag_process_stm_cmd(unsigned char *buf, unsigned char *dest_buf)
 	for (i = 0; i < STM_CMD_NUM_BYTES; i++)
 		dest_buf[i] = *(buf + i);
 
-	dest_buf[STM_RSP_VALID_INDEX] = valid_command;
+	dest_buf[STM_RSP_VALID_INDEX] = STM_COMMAND_VALID;
 	dest_buf[STM_RSP_SUPPORTED_INDEX] = rsp_supported;
 	dest_buf[STM_RSP_SMD_COMPLY_INDEX] = rsp_smd_comply;
 
@@ -1375,7 +1415,7 @@ int diag_process_apps_pkt(unsigned char *buf, int len)
 		encode_rsp_and_send(7);
 		return 0;
 	} else if ((*buf == 0x4b) && (*(buf+1) == 0x12) &&
-		(*(uint16_t *)(buf+2) == 0x020E)) {
+		(*(uint16_t *)(buf+2) == DIAG_DIAG_STM)) {
 		len = diag_process_stm_cmd(buf, driver->apps_rsp_buf);
 		if (len > 0) {
 			encode_rsp_and_send(len - 1);
@@ -1490,7 +1530,9 @@ int diag_process_apps_pkt(unsigned char *buf, int len)
 		*(uint16_t *)(driver->apps_rsp_buf + 94) = MSG_SSID_21_LAST;
 		*(uint16_t *)(driver->apps_rsp_buf + 96) = MSG_SSID_22;
 		*(uint16_t *)(driver->apps_rsp_buf + 98) = MSG_SSID_22_LAST;
-		encode_rsp_and_send(99);
+		*(uint16_t *)(driver->apps_rsp_buf + 100) = MSG_SSID_23;
+		*(uint16_t *)(driver->apps_rsp_buf + 102) = MSG_SSID_23_LAST;
+		encode_rsp_and_send(103);
 		return 0;
 	}
 	
@@ -2224,24 +2266,15 @@ void diag_smd_notify(void *ctxt, unsigned event)
 			diag_dci_notify_client(smd_info->peripheral_mask,
 							DIAG_STATUS_OPEN);
 		}
-	} else if (event == SMD_EVENT_DATA && !driver->real_time_mode &&
-					smd_info->type == SMD_DATA_TYPE) {
-		process_lock_on_notify(&smd_info->nrt_lock);
-	}
-
-	wake_up(&driver->smd_wait_q);
-
-	if (smd_info->type == SMD_DCI_TYPE ||
-					smd_info->type == SMD_DCI_CMD_TYPE) {
-		if (event == SMD_EVENT_DATA)
+		diag_smd_queue_read(smd_info);
+		wake_up(&driver->smd_wait_q);
+	} else if (event == SMD_EVENT_DATA) {
+		diag_smd_queue_read(smd_info);
+		wake_up(&driver->smd_wait_q);
+		if (smd_info->type == SMD_DCI_TYPE ||
+		    smd_info->type == SMD_DCI_CMD_TYPE) {
 			diag_dci_try_activate_wakeup_source();
-		queue_work(driver->diag_dci_wq,
-				&(smd_info->diag_read_smd_work));
-	} else if (smd_info->type == SMD_DATA_TYPE) {
-		queue_work(smd_info->wq,
-				&(smd_info->diag_read_smd_work));
-	} else {
-		queue_work(driver->diag_wq, &(smd_info->diag_read_smd_work));
+		}
 	}
 }
 
@@ -2256,7 +2289,7 @@ void diag_smd_enable(smd_channel_t *ch, char *src, int mode)
 	diag_smd_function_mode = mode;
 	if (mode) {
 		if (!driver->smd_data[index].ch) {
-			r = smd_open("DIAG", &driver->smd_data[index].ch, driver, diag_smd_notify);
+			r = smd_open("DIAG", &driver->smd_data[index].ch, &driver->smd_data[index], diag_smd_notify);
 		if (!r)
 			_ch = driver->smd_data[index].ch;
 		} else
@@ -2402,10 +2435,8 @@ int device_supports_separate_cmdrsp(void)
 
 void diag_smd_destructor(struct diag_smd_info *smd_info)
 {
-	if (smd_info->type == SMD_DATA_TYPE) {
-		wake_lock_destroy(&smd_info->nrt_lock.read_lock);
+	if (smd_info->type == SMD_DATA_TYPE)
 		destroy_workqueue(smd_info->wq);
-	}
 
 	if (smd_info->ch)
 		smd_close(smd_info->ch);
@@ -2587,30 +2618,6 @@ int diag_smd_constructor(struct diag_smd_info *smd_info, int peripheral,
 		goto err;
 	}
 
-	smd_info->nrt_lock.enabled = 0;
-	smd_info->nrt_lock.ref_count = 0;
-	smd_info->nrt_lock.copy_count = 0;
-	if (type == SMD_DATA_TYPE) {
-		spin_lock_init(&smd_info->nrt_lock.read_spinlock);
-
-		switch (peripheral) {
-		case MODEM_DATA:
-			wake_lock_init(&smd_info->nrt_lock.read_lock,
-				WAKE_LOCK_SUSPEND, "diag_nrt_modem_read");
-			break;
-		case LPASS_DATA:
-			wake_lock_init(&smd_info->nrt_lock.read_lock,
-				WAKE_LOCK_SUSPEND, "diag_nrt_lpass_read");
-			break;
-		case WCNSS_DATA:
-			wake_lock_init(&smd_info->nrt_lock.read_lock,
-				WAKE_LOCK_SUSPEND, "diag_nrt_wcnss_read");
-			break;
-		default:
-			break;
-		}
-	}
-
 	return 1;
 err:
 	kfree(smd_info->buf_in_1);
@@ -2640,6 +2647,9 @@ void diagfwd_init(void)
 	driver->supports_apps_hdlc_encoding = 0;
 	mutex_init(&driver->diag_hdlc_mutex);
 	mutex_init(&driver->diag_cntl_mutex);
+	spin_lock_init(&driver->ws_lock);
+	driver->ws_ref_count = 0;
+	driver->copy_count = 0;
 
 	for (i = 0; i < NUM_SMD_CONTROL_CHANNELS; i++) {
 		driver->separate_cmdrsp[i] = 0;

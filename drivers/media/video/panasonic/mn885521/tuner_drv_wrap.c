@@ -30,7 +30,11 @@
  * HISTORY      : 2011/07/25    K.Kitamura(*)
  *                001 new creation
  ******************************************************************************/
+/*..+....1....+....2....+....3....+....4....+....5....+....6....+....7....+...*/
 
+/******************************************************************************
+ * include
+ ******************************************************************************/
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
@@ -50,83 +54,141 @@
 
 #ifdef TUNER_CONFIG_IRQ_PC_LINUX
 #include "../../../i2c-parport-x/i2c-parport.h"
-#endif  
+#endif  /* TUNER_CONFIG_IRQ_PC_LINUX */
 
+/******************************************************************************/
+/* function                                                                   */
+/******************************************************************************/
 int tuner_drv_ctl_power( int data );
 int tuner_drv_set_interrupt( void );
 void tuner_drv_release_interrupt( void );
 
+/******************************************************************************
+ * code area
+ ******************************************************************************/
+/******************************************************************************
+ *    function:   tuner_drv_ctl_power
+ *    brief   :   power control of a driver
+ *    date    :   2011.08.26
+ *    author  :   M.Takahashi(*)
+ *
+ *    return  :    0                   normal exit
+ *            :   -1                   error exit
+ *    input   :   data                 setting data
+ *    output  :   none
+ ******************************************************************************/
 int tuner_drv_ctl_power( int data )
 {
-    
+    /* 電源ON制御 */
     if( data == TUNER_DRV_CTL_POWON )
     {
     }
-    
+    /* 電源OFF制御 */
     else
     {
     }
 
-    
+    /* 現状は正常終了を返却 */
     return 0;
 }
 
+/******************************************************************************
+ *    function:   tuner_drv_set_interrupt
+ *    brief   :   interruption registration control of a driver
+ *    date    :   2011.08.26
+ *    author  :   M.Takahashi(*)
+ *
+ *    return  :    0                   normal exit
+ *            :   -1                   error exit
+ *    input   :   pdev
+ *    output  :   none
+ ******************************************************************************/
 int tuner_drv_set_interrupt( void )
 {
 #ifndef TUNER_CONFIG_IRQ_PC_LINUX
-    int ret;                                     
+    int ret;                                     /* 戻り値                    */
 
-    
-    ret = request_irq( TUNER_CONFIG_INT,         
-                       tuner_interrupt,          
-                       IRQF_DISABLED,            
-                       "mm_tuner",               
-                       NULL );                   
+    /* 割り込み登録 */
+    ret = request_irq( TUNER_CONFIG_INT,         /* 割り込み番号              */
+                       tuner_interrupt,          /* コールバック関数          */
+                       IRQF_DISABLED,            /* 関数実行中の割込み禁止設定*/
+                       "mm_tuner",               /* 表示名称                  */
+                       NULL );                   /* デバイスID指定なし        */
 
-    if( ret != 0 )                               
+    if( ret != 0 )                               /* 登録失敗                  */
     {
         return -1;
     }
-#else  
+#else  /* TUNER_CONFIG_IRQ_PC_LINUX */
     i2c_set_interrupt( tuner_interrupt );
-#endif 
+#endif /* TUNER_CONFIG_IRQ_PC_LINUX */
     return 0;
 }
 
+/******************************************************************************
+ *    function:   tuner_drv_release_interrupt
+ *    brief   :   interruption registration release control of a driver
+ *    date    :   2011.08.26
+ *    author  :   M.Takahashi(*)
+ *
+ *    return  :   none
+ *    input   :   none
+ *    output  :   none
+ ******************************************************************************/
 void tuner_drv_release_interrupt( void )
 {
 #ifndef TUNER_CONFIG_IRQ_PC_LINUX
-    
+    /* 割り込み登録解除 */
     free_irq( TUNER_CONFIG_INT, NULL );
 
-#else  
+#else  /* TUNER_CONFIG_IRQ_PC_LINUX */
     i2c_release_interrupt( NULL );
-#endif 
+#endif /* TUNER_CONFIG_IRQ_PC_LINUX */
 }
 
 #ifdef TUNER_CONFIG_IRQ_LEVELTRIGGER
+/******************************************************************************
+ *    function:   tuner_drv_enable_interrupt
+ *    brief   :   interruption registration enable control of a driver
+ *    date    :   2011.09.18
+ *    author  :   M.Takahashi(*)(*)
+ *
+ *    return  :   none
+ *    input   :   none
+ *    output  :   none
+ ******************************************************************************/
 void tuner_drv_enable_interrupt( void )
 {
 #ifndef TUNER_CONFIG_IRQ_PC_LINUX
-    
+    /* 割り込み有効設定 */
     enable_irq( TUNER_INT, NULL );
 
-#else  
+#else  /* TUNER_CONFIG_IRQ_PC_LINUX */
     i2c_set_interrupt( tuner_interrupt );
-#endif 
+#endif /* TUNER_CONFIG_IRQ_PC_LINUX */
 }
 
+/******************************************************************************
+ *    function:   tuner_drv_disable_interrupt
+ *    brief   :   interruption registration disable control of a driver
+ *    date    :   2011.09.18
+ *    author  :   M.Takahashi(*)(*)
+ *
+ *    return  :   none
+ *    input   :   none
+ *    output  :   none
+ ******************************************************************************/
 void tuner_drv_disable_interrupt( void )
 {
 #ifndef TUNER_CONFIG_IRQ_PC_LINUX 
-    
+    /* 割り込み無効設定 */
     disable_irq( TUNER_INT, NULL );
 
-#else  
+#else  /* TUNER_CONFIG_IRQ_PC_LINUX */
     i2c_release_interrupt( NULL );
-#endif 
+#endif /* TUNER_CONFIG_IRQ_PC_LINUX */
 }
-#endif 
+#endif /* TUNER_CONFIG_IRQ_LEVELTRIGGER */
 
 /*******************************************************************************
  *              Copyright(c) 2011 Panasonc Co., Ltd.

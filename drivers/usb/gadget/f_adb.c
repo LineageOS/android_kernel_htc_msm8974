@@ -62,6 +62,8 @@ struct adb_dev {
 	int rx_done;
 	int read_err;
 	int write_err;
+/*	bool notify_close;
+	bool close_notified;*/
 };
 
 static struct usb_interface_descriptor adb_interface_desc = {
@@ -86,9 +88,9 @@ static struct usb_ss_ep_comp_descriptor adb_superspeed_in_comp_desc = {
 	.bLength =		sizeof adb_superspeed_in_comp_desc,
 	.bDescriptorType =	USB_DT_SS_ENDPOINT_COMP,
 
-	
-	
-	
+	/* the following 2 values can be tweaked if necessary */
+	/* .bMaxBurst =		0, */
+	/* .bmAttributes =	0, */
 };
 
 static struct usb_endpoint_descriptor adb_superspeed_out_desc = {
@@ -103,9 +105,9 @@ static struct usb_ss_ep_comp_descriptor adb_superspeed_out_comp_desc = {
 	.bLength =		sizeof adb_superspeed_out_comp_desc,
 	.bDescriptorType =	USB_DT_SS_ENDPOINT_COMP,
 
-	
-	
-	
+	/* the following 2 values can be tweaked if necessary */
+	/* .bMaxBurst =		0, */
+	/* .bmAttributes =	0, */
 };
 
 static struct usb_endpoint_descriptor adb_highspeed_in_desc = {
@@ -160,6 +162,11 @@ static struct usb_descriptor_header *ss_adb_descs[] = {
 	(struct usb_descriptor_header *) &adb_superspeed_out_comp_desc,
 	NULL,
 };
+/*
+static void adb_ready_callback(void);
+static void adb_closed_callback(void);
+*/
+/* temporary variable used between adb_open() and adb_gadget_bind() */
 static struct adb_dev *_adb_dev;
 
 static struct timer_list adb_read_timer;
@@ -530,6 +537,11 @@ static ssize_t adb_write(struct file *fp, const char __user *buf,
 
 static int adb_open(struct inode *ip, struct file *fp)
 {
+/*
+	static DEFINE_RATELIMIT_STATE(rl, 10*HZ, 1);
+	if (__ratelimit(&rl))
+		pr_info("adb_open\n");
+*/
 	printk(KERN_INFO "[USB] adb_open: %s(parent:%s): tgid=%d\n",
 			current->comm, current->parent->comm, current->tgid);
 
@@ -545,14 +557,42 @@ static int adb_open(struct inode *ip, struct file *fp)
 	atomic_set(&_adb_dev->error, 0);
 	_adb_dev->read_err = 0;
 	_adb_dev->write_err = 0;
+/*
+	if (_adb_dev->close_notified) {
+		_adb_dev->close_notified = false;
+		adb_ready_callback();
+	}
+
+	_adb_dev->notify_close = true;
+*/
 	return 0;
 }
 
 static int adb_release(struct inode *ip, struct file *fp)
 {
+/*
+	static DEFINE_RATELIMIT_STATE(rl, 10*HZ, 1);
+
+	if (__ratelimit(&rl))
+		pr_info("adb_release\n");
+*/
 	printk(KERN_INFO "[USB] adb_release: %s(parent:%s): tgid=%d read_err %d write_err %d\n",
 			current->comm, current->parent->comm, current->tgid,_adb_dev->read_err,_adb_dev->write_err);
 
+	/*
+	 * ADB daemon closes the device file after I/O error.  The
+	 * I/O error happen when Rx requests are flushed during
+	 * cable disconnect or bus reset in configured state.  Disabling
+	 * USB configuration and pull-up during these scenarios are
+	 * undesired.  We want to force bus reset only for certain
+	 * commands like "adb root" and "adb usb".
+	 */
+/*
+	if (_adb_dev->notify_close) {
+		adb_closed_callback();
+		_adb_dev->close_notified = true;
+	}
+*/
 	adb_unlock(&_adb_dev->open_excl);
 	return 0;
 }
@@ -737,6 +777,12 @@ static void adb_function_disable(struct usb_function *f)
 	struct usb_composite_dev	*cdev = dev->cdev;
 
 	DBG(cdev, "adb_function_disable cdev %p\n", cdev);
+	/*
+	 * Bus reset happened or cable disconnected.  No
+	 * need to disable the configuration now.  We will
+	 * set noify_close to true when device file is re-opened.
+	 */
+/*	dev->notify_close = false;*/
 	atomic_set(&dev->online, 0);
 	atomic_set(&dev->error, 1);
 	usb_ep_disable(dev->ep_in);
@@ -786,7 +832,8 @@ static int adb_setup(void)
 	atomic_set(&dev->read_excl, 0);
 	atomic_set(&dev->write_excl, 0);
 
-	
+	/* config is disabled by default if adb is present. */
+/*	dev->close_notified = true;*/
 
 	INIT_LIST_HEAD(&dev->tx_idle);
 

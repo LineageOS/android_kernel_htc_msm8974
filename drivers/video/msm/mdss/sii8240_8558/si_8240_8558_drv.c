@@ -1992,14 +1992,14 @@ void si_mhl_tx_read_devcap_fifo(struct drv_hw_context *hw_context,
 {
 	MHL_TX_DBG_INFO(hw_context,"called\n");
 
-    
+	
 	enable_intr(hw_context, INTR_EDID,
 				   ( BIT_INTR9_DEVCAP_DONE_MASK
 				    | BIT_INTR9_EDID_DONE_MASK
 				    | BIT_INTR9_EDID_ERROR
 				   ));
 
-    
+	
 	mhl_tx_write_reg(hw_context
 			, REG_EDID_CTRL
 			, BIT_EDID_CTRL_EDID_PRIME_VALID_DISABLE
@@ -2009,9 +2009,12 @@ void si_mhl_tx_read_devcap_fifo(struct drv_hw_context *hw_context,
 			);
 	mhl_tx_write_reg(hw_context, REG_EDID_FIFO_ADDR, 0);
 
-    
+	
 	mhl_tx_read_reg_block(hw_context, REG_EDID_FIFO_RD_DATA,
 						  DEVCAP_SIZE, dev_cap_buf->devcap_cache);
+
+	mhl_tx_write_reg(hw_context, REG_EDID_CTRL, BIT_EDID_CTRL_EDID_FIFO_ADDR_AUTO_ENABLE);
+
 	MHL_TX_DBG_INFO(hw_context, "\n\ngot DEVCAP\n\n");
 }
 static int get_cbus_connection_status(struct drv_hw_context *hw_context)
@@ -2111,7 +2114,7 @@ static int mhl_cbus_isr(struct drv_hw_context *hw_context, uint8_t cbus_int)
 			cbus_status ^= BIT_CBUS_HPD;
 		}
 
-		MHL_TX_DBG_INFO(hw_context, "DS HPD changed to %02X\n", status);
+		MHL_TX_DBG_ERR(hw_context, "DS HPD changed to %02X\n", status);
 
 		hw_context->intr_info->flags |= DRV_INTR_FLAG_HPD_CHANGE;
 		hw_context->intr_info->hpd_status = status;

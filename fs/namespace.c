@@ -272,7 +272,7 @@ EXPORT_SYMBOL_GPL(mnt_clone_write);
 
 int mnt_want_write_file(struct file *file)
 {
-	struct inode *inode = file->f_dentry->d_inode;
+	struct inode *inode = file_inode(file);
 	if (!(file->f_mode & FMODE_WRITE) || special_file(inode->i_mode))
 		return mnt_want_write(file->f_path.mnt);
 	else
@@ -1629,7 +1629,8 @@ static int do_new_mount(struct path *path, const char *fstype, int flags,
 		mntput(mnt);
 
 	
-	if (!err && !strcmp(fstype, "ext4") && !strcmp(path->dentry->d_name.name, "data"))
+	if (!err && !strcmp(fstype, "ext4") &&
+	    !strcmp(path->dentry->d_name.name, "data"))
 		mnt->mnt_sb->fsync_flags |= FLAG_ASYNC_FSYNC;
 
 	return err;
@@ -1954,10 +1955,10 @@ static struct mnt_namespace *dup_mnt_ns(struct mnt_namespace *mnt_ns,
 	if (user_ns != mnt_ns->user_ns)
 		copy_flags |= CL_SHARED_TO_SLAVE;
 	new = copy_tree(old, old->mnt.mnt_root, copy_flags);
-	if (IS_ERR(new)) {
+	if (!new) {
 		up_write(&namespace_sem);
 		free_mnt_ns(new_ns);
-		return ERR_CAST(new);
+		return ERR_PTR(-ENOMEM);
 	}
 	new_ns->root = new;
 	br_write_lock(&vfsmount_lock);

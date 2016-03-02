@@ -385,7 +385,7 @@ void mdss_dsi_host_init(struct mipi_panel_info *pinfo,
 	wmb();
 }
 
-void mdss_set_tx_power_mode(int mode, struct mdss_panel_data *pdata)
+void mdss_dsi_set_tx_power_mode(int mode, struct mdss_panel_data *pdata)
 {
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
 	u32 data;
@@ -837,7 +837,6 @@ int mdss_dsi_cmds_rx(struct mdss_dsi_ctrl_pdata *ctrl,
 		short_response = 1;
 		pkt_size = rlen;
 		rx_byte = 4;
-		pkt_size = 0;
 	} else {
 		short_response = 0;
 		data_byte = 8;	
@@ -1193,7 +1192,7 @@ int mdss_dsi_cmdlist_commit(struct mdss_dsi_ctrl_pdata *ctrl, int from_mdp)
 	}
 
 	if (req->flags & CMD_REQ_HS_MODE)
-		mdss_set_tx_power_mode(0, &ctrl->panel_data);
+		mdss_dsi_set_tx_power_mode(0, &ctrl->panel_data);
 
 	if (req->flags & CMD_REQ_RX)
 		ret = mdss_dsi_cmdlist_rx(ctrl, req);
@@ -1201,7 +1200,7 @@ int mdss_dsi_cmdlist_commit(struct mdss_dsi_ctrl_pdata *ctrl, int from_mdp)
 		ret = mdss_dsi_cmdlist_tx(ctrl, req);
 
 	if (req->flags & CMD_REQ_HS_MODE)
-		mdss_set_tx_power_mode(1, &ctrl->panel_data);
+		mdss_dsi_set_tx_power_mode(1, &ctrl->panel_data);
 
 	mdss_iommu_ctrl(0);
 	mdss_dsi_clk_ctrl(ctrl, 0);

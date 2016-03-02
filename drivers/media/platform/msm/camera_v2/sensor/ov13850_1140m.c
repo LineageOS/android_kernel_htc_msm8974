@@ -15,7 +15,7 @@
 #define DUAL_CAL_OTP_SIZE 1024
 static uint8_t otp[21];
 static uint8_t otp_mem[DUAL_CAL_OTP_SIZE];
-static uint8_t *path= "/data/OTPData.dat";
+static uint8_t *path= "/data/misc/camera/OTPData.dat";
 DEFINE_MSM_MUTEX(ov13850_1140m_mut);
 
 static struct msm_sensor_ctrl_t ov13850_1140m_s_ctrl;
@@ -305,10 +305,10 @@ static void ov13850_1140m_parse_otp_mem(struct msm_sensor_ctrl_t *s_ctrl)
 	for(i=0; i<5; i++)
 	  s_ctrl->sensordata->sensor_info->OTP_INFO[i] = otp[i];
 
-	s_ctrl->sensordata->sensor_info->fuse_id[0] = otp[5];
-	s_ctrl->sensordata->sensor_info->fuse_id[1] = otp[6];
-	s_ctrl->sensordata->sensor_info->fuse_id[2] = otp[7];
-	s_ctrl->sensordata->sensor_info->fuse_id[3] = otp[13];
+	s_ctrl->sensordata->sensor_info->fuse_id[0] = 0;
+	s_ctrl->sensordata->sensor_info->fuse_id[1] = otp[5];
+	s_ctrl->sensordata->sensor_info->fuse_id[2] = otp[6];
+	s_ctrl->sensordata->sensor_info->fuse_id[3] = otp[7];
 
 	pr_info("%s: OTP Module vendor = 0x%x\n",				__func__,  otp[0]);
 	pr_info("%s: OTP LENS = 0x%x\n",						__func__,  otp[1]);
@@ -316,10 +316,9 @@ static void ov13850_1140m_parse_otp_mem(struct msm_sensor_ctrl_t *s_ctrl)
 	pr_info("%s: OTP Driver IC Vendor & Version = 0x%x\n",	__func__,  otp[3]);
 	pr_info("%s: OTP Actuator vender ID & Version = 0x%x\n",__func__,  otp[4]);
 
-	pr_info("%s: OTP fuse 0 = 0x%x\n", __func__,	otp[5]);
-	pr_info("%s: OTP fuse 1 = 0x%x\n", __func__,	otp[6]);
-	pr_info("%s: OTP fuse 2 = 0x%x\n", __func__,	otp[7]);
-	pr_info("%s: OTP fuse 3 = 0x%x\n", __func__,	otp[13]);
+	pr_info("%s: OTP fuse 1 = 0x%x\n", __func__,	otp[5]);
+	pr_info("%s: OTP fuse 2 = 0x%x\n", __func__,	otp[6]);
+	pr_info("%s: OTP fuse 3 = 0x%x\n", __func__,	otp[7]);
 
 	pr_info("%s: OTP Infinity position code (MSByte) = 0x%x\n", __func__,  otp[9]);
 	pr_info("%s: OTP Infinity position code (LSByte) = 0x%x\n", __func__,  otp[10]);
@@ -360,10 +359,10 @@ static int ov13850_1140m_read_fuseid(struct sensorb_cfg_data *cdata,
 		return -1;
 	}
 
-	cdata->cfg.fuse.fuse_id_word1 = otp[5];
-	cdata->cfg.fuse.fuse_id_word2 = otp[6];
-	cdata->cfg.fuse.fuse_id_word3 = otp[7];
-	cdata->cfg.fuse.fuse_id_word4 = otp[13];
+	cdata->cfg.fuse.fuse_id_word1 = 0;
+	cdata->cfg.fuse.fuse_id_word2 = otp[5];
+	cdata->cfg.fuse.fuse_id_word3 = otp[6];
+	cdata->cfg.fuse.fuse_id_word4 = otp[7];
 
 	
 	cdata->af_value.AF_INF_MSB = otp[9];

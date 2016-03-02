@@ -235,7 +235,6 @@ alloc_fail:
 	return rc;
 }
 
-/* Doesn't do iommu unmap */
 static int wfd_free_ion_buffer(struct ion_client *client,
 		struct mem_region *mregion)
 {
@@ -328,7 +327,7 @@ static int wfd_allocate_input_buffers(struct wfd_device *wfd_dev,
 			goto set_input_fail;
 		}
 
-		/* map the buffer from encoder to mdp */
+		
 		mdp_mregion->kvaddr = enc_mregion->kvaddr;
 		mdp_mregion->size = enc_mregion->size;
 		mdp_mregion->offset = enc_mregion->offset;
@@ -397,10 +396,6 @@ static int wfd_allocate_input_buffers(struct wfd_device *wfd_dev,
 	}
 	return rc;
 
-	/*
-	 * Clean up only the buffer that we failed in setting up.
-	 * Caller will clean up the rest by calling free_input_buffers()
-	 */
 mdp_q_fail:
 	memset(&mmap_context, 0, sizeof(mmap_context));
 	mmap_context.mregion = mdp_mregion;
@@ -543,11 +538,18 @@ static int wfd_vidbuf_buf_init(struct vb2_buffer *vb)
 		(struct wfd_device *)video_drvdata(priv_data);
 	struct mem_info *minfo = vb2_plane_cookie(vb, 0);
 	struct mem_region mregion;
+	
+	if (!minfo)
+		return -ENODEV;
+	
 	mregion.fd = minfo->fd;
 	mregion.offset = minfo->offset;
 	mregion.cookie = (u32)vb;
-	/*TODO: should be fixed in kernel 3.2*/
-	mregion.size =  inst->out_buf_size;
+	
+	
+	if (inst)
+	
+		mregion.size =  inst->out_buf_size;
 
 	if (inst && !inst->vid_bufq.streaming) {
 		rc = wfd_allocate_input_buffers(wfd_dev, inst);
@@ -937,6 +939,9 @@ static int wfd_register_out_buf(struct wfd_inst *inst,
 					sizeof(struct mem_info))) {
 			WFD_MSG_ERR(" copy_from_user failed. Populate"
 					" v4l2_buffer->reserved with meminfo\n");
+			
+			kfree(minfo_entry);
+			
 			return -EINVAL;
 		}
 		minfo_entry->userptr = b->m.userptr;
@@ -1076,7 +1081,7 @@ static int wfdioc_g_parm(struct file *filp, void *fh,
 	struct wfd_device *wfd_dev = video_drvdata(filp);
 	struct wfd_inst *inst = file_to_inst(filp);
 	int64_t frame_interval = 0,
-		max_frame_interval = 0; /* both in nsecs*/
+		max_frame_interval = 0; 
 	struct v4l2_qcom_frameskip frameskip, *usr_frameskip;
 
 	usr_frameskip = (struct v4l2_qcom_frameskip *)
@@ -1338,7 +1343,7 @@ static void venc_on_event(void *cookie, enum venc_event e)
 		type = V4L2_EVENT_MSM_VIDC_SYS_ERROR;
 		break;
 	default:
-		/* Whatever~~ */
+		
 		break;
 	}
 
@@ -1407,7 +1412,7 @@ void *wfd_vb2_mem_ops_get_userptr(void *alloc_ctx, unsigned long vaddr,
 
 void wfd_vb2_mem_ops_put_userptr(void *buf_priv)
 {
-	/*TODO: Free the list*/
+	
 }
 
 void *wfd_vb2_mem_ops_cookie(void *buf_priv)
@@ -1471,7 +1476,7 @@ static int wfd_open(struct file *filp)
 	INIT_LIST_HEAD(&inst->input_mem_list);
 	INIT_LIST_HEAD(&inst->minfo_list);
 
-	/* Set up userspace event handlers */
+	
 	v4l2_fh_init(&inst->event_handler, wfd_dev->pvdev);
 	v4l2_fh_add(&inst->event_handler);
 
@@ -1693,7 +1698,7 @@ err_v4l2_registration:
 static int __devinit __wfd_probe(struct platform_device *pdev)
 {
 	int rc = 0, c = 0;
-	struct wfd_device *wfd_dev; /* Should be taken as an array*/
+	struct wfd_device *wfd_dev; 
 	struct ion_client *ion_client = NULL;
 	struct msm_wfd_platform_data *wfd_priv;
 
@@ -1715,7 +1720,7 @@ static int __devinit __wfd_probe(struct platform_device *pdev)
 	rc = wfd_stats_setup();
 	if (rc) {
 		WFD_MSG_ERR("No debugfs support: %d\n", rc);
-		/* Don't treat this as a fatal err */
+		
 		rc = 0;
 	}
 
@@ -1730,7 +1735,7 @@ static int __devinit __wfd_probe(struct platform_device *pdev)
 			WFD_DEVICE_NUMBER_BASE + c, pdev);
 
 		if (rc) {
-			/* Clear out old devices */
+			
 			for (--c; c >= 0; --c) {
 				v4l2_device_unregister_subdev(
 						&wfd_dev[c].vsg_sdev);
@@ -1746,7 +1751,7 @@ static int __devinit __wfd_probe(struct platform_device *pdev)
 			goto err_v4l2_probe;
 		}
 
-		/* Other device specific stuff */
+		
 		mutex_init(&wfd_dev[c].dev_lock);
 		wfd_dev[c].ion_client = ion_client;
 		wfd_dev[c].in_use = false;

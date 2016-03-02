@@ -67,6 +67,8 @@ int board_get_usb_ats(void);
 #ifdef CONFIG_SND_PCM
 #include "f_audio_source.c"
 #endif
+#include "f_midi.c"
+#include "f_charger.c"
 #include "f_mass_storage.c"
 #include "u_serial.c"
 #include "u_sdio.c"
@@ -122,6 +124,10 @@ static const char longname[] = "Gadget Android";
 static bool connect2pc;
 
 #define ANDROID_DEVICE_NODE_NAME_LENGTH 11
+#define MIDI_INPUT_PORTS    1
+#define MIDI_OUTPUT_PORTS   1
+#define MIDI_BUFFER_SIZE    256
+#define MIDI_QUEUE_LENGTH   32
 
 struct android_usb_function {
 	char *name;
@@ -199,6 +205,8 @@ struct android_dev {
 	int num_functions;
 
 	int autobot_mode;
+
+	struct work_struct send_abnormal_usb_reset_uevent_work;
 };
 
 struct android_configuration {
@@ -305,6 +313,7 @@ static void android_pm_qos_update_latency(struct android_dev *dev, int vote)
 
 
 void android_broadcast_abnormal_usb_reset(void);
+void send_abnormal_usb_reset_uevent(struct work_struct *);
 
 static void android_work(struct work_struct *data)
 {
@@ -371,11 +380,7 @@ static void android_work(struct work_struct *data)
 			last_uevent = next_state;
 		}
 		pr_info("%s: sent uevent %s\n", __func__, uevent_envp[0]);
-		if (dev->pdata->vzw_unmount_cdrom) {
-			cancel_delayed_work(&cdev->cdusbcmd_vzw_unmount_work);
-			cdev->unmount_cdrom_mask = 1 << 3 | 1 << 4;
-			schedule_delayed_work(&cdev->cdusbcmd_vzw_unmount_work,30 * HZ);
-		}
+		pr_info("%s: skip trigger unmount uevent\n", __func__);
 	} else {
 	}
 
@@ -397,6 +402,10 @@ static void android_work(struct work_struct *data)
 		setup_usb_denied(0);
 	}
 
+	if (next_state == USB_DISCONNECTED && switch_get_state(&ml_switch)) {
+		switch_set_state(&ml_switch, 0);
+		printk("[MIRROR_LINK]%s : ml_switch set 0\n", __func__);
+	}
 
 }
 
@@ -1525,6 +1534,18 @@ static struct android_usb_function ccid_function = {
 	.bind_config	= ccid_function_bind_config,
 };
 
+static int charger_function_bind_config(struct android_usb_function *f,
+						struct usb_configuration *c)
+{
+	return charger_bind_config(c);
+}
+
+static struct android_usb_function charger_function = {
+	.name		= "charging",
+	.bind_config	= charger_function_bind_config,
+};
+
+
 static int
 mtp_function_init(struct android_usb_function *f,
 		struct usb_composite_dev *cdev)
@@ -2557,6 +2578,60 @@ struct android_usb_function projector2_function = {
 };
 
 
+static int midi_function_init(struct android_usb_function *f,
+					struct usb_composite_dev *cdev)
+{
+	struct midi_alsa_config *config;
+
+	config = kzalloc(sizeof(struct midi_alsa_config), GFP_KERNEL);
+	f->config = config;
+	if (!config)
+		return -ENOMEM;
+	config->card = -1;
+	config->device = -1;
+	return 0;
+}
+
+static void midi_function_cleanup(struct android_usb_function *f)
+{
+	kfree(f->config);
+}
+
+static int midi_function_bind_config(struct android_usb_function *f,
+						struct usb_configuration *c)
+{
+	struct midi_alsa_config *config = f->config;
+
+	return f_midi_bind_config(c, SNDRV_DEFAULT_IDX1, SNDRV_DEFAULT_STR1,
+			MIDI_INPUT_PORTS, MIDI_OUTPUT_PORTS, MIDI_BUFFER_SIZE,
+			MIDI_QUEUE_LENGTH, config);
+}
+
+static ssize_t midi_alsa_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct android_usb_function *f = dev_get_drvdata(dev);
+	struct midi_alsa_config *config = f->config;
+
+	
+	return sprintf(buf, "%d %d\n", config->card, config->device);
+}
+
+static DEVICE_ATTR(alsa, S_IRUGO, midi_alsa_show, NULL);
+
+static struct device_attribute *midi_function_attributes[] = {
+	&dev_attr_alsa,
+	NULL
+};
+
+static struct android_usb_function midi_function = {
+	.name		= "midi",
+	.init		= midi_function_init,
+	.cleanup	= midi_function_cleanup,
+	.bind_config	= midi_function_bind_config,
+	.attributes	= midi_function_attributes,
+};
+
 static struct android_usb_function *supported_functions[] = {
 	&rndis_function,
 	&rndis_qc_function,
@@ -2567,6 +2642,8 @@ static struct android_usb_function *supported_functions[] = {
 	&mtp_function,
 	&ptp_function,
 	&ncm_function,
+	&midi_function,
+	&charger_function,
 
 	&adb_function,
 	&mass_storage_function,
@@ -2858,7 +2935,7 @@ functions_show(struct device *pdev, struct device_attribute *attr, char *buf)
 	char *buff = buf;
 
 	mutex_lock(&dev->mutex);
-
+        mutex_lock(&function_bind_sem);
 	list_for_each_entry(conf, &dev->configs, list_item) {
 		if (buff != buf)
 			*(buff-1) = ':';
@@ -2867,7 +2944,7 @@ functions_show(struct device *pdev, struct device_attribute *attr, char *buf)
 			buff += snprintf(buff, PAGE_SIZE, "%s,",
 					f_holder->f->name);
 	}
-
+        mutex_unlock(&function_bind_sem);
 	mutex_unlock(&dev->mutex);
 
 	if (buff != buf)
@@ -3615,6 +3692,7 @@ static int __devinit android_probe(struct platform_device *pdev)
 	android_dev->configs_num = 0;
 	INIT_LIST_HEAD(&android_dev->configs);
 	INIT_WORK(&android_dev->work, android_work);
+	INIT_WORK(&android_dev->send_abnormal_usb_reset_uevent_work, send_abnormal_usb_reset_uevent);
 	mutex_init(&android_dev->mutex);
 
 	android_dev->pdata = pdata;
@@ -3662,6 +3740,7 @@ static int __devinit android_probe(struct platform_device *pdev)
 	strlcpy(android_dev->pm_qos, "high", sizeof(android_dev->pm_qos));
 
 	setup_vendor_info(android_dev);
+
 
 	return ret;
 err_probe:
@@ -3753,19 +3832,23 @@ static struct platform_driver android_platform_driver = {
 	.shutdown = android_shutdown,
 };
 
-void android_broadcast_abnormal_usb_reset(void)
+void send_abnormal_usb_reset_uevent(struct work_struct *work)
 {
-
 	char *envp[] = {"EVENT=ABNORMAL_USB_RESET", NULL };
-	int ats = board_get_usb_ats();
 	int ret;
-	if (!ats)
-		return;
-	ret = kobject_uevent_env(&_android_dev->dev->kobj, KOBJ_CHANGE,envp);
+	ret = kobject_uevent_env(&_android_dev->dev->kobj, KOBJ_CHANGE, envp);
 	if (!ret)
 		printk(KERN_INFO "[USB] broadcast abnormal usb reset\n");
 	else
 		printk(KERN_INFO "[USB] fail to broadcast abnormal usb reset\n");
+}
+
+void android_broadcast_abnormal_usb_reset(void)
+{
+	int ats = board_get_usb_ats();
+	if (!ats)
+		return;
+	queue_work(system_nrt_wq, &_android_dev->send_abnormal_usb_reset_uevent_work);
 
 }
 

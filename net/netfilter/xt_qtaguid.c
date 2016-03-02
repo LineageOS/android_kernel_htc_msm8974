@@ -1223,12 +1223,15 @@ static void if_tag_stat_update(const char *ifname, uid_t uid,
 		 ifname, uid, sk, direction, proto, bytes);
 
 
+	spin_lock_bh(&iface_stat_list_lock);
 	iface_entry = get_iface_entry(ifname);
 	if (!iface_entry) {
+		spin_unlock_bh(&iface_stat_list_lock);
 		pr_err_ratelimited("qtaguid: tag_stat: stat_update() "
 				   "%s not found\n", ifname);
 		return;
 	}
+	spin_unlock_bh(&iface_stat_list_lock);
 	
 
 	MT_DEBUG("qtaguid: tag_stat: stat_update() dev=%s entry=%p\n",
@@ -1705,8 +1708,21 @@ static int qtaguid_ctrl_proc_read(char *page, char **num_items_returned,
 			 uid,
 			 sock_tag_entry->pid
 			);
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+		if(likely(sock_tag_entry->socket->file)) {
+			f_count = atomic_long_read(
+				&sock_tag_entry->socket->file->f_count);
+		}else{
+			pr_warn("qtaguid: socket->file is NULL so use sk_socket->file.\n");
+			f_count = atomic_long_read(
+				&sock_tag_entry->sk->sk_socket->file->f_count);
+		}
+#else
 		f_count = atomic_long_read(
 			&sock_tag_entry->socket->file->f_count);
+#endif
+
 		len = snprintf(outp, char_count,
 			       "sock=%p tag=0x%llx (uid=%u) pid=%u "
 			       "f_count=%lu\n",

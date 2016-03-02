@@ -529,6 +529,9 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 			show_mem_call_notifiers();
 		}
 
+		if (!current_is_kswapd() && current->reclaim_state)
+			current->reclaim_state->trigger_lmk++;
+
 		lowmem_deathpending_timeout = jiffies + HZ;
 		send_sig(SIGKILL, selected, 0);
 		set_tsk_thread_flag(selected, TIF_MEMDIE);

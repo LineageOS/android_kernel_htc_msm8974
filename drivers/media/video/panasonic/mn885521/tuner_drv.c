@@ -30,7 +30,11 @@
  * HISTORY      : 2011/07/25    K.Kitamura(*)
  *                001 new creation
  ******************************************************************************/
+/*..+....1....+....2....+....3....+....4....+....5....+....6....+....7....+...*/
 
+/******************************************************************************
+ * include
+ ******************************************************************************/
 #include <linux/module.h>       
 #include <linux/kernel.h>       
 #include <linux/init.h>
@@ -57,11 +61,16 @@
 #include <linux/mutex.h>
 #endif
 
+//++ DTV_PCN1000007_HTC_GPIO_DEFINE
+/* [HTC]  GPIO define */
 
 #include <linux/of_gpio.h>
 #include <linux/delay.h>
 #include <linux/regulator/consumer.h>
 
+/******************************************************************************
+ * define
+ ******************************************************************************/
 #define XA 0
 #define XB 1
 #define XC 2
@@ -82,31 +91,46 @@
 #define GPIO_SRIO_1V8_EN_XB 83
 #define GPIO_FULLSEG_1V1_EN_XB 84
 #define FM_FULLSEG_ANT_SW_XB 24
+//-- DTV_PCN1000007_HTC_GPIO_DEFINE
 
 
-#define DEV_NAME "TUNER" 
-int TUNER_CONFIG_DRV_MAJOR = 0; 
-int TUNER_CONFIG_DRV_MINOR = 0; 
+//++ DTV_PCN1000009_HTC_DEVICE_NUMBER
+/* [HTC]  Device number */
+#define DEV_NAME "TUNER" //設備名稱
+int TUNER_CONFIG_DRV_MAJOR = 0; //主設備號
+int TUNER_CONFIG_DRV_MINOR = 0; //次設備號
+//-- DTV_PCN1000009_HTC_DEVICE_NUMBER
 
+/******************************************************************************
+ * data
+ ******************************************************************************/
+/* Mmap用のアドレス保持用 */
 void *mem_p;
 
-wait_queue_head_t g_tuner_poll_wait_queue;       
-spinlock_t        g_tuner_lock;                  
-unsigned long     g_tuner_wakeup_flag;           
+/* poll制御用テーブル */
+wait_queue_head_t g_tuner_poll_wait_queue;       /* poll待ち用waitキュー      */
+spinlock_t        g_tuner_lock;                  /* spin_lock用資源           */
+unsigned long     g_tuner_wakeup_flag;           /* poll待ちフラグ            */
 
-unsigned char g_tuner_intcnd_f;                  
-unsigned char g_tuner_intcnd_s;                  
+/* 割り込み要因テーブル */
+unsigned char g_tuner_intcnd_f;                  /* INTCNDD_F レジスタ値      */
+unsigned char g_tuner_intcnd_s;                  /* INTCNDD_S レジスタ値      */
 unsigned char g_tuner_intst_f;
 unsigned char g_tuner_intst_s;
 
-struct task_struct *g_tuner_kthread_id;          
-u32                 g_tuner_kthread_flag;        
-wait_queue_head_t   g_tuner_kthread_wait_queue;  
+/* kernel_thread */
+struct task_struct *g_tuner_kthread_id;          /* カーネルスレッド識別子     */
+u32                 g_tuner_kthread_flag;        /* カーネルスレッド起床フラグ */
+wait_queue_head_t   g_tuner_kthread_wait_queue;  /* カーネルスレッド起床用waitキュー*/
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
-struct mutex g_tuner_mutex;                       
+/* mutex */
+struct mutex g_tuner_mutex;                       /* 排他制御                  */
 #endif
 
+/******************************************************************************
+ * function
+ ******************************************************************************/
 static ssize_t tuner_module_entry_read( struct file* FIle,
                                         char* Buffer,
                                         size_t Count,
@@ -123,11 +147,11 @@ static int tuner_module_entry_ioctl( struct inode* Inode,
                                      struct file* FIle, 
                                      unsigned int uCommand,
                                      unsigned long uArgument );
-#else   
+#else  /* LINUX_VERSION_CODE */ 
 static long tuner_module_entry_ioctl( struct file *file,
                                       unsigned int uCommand,
                                       unsigned long uArgument );
-#endif 
+#endif /* LINUX_VERSION_CODE */
 static int tuner_module_entry_open( struct inode* Inode,
                                     struct file* FIle );
 static int tuner_module_entry_close( struct inode* Inode,
@@ -137,6 +161,7 @@ static int __exit tuner_remove( struct platform_device *pdev );
 static int  __init tuner_drv_start( void );
 static void __exit tuner_drv_end( void );
 
+/* エントリーポイント */
 static struct file_operations TunerFileOperations =
 {
    .owner   = THIS_MODULE,
@@ -145,26 +170,33 @@ static struct file_operations TunerFileOperations =
    .poll    = tuner_module_entry_poll,
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36)
    .ioctl   = tuner_module_entry_ioctl,
-#else  
+#else  /* LINUX_VERSION_CODE */
    .unlocked_ioctl = tuner_module_entry_ioctl,
-#endif 
+#endif /* LINUX_VERSION_CODE */
    .open    = tuner_module_entry_open,
    .release = tuner_module_entry_close
 };
 
+//static const struct of_device_id mn885521_mttable[] = {
+//        { .compatible = "MN885521"},
+//        { },
+//};
 
 static struct platform_driver mmtuner_driver = {
     .probe  = tuner_probe,
     .remove = __exit_p(tuner_remove),
     .driver = { .name = "mmtuner",
                 .owner = THIS_MODULE,
+//		.of_match_table = mn885521_mttable,
               }
 };
 
 static struct platform_device *mmtuner_device;
 static struct class *device_class;
-unsigned long open_cnt;                           
+unsigned long open_cnt;                           /* OPENカウンタ             */
 
+//++ DTV_PCN1000007_HTC_GPIO_DEFINE
+/* [HTC]  GPIO define */
 struct mn885521_platform_data {
         int npd_reg_npd_xtal;
         int nrst;
@@ -185,12 +217,18 @@ struct mn885521_gpios {
 	int fm_fullseg_ant_sw;
 };
 struct mn885521_gpios *gpios;
+//-- DTV_PCN1000007_HTC_GPIO_DEFINE
 
 #ifndef TUNER_CONFIG_IRQ_PC_LINUX
 irqreturn_t tuner_interrupt( int irq, void *dev_id );
-#else  
+#else  /* TUNER_CONFIG_IRQ_PC_LINUX */
 int tuner_interrupt( void );
-#endif 
+#endif /* TUNER_CONFIG_IRQ_PC_LINUX */
+/******************************************************************************
+ * code area
+ ******************************************************************************/
+//++ DTV_PCN1000007_HTC_GPIO_DEFINE
+/* [HTC]  GPIO define */
 int board_gpio_init(void)
 {
 	int ret =0;
@@ -269,7 +307,10 @@ void board_gpio_free(void)
 
         return;
 }
+//-- DTV_PCN1000007_HTC_GPIO_DEFINE
 
+//++ DTV_PCN1000008_HTC_POWER_CONTROL
+/* [HTC]  Power control */
 int poweron_tuner_rework(int on)
 {
 	int ret =0;
@@ -288,7 +329,7 @@ int poweron_tuner_rework(int on)
                 	gpio_free(gpios->npdreg);
 	                return ret;
         	}
-		msleep(10); 
+		msleep(10); // delay 10ms
 
                 ret = gpio_request(gpios->npdxtal, "fullseg_npd_xtal");
                 if (ret < 0) {
@@ -301,7 +342,7 @@ int poweron_tuner_rework(int on)
                         gpio_free(gpios->npdxtal);
                         return ret;
                 }
-                msleep(10); 
+                msleep(10); // delay 10ms
 
 
                 ret = gpio_request(gpios->nrst, "fullseg_nrst");
@@ -329,7 +370,7 @@ int poweron_tuner_rework(int on)
                         gpio_free(gpios->nrst);
                         return ret;
                 }
-		msleep(10); 
+		msleep(10); //delay 10ms
 
                 ret = gpio_request(gpios->npdxtal, "fullseg_npd_xtal");
                 if (ret < 0) {
@@ -353,7 +394,7 @@ int poweron_tuner_rework(int on)
                         gpio_free(gpios->npdreg);
                         return ret;
                 }
-                msleep(10); 
+                msleep(10); //delay 10ms
 	}
 	return ret;
 }
@@ -467,7 +508,7 @@ int poweron_tuner(int on)
                 	gpio_free(gpios->npdreg);
 	                return ret;
         	}
-		msleep(10); 
+		msleep(10); // delay 10ms
 
                 ret = gpio_direction_output(gpios->npdxtal, 1);
                 if (ret < 0) {
@@ -475,7 +516,7 @@ int poweron_tuner(int on)
                         gpio_free(gpios->npdxtal);
                         return ret;
                 }
-                msleep(10); 
+                msleep(10); // delay 10ms
 
                 ret = gpio_direction_output(gpios->nrst, 1);
                 if (ret < 0) {
@@ -484,7 +525,7 @@ int poweron_tuner(int on)
                         return ret;
                 }
 
-		
+		//tune on Fullseg antenna SW power (2.85v)
         	fm_fullseg_antenna_sw_power_enable("8941_l17", 2850000, &reg_8941_l17);
 
 		gpio_free(gpios->fm_fullseg_ant_sw);
@@ -508,7 +549,7 @@ int poweron_tuner(int on)
                         gpio_free(gpios->fm_fullseg_ant_sw);
                         return ret;
                 }
-		
+		//tune off antenna sw power (2.85v)
 	        fm_fullseg_antenna_sw_power_disable(reg_8941_l17);
 
                 ret = gpio_direction_output(gpios->nrst, 0);
@@ -517,7 +558,7 @@ int poweron_tuner(int on)
                         gpio_free(gpios->nrst);
                         return ret;
                 }
-		msleep(10); 
+		msleep(10); //delay 10ms
 
                 ret = gpio_direction_output(gpios->npdxtal, 0);
                 if (ret < 0) {
@@ -532,7 +573,7 @@ int poweron_tuner(int on)
                         gpio_free(gpios->npdreg);
                         return ret;
                 }
-                msleep(10); 
+                msleep(10); //delay 10ms
 
                 gpio_tlmm_config(GPIO_CFG(gpios->_1v1_en, 0, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
                 gpio_set_value(gpios->_1v1_en, 0);
@@ -548,10 +589,13 @@ int poweron_tuner(int on)
 	}
 	return ret;
 }
+//-- DTV_PCN1000008_HTC_POWER_CONTROL
  
 static int mn885521_parse_dt(struct device *dev, struct mn885521_platform_data *pdata)
 {
 	int rc = 0;
+//        struct property *prop = NULL;
+//        struct device_node *dt = dev->of_node;
 
 	INFO_PRINT("%s \n", __func__);
 
@@ -659,10 +703,21 @@ int set_i2c_spi_mode(void)
 }
 #endif
 
+/******************************************************************************
+ *    function:   tuner_probe
+ *    brief   :   probe control of a driver
+ *    date    :   2011.08.02
+ *    author  :   K.Kitamura(*)
+ *
+ *    return  :    0                   normal exit
+ *            :   -1                   error exit
+ *    input   :   pdev
+ *    output  :   none
+ ******************************************************************************/
 static int __devinit tuner_probe(struct platform_device *pdev)
 {
     INFO_PRINT("mmtuner_probe: Called. -4-\n");
-    
+    /* ドライバの登録 */
     if (register_chrdev(TUNER_CONFIG_DRV_MAJOR, TUNER_CONFIG_DRIVER_NAME, &TunerFileOperations))
     {
         ERROR_PRINT("mmtuner_probe: register_chrdev()\
@@ -670,7 +725,7 @@ static int __devinit tuner_probe(struct platform_device *pdev)
         return -1;
     }
 
-    
+    /* 外部変数の初期化 */
     init_waitqueue_head( &g_tuner_poll_wait_queue );
     spin_lock_init( &g_tuner_lock );
     g_tuner_wakeup_flag = TUNER_OFF;
@@ -680,22 +735,38 @@ static int __devinit tuner_probe(struct platform_device *pdev)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
     mutex_init(&g_tuner_mutex);
 #endif
+//++ DTV_PCN1000007_HTC_GPIO_DEFINE
+/* [HTC]  GPIO define */
     board_gpio_init();
     board_gpio_request();
+//-- DTV_PCN1000007_HTC_GPIO_DEFINE
+//    read_gpio_from_dt(&pdev->dev);
+//    set_i2c_spi_mode();
 
     INFO_PRINT("tuner_probe: END.\n");
     return 0;
 }
 
+/******************************************************************************
+ *    function:   tuner_remove
+ *    brief   :   remove control of a driver
+ *    date    :   2011.08.02
+ *    author  :   K.Kitamura(*)
+ *
+ *    return  :    0                   normal exit
+ *            :   -1                   error exit
+ *    input   :   pdev
+ *    output  :   none
+ ******************************************************************************/
 static int __exit tuner_remove(struct platform_device *pdev)
 {
     INFO_PRINT("tuner_remove: Called.\n");
     TRACE();
 
-    
+    /* 割込みの解放 */
     tuner_drv_release_interrupt();
 
-    
+    /* ドライバの登録解除 */
     unregister_chrdev(TUNER_CONFIG_DRV_MAJOR, TUNER_CONFIG_DRIVER_NAME);
     
     INFO_PRINT("tuner_remove: END.\n");
@@ -704,25 +775,36 @@ static int __exit tuner_remove(struct platform_device *pdev)
 }
 
 
+/******************************************************************************
+ *    function:   tuner_kernel_thread
+ *    brief   :   kernel_thread of mmtuner driver
+ *    date    :   2011.09.16
+ *    author  :   K.Kitamura(*)
+ *
+ *    return  :    0                   normal exit
+ *            :   -1                   error exit
+ *    input   :   none
+ *    output  :   none
+ ******************************************************************************/
 int tuner_kernel_thread( void * arg )
 {
     int ret = 0;
     unsigned long flags;
     unsigned long ktread_flg;
-    
+    //TUNER_DATA_RW rw_data[ 4 ];                  /* 設定データ                */
     mm_segment_t    oldfs;
     struct sched_param  param; 
 
     struct i2c_adapter	*adap;
     struct i2c_msg		msgs[4];
-    
-    
+    //unsigned char		adr_intcnd_f;
+    //unsigned char		adr_intcnd_s;
     unsigned char		buff[3];
     unsigned char		bufs[3];
 
     INFO_PRINT("tuner_kernel_thread: START.\n");
 
-    
+    /* 内部変数初期化 */
     ret = 0;
     flags = 0;
     ktread_flg = 0;
@@ -746,7 +828,7 @@ int tuner_kernel_thread( void * arg )
 
         spin_lock_irqsave( &g_tuner_lock, flags );
         ktread_flg = g_tuner_kthread_flag;
-        g_tuner_kthread_flag &= ~TUNER_KTH_IRQHANDLER;	
+        g_tuner_kthread_flag &= ~TUNER_KTH_IRQHANDLER;	// 20121122
         spin_unlock_irqrestore( &g_tuner_lock, flags);
 
         memset( msgs, 0x00, sizeof(struct i2c_msg) * 4 );
@@ -756,7 +838,7 @@ int tuner_kernel_thread( void * arg )
             break;
         }
 
-        
+        /* 割り込み要因読み出し要求 */
         if ( ( ktread_flg & TUNER_KTH_IRQHANDLER ) == TUNER_KTH_IRQHANDLER )
         {
             DEBUG_PRINT("tuner_kernel_thread IRQHANDLER start ");
@@ -764,10 +846,10 @@ int tuner_kernel_thread( void * arg )
 			buff[1] = buff[2] = 0;
 			bufs[1] = bufs[2] = 0;
 
-            
-            
+            /* 読み出しデータ */
+            /* INTCND_F */
             msgs[0].addr	= TUNER_SLAVE_ADR_M1;
-            msgs[0].flags	= 0;	
+            msgs[0].flags	= 0;	/* write */
             msgs[0].len		= 1;
             msgs[0].buf		= &buff[0];
             msgs[1].addr	= TUNER_SLAVE_ADR_M1;
@@ -775,7 +857,7 @@ int tuner_kernel_thread( void * arg )
             msgs[1].len		= 2;
             msgs[1].buf		= buff+1;
             msgs[2].addr	= TUNER_SLAVE_ADR_M2;
-            msgs[2].flags	= 0;	
+            msgs[2].flags	= 0;	/* write */
             msgs[2].len		= 1;
             msgs[2].buf		= &bufs[0];
             msgs[3].addr	= TUNER_SLAVE_ADR_M2;
@@ -799,20 +881,72 @@ int tuner_kernel_thread( void * arg )
             g_tuner_intst_f	= buff[2];
             g_tuner_intst_s	= bufs[2];
 
+//            rw_data[ 0 ].slave_adr = TUNER_SLAVE_ADR_M1;
+//            rw_data[ 0 ].adr       = TUNER_DRV_ADR_INTCND_F;
+//            rw_data[ 0 ].sbit      = TUNER_DRV_ENAS_ALL;
+//            rw_data[ 0 ].ebit      = TUNER_DRV_ENAE_ALL;
+//            rw_data[ 0 ].enabit    = TUNER_DRV_ENA_ALL;
+//            rw_data[ 0 ].param     = TUNER_DRV_PARAM_RINIT;
+//            /* INTCND_S */
+//            rw_data[ 1 ].slave_adr = TUNER_SLAVE_ADR_M2;
+//            rw_data[ 1 ].adr       = TUNER_DRV_ADR_INTCND_S;
+//            rw_data[ 1 ].sbit      = TUNER_DRV_ENAS_ALL;
+//            rw_data[ 1 ].ebit      = TUNER_DRV_ENAE_ALL;
+//            rw_data[ 1 ].enabit    = TUNER_DRV_ENA_ALL;
+//            rw_data[ 1 ].param     = TUNER_DRV_PARAM_RINIT;
+//            /* INTST_F */
+//            rw_data[ 2 ].slave_adr = TUNER_SLAVE_ADR_M1;
+//            rw_data[ 2 ].adr       = TUNER_DRV_ADR_INTST_F;
+//            rw_data[ 2 ].sbit      = TUNER_DRV_ENAS_ALL;
+//            rw_data[ 2 ].ebit      = TUNER_DRV_ENAE_ALL;
+//            rw_data[ 2 ].enabit    = TUNER_DRV_ENA_ALL;
+//            rw_data[ 2 ].param     = TUNER_DRV_PARAM_RINIT;
+//            /* INTST_S */
+//            rw_data[ 3 ].slave_adr = TUNER_SLAVE_ADR_M2;
+//            rw_data[ 3 ].adr       = TUNER_DRV_ADR_INTST_S;
+//            rw_data[ 3 ].sbit      = TUNER_DRV_ENAS_ALL;
+//            rw_data[ 3 ].ebit      = TUNER_DRV_ENAE_ALL;
+//            rw_data[ 3 ].enabit    = TUNER_DRV_ENA_ALL;
+//            rw_data[ 3 ].param     = TUNER_DRV_PARAM_RINIT;
+//
+//            /* 割り込み要因リード */
+//            ret = tuner_drv_hw_access( TUNER_IOCTL_VALGET,
+//                                       rw_data,
+//                                       4 );
+//            if( ret != 0 )
+//            {
+//                DEBUG_PRINT( " tuner_kernel_thread i2c_read Err " );
+//                /* 要因読み込み結果が異常の場合、ALLBitクリアする */
+//                rw_data[ 0 ].param = TUNER_DRV_PARAM_ALL;
+//                rw_data[ 1 ].param = TUNER_DRV_PARAM_ALL;
+//            }
+//            else
+//            {
+//                /* 要因読み込み結果が正常の場合、割り込み要因を保存する */
+//                /* 割り込み要因格納 */
+//                g_tuner_intcnd_f |= ( unsigned char )rw_data[ 0 ].param;
+//                g_tuner_intcnd_s |= ( unsigned char )rw_data[ 1 ].param;
+//                g_tuner_intst_f |= ( unsigned char )rw_data[ 2 ].param;
+//                g_tuner_intst_s |= ( unsigned char )rw_data[ 3 ].param;
+//
+//            }
 
             DEBUG_PRINT( "// IRQ factor update: INTCND_F:0x%02x INTST_F:0x%02x"
             		,g_tuner_intcnd_f, g_tuner_intst_f );
             DEBUG_PRINT( "// IRQ factor update: INTCND_S:0x%02x INTST_S:0x%02x"
             		,g_tuner_intcnd_s, g_tuner_intst_s );
             
-            
+            /* 割り込み要因クリア */
+//            ret = tuner_drv_hw_access( TUNER_IOCTL_VALSET,
+//                                       rw_data,
+//                                       2 );
             memset( msgs, 0x00, sizeof(struct i2c_msg) * 4 );
             msgs[0].addr	= TUNER_SLAVE_ADR_M1;
-            msgs[0].flags	= 0;	
+            msgs[0].flags	= 0;	/* write */
             msgs[0].len		= 2;
             msgs[0].buf		= buff;
             msgs[1].addr	= TUNER_SLAVE_ADR_M2;
-            msgs[1].flags	= 0;	
+            msgs[1].flags	= 0;	/* write */
             msgs[1].len		= 2;
             msgs[1].buf		= bufs;
             ret = i2c_transfer(adap, msgs, 2);
@@ -823,21 +957,28 @@ int tuner_kernel_thread( void * arg )
             }
             i2c_put_adapter(adap);
 
+//            if( ret != 0 )
+//            {
+//                break;
+//            }
 
-            
+            /* poll待ち解除 */
             g_tuner_wakeup_flag = TUNER_ON;
             wake_up( &g_tuner_poll_wait_queue );
 
             DEBUG_PRINT("tuner_interrupt end ");
 
+//20121122  spin_lock_irqsave( &g_tuner_lock, flags );
+//20121122  g_tuner_kthread_flag &= ~TUNER_KTH_IRQHANDLER;
+//20121122  spin_unlock_irqrestore( &g_tuner_lock, flags );
 
 #ifdef TUNER_CONFIG_IRQ_LEVELTRIGGER
-            
+            /* レベル割り込みの場合は割り込み有効に戻す */
             tuner_drv_enable_interrupt();
-#endif 
+#endif /* TUNER_CONFIG_IRQ_LEVELTRIGGER */
         }
 
-        
+        /* カーネルスレッド終了要求 */
         if ( ( ktread_flg & TUNER_KTH_END ) == TUNER_KTH_END )
         {
             DEBUG_PRINT("tuner_kernel_thread KTH_END start ");
@@ -854,29 +995,40 @@ int tuner_kernel_thread( void * arg )
 }
 
 
+/******************************************************************************
+ *    function:   tuner_drv_start
+ *    brief   :   initialization control of a driver
+ *    date    :   2011.08.02
+ *    author  :   K.Kitamura(*)
+ *
+ *    return  :    0                   normal exit
+ *            :   -1                   error exit
+ *    input   :   none
+ *    output  :   none
+ ******************************************************************************/
 static int __init tuner_drv_start(void)
 {
     int ret =0;
     struct device *dev = NULL;
 
-    
-    
+    //++ DTV_PCN1000009_HTC_DEVICE_NUMBER
+    /* [HTC]  Device number */
     int count = 1;
     dev_t tuner_dev;
 
-    
+    /*  Dynamic assign major */
     ret = alloc_chrdev_region(&tuner_dev, TUNER_CONFIG_DRV_MAJOR, count, DEV_NAME);
     if (ret < 0) 
        printk("Major number allocation is failed\n");
 
-    
-    TUNER_CONFIG_DRV_MAJOR = 255; 
-    TUNER_CONFIG_DRV_MINOR = 0; 
-    
+    // FIX ME
+    TUNER_CONFIG_DRV_MAJOR = 255; //MAJOR(tuner_dev);
+    TUNER_CONFIG_DRV_MINOR = 0; //MINOR(tuner_dev);	
+    //-- DTV_PCN1000009_HTC_DEVICE_NUMBER
 
     INFO_PRINT("mmtuner_tuner_drv_start: Called\n");
 
-    
+    /* ドライバ登録 */
     ret = platform_driver_register(&mmtuner_driver);
 
     if( ret != 0 )
@@ -886,7 +1038,7 @@ static int __init tuner_drv_start(void)
         return ret;
     }
     
-    
+    /* 領域確保 */
     mmtuner_device = platform_device_alloc("mmtuner", -1);
 
     if (!mmtuner_device)
@@ -896,7 +1048,7 @@ static int __init tuner_drv_start(void)
         return -ENOMEM;
     }
     
-    
+    /* デバイス追加 */
     ret = platform_device_add(mmtuner_device);
     if ( ret )
     {
@@ -905,7 +1057,7 @@ static int __init tuner_drv_start(void)
         platform_driver_unregister(&mmtuner_driver);
         return ret;
     }
-    
+    /* デバイスノード(クラス)作成 */
     device_class = class_create(THIS_MODULE, "mmtuner");
     if (IS_ERR(device_class)) 
     {
@@ -915,7 +1067,7 @@ static int __init tuner_drv_start(void)
         return PTR_ERR(device_class);
     }
 
-    
+    /* デバイス作成 */
     dev = device_create (device_class, NULL, MKDEV(TUNER_CONFIG_DRV_MAJOR, TUNER_CONFIG_DRV_MINOR), NULL, "mmtuner");
 
     if(IS_ERR(dev))
@@ -926,7 +1078,7 @@ static int __init tuner_drv_start(void)
         return PTR_ERR(dev);
     }
    
-    
+    /* カーネルスレッド生成処理 */
     g_tuner_kthread_flag = TUNER_KTH_NONE;
 
     init_waitqueue_head( &g_tuner_kthread_wait_queue );
@@ -948,75 +1100,115 @@ static int __init tuner_drv_start(void)
     return 0;
 }
 
+/******************************************************************************
+ *    function:   tuner_drv_end
+ *    brief   :   exit control of a driver
+ *    date    :   2011.08.02
+ *    author  :   K.Kitamura(*)
+ *
+ *    return  :   none
+ *    input   :   none
+ *    output  :   none
+ ******************************************************************************/
 static void __exit tuner_drv_end(void)
 {
     INFO_PRINT("mmtuner_tuner_drv_end: Called\n");
 
+//++ DTV_PCN1000007_HTC_GPIO_DEFINE
+/* [HTC]  GPIO define */
     board_gpio_free();
+//-- DTV_PCN1000007_HTC_GPIO_DEFINE
 
-    
+    /* カーネルスレッドを終了する */
     g_tuner_kthread_flag |= TUNER_KTH_END;
     if( waitqueue_active( &g_tuner_kthread_wait_queue ))
     {
         wake_up( &g_tuner_kthread_wait_queue );
     }
 
-    
+    /* カーネルスレッドの登録を解除 */
     if( g_tuner_kthread_id )
     {
         kthread_stop( g_tuner_kthread_id );
     }
 
-    
+    /* デバイス削除 */
     device_destroy(device_class, MKDEV(TUNER_CONFIG_DRV_MAJOR, TUNER_CONFIG_DRV_MINOR));
-    
+    /* クラス削除*/
     class_destroy(device_class);
-    
+    /* デバイス登録解除 */
     platform_device_unregister(mmtuner_device);
-    
+    /* ドライバ登録解除 */
     platform_driver_unregister(&mmtuner_driver);
 
     INFO_PRINT("mmtuner_tuner_drv_end: END\n");
 }
 
+/******************************************************************************
+ *    function:   tuner_module_entry_open
+ *    brief   :   open control of a driver
+ *    date    :   2011.08.02
+ *    author  :   K.Kitamura(*)
+ *
+ *    return  :    0                   normal exit
+ *            :   -1                   error exit
+ *    input   :   Inode
+ *            :   FIle
+ *    output  :   none
+ ******************************************************************************/
 static int tuner_module_entry_open(struct inode* Inode, struct file* FIle)
 {
 
     INFO_PRINT("tuner_module_entry_open: Called\n");
 
-#ifdef  TUNER_CONFIG_DRV_MULTI      
+#ifdef  TUNER_CONFIG_DRV_MULTI      /* 多重open可能 */
     open_cnt++;
-#else   
-	
+#else  /* TUNER_CONFIG_DRV_MULTI */ /* 多重open不可 */
+	/* 既にopenを実施している場合 */
     if( open_cnt > 0 )
     {
         INFO_PRINT("tuner_module_entry_open: open error\n");
         return -1;
     }
-	
+	/* 初めてのopenの場合 */
     else
     {
         INFO_PRINT("tuner_module_entry_open: open_cnt = 1\n");
         open_cnt++;
     }
-#endif 
+#endif /* TUNER_CONFIG_DRV_MULTI */
 
+//++ DTV_PCN1000008_HTC_POWER_CONTROL
+/* [HTC]  Power control */
     poweron_tuner(1);	
+//-- DTV_PCN1000008_HTC_POWER_CONTROL
     return 0;
 }
 
+/******************************************************************************
+ *    function:   tuner_module_entry_close
+ *    brief   :   close control of a driver
+ *    date    :   2011.08.02
+ *    author  :   K.Kitamura(*)
+ *
+ *    return  :    0                   normal exit
+ *            :   -1                   error exit
+ *    input   :   Inode
+ *            :   FIle
+ *    output  :   none
+ ******************************************************************************/
 static int tuner_module_entry_close(struct inode* Inode, struct file* FIle)
 {
     	struct devone_data *dev;
 
     	INFO_PRINT("tuner_module_entry_close: Called\n");
 
-	
-	
+	//++ DTV_PCN1000008_HTC_POWER_CONTROL
+	/* [HTC]  Power control */
 	poweron_tuner(0);
-	
+	//-- DTV_PCN1000008_HTC_POWER_CONTROL
 
-	
+	/* open_cntが0以下の場合 */
 	if( open_cnt <= 0 )
 	{
         INFO_PRINT("tuner_module_entry_close: close error\n");
@@ -1027,10 +1219,10 @@ static int tuner_module_entry_close(struct inode* Inode, struct file* FIle)
 		open_cnt--;
 	}
 
-	
+	/* 全てのopenがcloseされた場合 */
 	if( open_cnt == 0 )
 	{
-        
+        /* 割込みの解放 */
 	tuner_drv_release_interrupt();
 
         if( FIle == NULL )
@@ -1050,6 +1242,20 @@ static int tuner_module_entry_close(struct inode* Inode, struct file* FIle)
 
 }
 
+/******************************************************************************
+ *    function:   tuner_module_entry_read
+ *    brief   :   read control of a driver
+ *    date    :   2011.08.02
+ *    author  :   K.Kitamura(*)
+ *
+ *    return  :    0                   normal exit
+ *            :   -1                   error exit
+ *    input   :   FIle
+ *            :   Buffer
+ *            :   Count
+ *            :   OffsetPosition
+ *    output  :   none
+ ******************************************************************************/
 static ssize_t tuner_module_entry_read(struct file * FIle, char * Buffer,
                                  size_t Count, loff_t * OffsetPosition)
 {
@@ -1057,24 +1263,38 @@ static ssize_t tuner_module_entry_read(struct file * FIle, char * Buffer,
 
 }
 
+/******************************************************************************
+ *    function:   tuner_module_entry_write
+ *    brief   :   write control of a driver
+ *    date    :   2011.10.31
+ *    author  :   K.Okawa(KXD14)
+ *
+ *    return  :    0		normal exit
+ *            :   -1		error exit
+ *    input   :   FIle
+ *            :   Buffer	[slave][reg.addr][data-0][data-1]...[data-(n-1)]
+ *            :   Count		(>=3) n+2
+ *            :   OffsetPosition
+ *    output  :   none
+ ******************************************************************************/
 static ssize_t tuner_module_entry_write(struct file* FIle,
 		const char* Buffer, size_t Count, loff_t* OffsetPosition)
 {
     int				ret;
     unsigned long	copy_ret;
-    
-    unsigned char	*buf;				
+    //TUNER_DATA_RW *write_arg;			/* pointer to data area */
+    unsigned char	*buf;				/* pointer to data area */
 
     struct i2c_adapter	*adap;
     struct i2c_msg		msgs[1];
 
-    
+    /* argument check */
     if (Count < 3) {
     	TRACE();
     	return -EINVAL;
     }
 
-    
+    /* memory allocation for data area */
     buf = (unsigned char *)vmalloc(Count);
     if (buf == NULL) {
         return -EINVAL;
@@ -1086,7 +1306,7 @@ static ssize_t tuner_module_entry_write(struct file* FIle,
         return -EINVAL;
     }
 
-    
+    /* get i2c adapter */
     adap = i2c_get_adapter(TUNER_CONFIG_I2C_BUSNUM);
     if (adap == NULL) {
     	TRACE();
@@ -1094,11 +1314,11 @@ static ssize_t tuner_module_entry_write(struct file* FIle,
     	return -EINVAL;
     }
 
-    
+    /* construct i2c message */
     memset(msgs, 0x00, sizeof(struct i2c_msg) * 1);
 
     msgs[0].addr	= buf[0];
-    msgs[0].flags	= 0;		
+    msgs[0].flags	= 0;		/* write */
     msgs[0].len		= Count - 1;
     msgs[0].buf		= buf + 1;
 
@@ -1109,20 +1329,34 @@ static ssize_t tuner_module_entry_write(struct file* FIle,
     	vfree(buf);
     	return -EINVAL;
     }
-    
-    
+    //DEBUG_PRINT("write        slv:0x%02x adr:0x%02x len:%-4d 0x%02x ... 0x%02x ",
+    //		buf[0], buf[1], Count-2, buf[2], buf[Count-1]);
 
     vfree(buf);
     return ret;
 }
 
+/******************************************************************************
+ *    function:   tuner_module_entry_ioctl
+ *    brief   :   ioctl control of a driver
+ *    date    :   2011.08.02
+ *    author  :   K.Kitamura(*)
+ *
+ *    return  :    0                   normal exit
+ *            :   -1                   error exit
+ *    input   :   Inode
+ *            :   FIle
+ *            :   uCommand
+ *            :   uArgument
+ *    output  :   none
+ ******************************************************************************/
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36)
 static int tuner_module_entry_ioctl(struct inode* Inode, struct file* FIle,
                               unsigned int uCommand, unsigned long uArgument)
-#else  
+#else  /* LINUX_VERSION_CODE */
 static long tuner_module_entry_ioctl(struct file *file,
                               unsigned int uCommand, unsigned long uArgument)
-#endif 
+#endif /* LINUX_VERSION_CODE */
 
 {
     int                   ret;
@@ -1131,19 +1365,19 @@ static long tuner_module_entry_ioctl(struct file *file,
     int                   param;
     TUNER_DATA_RW         event_status[ TUNER_EVENT_REGNUM ];
 
-    
+    //INFO_PRINT("tuner_module_entry_ioctl:START\n");
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
-    
+    /* 排他制御:ロック開始 */
     mutex_lock(&g_tuner_mutex);
 #endif
 
-    
+    /* 引数チェック */
     if( uArgument == 0 )
     {
         TRACE();
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
-        
+        /* 排他制御:ロック解除 */
         mutex_unlock(&g_tuner_mutex);
 #endif  
         return -EINVAL;
@@ -1151,7 +1385,7 @@ static long tuner_module_entry_ioctl(struct file *file,
     
     switch( uCommand )
     {
-        
+        /* HWからデータを取得 */
         case TUNER_IOCTL_VALGET:
             copy_ret = copy_from_user( &data,
                                        &( *(TUNER_DATA_RW *)uArgument ),
@@ -1160,7 +1394,7 @@ static long tuner_module_entry_ioctl(struct file *file,
             {
                 TRACE();
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
-                
+                /* 排他制御:ロック解除 */
                 mutex_unlock(&g_tuner_mutex);
 #endif  
                 return -EINVAL;
@@ -1170,7 +1404,7 @@ static long tuner_module_entry_ioctl(struct file *file,
 
             if( ret == 0 )
             {
-                
+                /* 読み出した値を上位へ返却 */
                 copy_ret = copy_to_user( &( *(TUNER_DATA_RW *)uArgument ),
                                          &data,
                                          sizeof( TUNER_DATA_RW ));
@@ -1178,7 +1412,7 @@ static long tuner_module_entry_ioctl(struct file *file,
                 {
                     TRACE();
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
-                    
+                    /* 排他制御:ロック解除 */
                     mutex_unlock(&g_tuner_mutex);
 #endif  
                     return -EINVAL;
@@ -1188,7 +1422,7 @@ static long tuner_module_entry_ioctl(struct file *file,
             break;
 
 
-        
+        /* HWへデータを設定 */
         case TUNER_IOCTL_VALSET:
             copy_ret = copy_from_user( &data,
                                        &( *(TUNER_DATA_RW *)uArgument ),
@@ -1197,7 +1431,7 @@ static long tuner_module_entry_ioctl(struct file *file,
             {
                 TRACE();
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
-                
+                /* 排他制御:ロック解除 */
                 mutex_unlock(&g_tuner_mutex);
 #endif  
                 return -EINVAL;
@@ -1207,50 +1441,50 @@ static long tuner_module_entry_ioctl(struct file *file,
             break;
 
         case TUNER_IOCTL_VALGET_EVENT:
-            
+            /* INTCND_F */
             copy_ret = copy_to_user( &( *( unsigned char *)uArgument ),
                                      &g_tuner_intcnd_f,
                                      sizeof( unsigned char ));
             if (copy_ret != 0) {
                 TRACE();
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
-                
+                /* 排他制御:ロック解除 */
                 mutex_unlock(&g_tuner_mutex);
 #endif  
                 return -EINVAL;
             }
-            
+            /* INTCND_S */
             copy_ret = copy_to_user( &( *( unsigned char *)( uArgument + 1 )),
                                      &g_tuner_intcnd_s,
                                      sizeof( unsigned char ));
             if (copy_ret != 0) {
                 TRACE();
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
-                
+                /* 排他制御:ロック解除 */
                 mutex_unlock(&g_tuner_mutex);
 #endif
                 return -EINVAL;
             }
-            
+            /* INTST_F */
             copy_ret = copy_to_user( &( *( unsigned char *)(uArgument + 2)),
                                      &g_tuner_intst_f,
                                      sizeof( unsigned char ));
             if (copy_ret != 0) {
                 TRACE();
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
-                
+                /* 排他制御:ロック解除 */
                 mutex_unlock(&g_tuner_mutex);
 #endif
                 return -EINVAL;
             }
-            
+            /* INTCND_F */
             copy_ret = copy_to_user( &( *( unsigned char *)(uArgument + 3)),
                                      &g_tuner_intst_s,
                                      sizeof( unsigned char ));
             if (copy_ret != 0) {
                 TRACE();
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
-                
+                /* 排他制御:ロック解除 */
                 mutex_unlock(&g_tuner_mutex);
 #endif  
                 return -EINVAL;
@@ -1261,7 +1495,7 @@ static long tuner_module_entry_ioctl(struct file *file,
             DEBUG_PRINT( "// IRQ factor send: INTCND_S:0x%02x INTST_S:0x%02x"
             		,g_tuner_intcnd_s, g_tuner_intst_s );
 
-            
+            /* 要因初期化 */
             g_tuner_intcnd_f = 0x00;
             g_tuner_intcnd_s = 0x00;
             g_tuner_intst_f = 0x00;
@@ -1270,7 +1504,7 @@ static long tuner_module_entry_ioctl(struct file *file,
             ret = copy_ret;
 
             break;
-        
+        /* イベント設定 */
         case TUNER_IOCTL_VALSET_EVENT:
         	DEBUG_PRINT("*** VALSET_EVENT ***\n");
             copy_ret = copy_from_user( &data,
@@ -1280,19 +1514,19 @@ static long tuner_module_entry_ioctl(struct file *file,
             {
                 TRACE();
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
-                
+                /* 排他制御:ロック解除 */
                 mutex_unlock(&g_tuner_mutex);
 #endif  
                 return -EINVAL;
             }
 
-            
-            event_status[0].slave_adr = TUNER_SLAVE_ADR_M1;  
-            event_status[0].adr       = REG_INTDEF1_F;       
-            event_status[0].sbit      = SIG_ENS_INTDEF1_F;   
-            event_status[0].ebit      = SIG_ENE_INTDEF1_F;   
-            event_status[0].param     = 0x00;                
-            event_status[0].enabit    = SIG_ENA_INTDEF1_F;   
+            /* when 1st time of event setting, be enable interrupt */
+            event_status[0].slave_adr = TUNER_SLAVE_ADR_M1;  /* slave address */
+            event_status[0].adr       = REG_INTDEF1_F;       /* reg. address  */
+            event_status[0].sbit      = SIG_ENS_INTDEF1_F;   /* start bit position */
+            event_status[0].ebit      = SIG_ENE_INTDEF1_F;   /* end bit position */
+            event_status[0].param     = 0x00;                /* clear for read */
+            event_status[0].enabit    = SIG_ENA_INTDEF1_F;   /* enable bit mask */
             event_status[1].slave_adr = TUNER_SLAVE_ADR_M1;
             event_status[1].adr       = REG_INTDEF2_F;
             event_status[1].sbit      = SIG_ENS_INTDEF2_F;
@@ -1318,7 +1552,7 @@ static long tuner_module_entry_ioctl(struct file *file,
             {
                 TRACE();
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
-                
+                /* 排他制御:ロック解除 */
                 mutex_unlock(&g_tuner_mutex);
 #endif
                 return -EINVAL;  
@@ -1336,7 +1570,7 @@ static long tuner_module_entry_ioctl(struct file *file,
                 {
                     TRACE();
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
-                
+                /* 排他制御:ロック解除 */
                 mutex_unlock(&g_tuner_mutex);
 #endif
                 return -EINVAL;  
@@ -1346,7 +1580,7 @@ static long tuner_module_entry_ioctl(struct file *file,
             ret = tuner_drv_hw_access( TUNER_IOCTL_VALSET, &data, 1 );
 
             break;
-        
+        /* イベント解除 */
         case TUNER_IOCTL_VALREL_EVENT:
             copy_ret = copy_from_user( &data,
                                        &( *(TUNER_DATA_RW *)uArgument ),
@@ -1355,7 +1589,7 @@ static long tuner_module_entry_ioctl(struct file *file,
             {
                 TRACE();
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
-                
+                /* 排他制御:ロック解除 */
                 mutex_unlock(&g_tuner_mutex);
 #endif  
                 return -EINVAL;
@@ -1367,19 +1601,19 @@ static long tuner_module_entry_ioctl(struct file *file,
             {
                 TRACE();
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
-                
+                /* 排他制御:ロック解除 */
                 mutex_unlock(&g_tuner_mutex);
 #endif  
                 return -EINVAL;
             }
 
-            
-            event_status[0].slave_adr = TUNER_SLAVE_ADR_M1;  
-            event_status[0].adr       = REG_INTDEF1_F;       
-            event_status[0].sbit      = SIG_ENS_INTDEF1_F;   
-            event_status[0].ebit      = SIG_ENE_INTDEF1_F;   
-            event_status[0].param     = 0x00;                
-            event_status[0].enabit    = SIG_ENA_INTDEF1_F;   
+            /* イベント設定が最終の場合、割り込みを無効にする */
+            event_status[0].slave_adr = TUNER_SLAVE_ADR_M1;  /* slave address */
+            event_status[0].adr       = REG_INTDEF1_F;       /* reg. address  */
+            event_status[0].sbit      = SIG_ENS_INTDEF1_F;   /* start bit position */
+            event_status[0].ebit      = SIG_ENE_INTDEF1_F;   /* end bit position */
+            event_status[0].param     = 0x00;                /* clear for read */
+            event_status[0].enabit    = SIG_ENA_INTDEF1_F;   /* enable bit mask */
             event_status[1].slave_adr = TUNER_SLAVE_ADR_M1;
             event_status[1].adr       = REG_INTDEF2_F;
             event_status[1].sbit      = SIG_ENS_INTDEF2_F;
@@ -1419,7 +1653,7 @@ static long tuner_module_entry_ioctl(struct file *file,
             {
                 TRACE();
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
-                
+                /* 排他制御:ロック解除 */
                 mutex_unlock(&g_tuner_mutex);
 #endif  
                 return -EINVAL;
@@ -1434,13 +1668,25 @@ static long tuner_module_entry_ioctl(struct file *file,
     }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
-    
+    /* 排他制御:ロック解除 */
     mutex_unlock(&g_tuner_mutex);
 #endif    
-    
+    //INFO_PRINT("tuner_module_entry_ioctl:END\n");
     return ret;
 }
 
+/******************************************************************************
+ *    function:   tuner_module_entry_poll
+ *    brief   :   poll control of a driver
+ *    date    :   2011.08.23
+ *    author  :   M.Takahashi(*)
+ *
+ *    return  :    0                   normal exit
+ *            :   -1                   error exit
+ *    input   :   file
+ *            :   poll_tbl
+ *    output  :   none
+ ******************************************************************************/
 static unsigned int tuner_module_entry_poll(
                         struct file *file,
                         struct poll_table_struct *poll_tbl )
@@ -1449,16 +1695,16 @@ static unsigned int tuner_module_entry_poll(
     unsigned int  tuner_mask;
 
 
-    
+    /* 初期化 */
     tuner_mask = 0;
 
-    
+    /* wait状態遷移 */
     poll_wait( file, &g_tuner_poll_wait_queue, poll_tbl );
 
-    
+    /* 割り込み禁止 */
     spin_lock_irqsave( &g_tuner_lock, tuner_flags );
 
-    
+    /* wait解除状態の場合 */
     if( g_tuner_wakeup_flag == TUNER_ON )
     {
         tuner_mask = ( POLLIN | POLLRDNORM );
@@ -1466,35 +1712,48 @@ static unsigned int tuner_module_entry_poll(
     
     g_tuner_wakeup_flag = TUNER_OFF;
 
-    
+    /* 割り込み許可 */
     spin_unlock_irqrestore( &g_tuner_lock, tuner_flags );
 
     return tuner_mask;
 }
 
+/******************************************************************************
+ *    function:   tuner_interrupt
+ *    brief   :   interrpu control of a driver
+ *    date    :   2011.08.23
+ *    author  :   M.Takahashi(*)
+ *
+ *    return  :    0                   normal exit
+ *            :   -1                   error exit
+ *    input   :   irq
+ *            :   dev_id
+ *    output  :   none
+ ******************************************************************************/
 #ifndef TUNER_CONFIG_IRQ_PC_LINUX
 irqreturn_t tuner_interrupt( int irq, void *dev_id )
-#else  
+#else  /* TUNER_CONFIG_IRQ_PC_LINUX */
 int tuner_interrupt( void )
-#endif 
+#endif /* TUNER_CONFIG_IRQ_PC_LINUX */
 {
     DEBUG_PRINT("tuner_interrupt start ");
 
-    
+    /* 処理はカーネルスレッドで行う */
     g_tuner_kthread_flag |= TUNER_KTH_IRQHANDLER;
     if( waitqueue_active( &g_tuner_kthread_wait_queue ))
     {
 #ifdef TUNER_CONFIG_IRQ_LEVELTRIGGER
-        
+        /* レベル割り込みの場合は割り込み無効に設定する */
         tuner_drv_disable_interrupt();
-#endif 
+#endif /* TUNER_CONFIG_IRQ_LEVELTRIGGER */
         wake_up( &g_tuner_kthread_wait_queue );
     }
     else
     {
         DEBUG_PRINT("tuner_interrupt waitqueue_active err!!! ");
-        
-        
+        /* カーネルスレッドを起床がNGの場合、割り込みを停止する */
+        /* 割り込みが発生し続けないためのフェールセーフ処理 */
+//20121122        tuner_drv_release_interrupt();
     }
 
     DEBUG_PRINT("tuner_interrupt end ");

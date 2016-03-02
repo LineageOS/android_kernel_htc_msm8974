@@ -660,3 +660,4 @@ extern void mmc_blk_init_packed_statistics(struct mmc_card *card);
 extern void mmc_blk_disable_wr_packing(struct mmc_queue *mq);
 extern int mmc_send_pon(struct mmc_card *card);
 #endif /* LINUX_MMC_CARD_H */
+

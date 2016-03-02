@@ -122,6 +122,7 @@ struct htc_battery_platform_data {
 	int overload_vol_thr_mv;
 	int overload_curr_thr_ma;
 	bool usb_temp_monitor_enable;
+	bool disable_pwrpath_after_eoc;
 	int usb_temp_overheat_increase_threshold;
 	int normal_usb_temp_threshold;
 	int usb_temp_overheat_threshold;

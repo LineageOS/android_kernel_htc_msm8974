@@ -755,7 +755,7 @@ static ssize_t cache_read(struct file *filp, char __user *buf, size_t count,
 {
 	struct cache_reader *rp = filp->private_data;
 	struct cache_request *rq;
-	struct inode *inode = filp->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(filp);
 	int err;
 
 	if (count == 0)
@@ -886,7 +886,7 @@ static ssize_t cache_write(struct file *filp, const char __user *buf,
 			   struct cache_detail *cd)
 {
 	struct address_space *mapping = filp->f_mapping;
-	struct inode *inode = filp->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(filp);
 	ssize_t ret = -EINVAL;
 
 	if (!cd->cache_parse)
@@ -1451,7 +1451,7 @@ static ssize_t write_flush(struct file *file, const char __user *buf,
 static ssize_t cache_read_procfs(struct file *filp, char __user *buf,
 				 size_t count, loff_t *ppos)
 {
-	struct cache_detail *cd = PDE(filp->f_path.dentry->d_inode)->data;
+	struct cache_detail *cd = PDE(file_inode(filp))->data;
 
 	return cache_read(filp, buf, count, ppos, cd);
 }
@@ -1459,14 +1459,14 @@ static ssize_t cache_read_procfs(struct file *filp, char __user *buf,
 static ssize_t cache_write_procfs(struct file *filp, const char __user *buf,
 				  size_t count, loff_t *ppos)
 {
-	struct cache_detail *cd = PDE(filp->f_path.dentry->d_inode)->data;
+	struct cache_detail *cd = PDE(file_inode(filp))->data;
 
 	return cache_write(filp, buf, count, ppos, cd);
 }
 
 static unsigned int cache_poll_procfs(struct file *filp, poll_table *wait)
 {
-	struct cache_detail *cd = PDE(filp->f_path.dentry->d_inode)->data;
+	struct cache_detail *cd = PDE(file_inode(filp))->data;
 
 	return cache_poll(filp, wait, cd);
 }
@@ -1474,7 +1474,7 @@ static unsigned int cache_poll_procfs(struct file *filp, poll_table *wait)
 static long cache_ioctl_procfs(struct file *filp,
 			       unsigned int cmd, unsigned long arg)
 {
-	struct inode *inode = filp->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(filp);
 	struct cache_detail *cd = PDE(inode)->data;
 
 	return cache_ioctl(inode, filp, cmd, arg, cd);
@@ -1543,7 +1543,7 @@ static int release_flush_procfs(struct inode *inode, struct file *filp)
 static ssize_t read_flush_procfs(struct file *filp, char __user *buf,
 			    size_t count, loff_t *ppos)
 {
-	struct cache_detail *cd = PDE(filp->f_path.dentry->d_inode)->data;
+	struct cache_detail *cd = PDE(file_inode(filp))->data;
 
 	return read_flush(filp, buf, count, ppos, cd);
 }
@@ -1552,7 +1552,7 @@ static ssize_t write_flush_procfs(struct file *filp,
 				  const char __user *buf,
 				  size_t count, loff_t *ppos)
 {
-	struct cache_detail *cd = PDE(filp->f_path.dentry->d_inode)->data;
+	struct cache_detail *cd = PDE(file_inode(filp))->data;
 
 	return write_flush(filp, buf, count, ppos, cd);
 }
@@ -1683,7 +1683,7 @@ EXPORT_SYMBOL_GPL(cache_destroy_net);
 static ssize_t cache_read_pipefs(struct file *filp, char __user *buf,
 				 size_t count, loff_t *ppos)
 {
-	struct cache_detail *cd = RPC_I(filp->f_path.dentry->d_inode)->private;
+	struct cache_detail *cd = RPC_I(file_inode(filp))->private;
 
 	return cache_read(filp, buf, count, ppos, cd);
 }
@@ -1691,14 +1691,14 @@ static ssize_t cache_read_pipefs(struct file *filp, char __user *buf,
 static ssize_t cache_write_pipefs(struct file *filp, const char __user *buf,
 				  size_t count, loff_t *ppos)
 {
-	struct cache_detail *cd = RPC_I(filp->f_path.dentry->d_inode)->private;
+	struct cache_detail *cd = RPC_I(file_inode(filp))->private;
 
 	return cache_write(filp, buf, count, ppos, cd);
 }
 
 static unsigned int cache_poll_pipefs(struct file *filp, poll_table *wait)
 {
-	struct cache_detail *cd = RPC_I(filp->f_path.dentry->d_inode)->private;
+	struct cache_detail *cd = RPC_I(file_inode(filp))->private;
 
 	return cache_poll(filp, wait, cd);
 }
@@ -1706,7 +1706,7 @@ static unsigned int cache_poll_pipefs(struct file *filp, poll_table *wait)
 static long cache_ioctl_pipefs(struct file *filp,
 			      unsigned int cmd, unsigned long arg)
 {
-	struct inode *inode = filp->f_dentry->d_inode;
+	struct inode *inode = file_inode(filp);
 	struct cache_detail *cd = RPC_I(inode)->private;
 
 	return cache_ioctl(inode, filp, cmd, arg, cd);
@@ -1775,7 +1775,7 @@ static int release_flush_pipefs(struct inode *inode, struct file *filp)
 static ssize_t read_flush_pipefs(struct file *filp, char __user *buf,
 			    size_t count, loff_t *ppos)
 {
-	struct cache_detail *cd = RPC_I(filp->f_path.dentry->d_inode)->private;
+	struct cache_detail *cd = RPC_I(file_inode(filp))->private;
 
 	return read_flush(filp, buf, count, ppos, cd);
 }
@@ -1784,7 +1784,7 @@ static ssize_t write_flush_pipefs(struct file *filp,
 				  const char __user *buf,
 				  size_t count, loff_t *ppos)
 {
-	struct cache_detail *cd = RPC_I(filp->f_path.dentry->d_inode)->private;
+	struct cache_detail *cd = RPC_I(file_inode(filp))->private;
 
 	return write_flush(filp, buf, count, ppos, cd);
 }
