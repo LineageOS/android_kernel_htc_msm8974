@@ -497,7 +497,7 @@ EXPORT_SYMBOL(lirc_dev_fop_open);
 
 int lirc_dev_fop_close(struct inode *inode, struct file *file)
 {
-	
+	/* HTC_START (klockwork issue) */
 	struct irctl *ir;
 	struct cdev *cdev;
 	if (iminor(inode) >= MAX_IRCTL_DEVICES){
@@ -506,7 +506,7 @@ int lirc_dev_fop_close(struct inode *inode, struct file *file)
 		return -ENODEV;
 	}
 	ir = irctls[iminor(inode)];
-	
+	/* HTC_END */
 
 	if (!ir) {
 		printk(KERN_ERR "%s: called with invalid irctl\n", __func__);
@@ -539,16 +539,16 @@ EXPORT_SYMBOL(lirc_dev_fop_close);
 
 unsigned int lirc_dev_fop_poll(struct file *file, poll_table *wait)
 {
-	
+	/* HTC_START (klockwork issue)*/
 	struct irctl *ir;
 	unsigned int ret;
-	if (iminor(file->f_dentry->d_inode) >= MAX_IRCTL_DEVICES) {
+	if (iminor(file_inode(file)) >= MAX_IRCTL_DEVICES) {
 		printk(KERN_WARNING "lirc_dev [%d]: open result = -ENODEV\n",
-		iminor(file->f_dentry->d_inode));
+		iminor(file_inode(file)));
 		return -ENODEV;
 	}
-	ir = irctls[iminor(file->f_dentry->d_inode)];
-	
+	ir = irctls[iminor(file_inode(file))];
+	/* HTC_END */
 
 	if (!ir) {
 		printk(KERN_ERR "%s: called with invalid irctl\n", __func__);
@@ -581,15 +581,15 @@ long lirc_dev_fop_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	__u32 mode;
 	int result = 0;
-	
+	/* HTC_START (klockwork issue)*/
 	struct irctl *ir;
-	if (iminor(file->f_dentry->d_inode) >= MAX_IRCTL_DEVICES) {
+	if (iminor(file_inode(file)) >= MAX_IRCTL_DEVICES) {
 		printk(KERN_WARNING "lirc_dev [%d]: open result = -ENODEV\n",
-		iminor(file->f_dentry->d_inode));
+		iminor(file_inode(file)));
 		return -ENODEV;
 	}
-	ir = irctls[iminor(file->f_dentry->d_inode)];
-	
+	ir = irctls[iminor(file_inode(file))];
+	/* HTC_END */
 
 	if (!ir) {
 		printk(KERN_ERR "lirc_dev: %s: no irctl found!\n", __func__);
@@ -676,16 +676,16 @@ ssize_t lirc_dev_fop_read(struct file *file,
 {
 	unsigned char *buf;
 	int ret = 0, written = 0;
-	
+	/* HTC_START (klockwork issue)*/
 	struct irctl *ir;
 	DECLARE_WAITQUEUE(wait, current);
-	if (iminor(file->f_dentry->d_inode) >= MAX_IRCTL_DEVICES) {
+	if (iminor(file_inode(file)) >= MAX_IRCTL_DEVICES) {
 		printk(KERN_WARNING "lirc_dev [%d]: open result = -ENODEV\n",
-		iminor(file->f_dentry->d_inode));
+		iminor(file_inode(file)));
 		return -ENODEV;
 	}
-	ir = irctls[iminor(file->f_dentry->d_inode)];
-	
+	ir = irctls[iminor(file_inode(file))];
+	/* HTC_END */
 
 	if (!ir) {
 		printk(KERN_ERR "%s: called with invalid irctl\n", __func__);
@@ -786,10 +786,10 @@ void *lirc_get_pdata(struct file *file)
 {
 	void *data = NULL;
 
-	if (file && file->f_dentry && file->f_dentry->d_inode &&
-	    file->f_dentry->d_inode->i_rdev) {
+	if (file && file->f_dentry && file_inode(file) &&
+	    file_inode(file)->i_rdev) {
 		struct irctl *ir;
-		ir = irctls[iminor(file->f_dentry->d_inode)];
+		ir = irctls[iminor(file_inode(file))];
 		data = ir->d.data;
 	}
 
@@ -801,7 +801,7 @@ EXPORT_SYMBOL(lirc_get_pdata);
 ssize_t lirc_dev_fop_write(struct file *file, const char __user *buffer,
 			   size_t length, loff_t *ppos)
 {
-	struct irctl *ir = irctls[iminor(file->f_dentry->d_inode)];
+	struct irctl *ir = irctls[iminor(file_inode(file))];
 
 	if (!ir) {
 		printk(KERN_ERR "%s: called with invalid irctl\n", __func__);

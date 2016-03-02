@@ -218,7 +218,7 @@ static int ov4688_read_fuseid(struct sensorb_cfg_data *cdata,
 	static int first= true;
 	static int read_vcm = true;
 	static int read_otp = true;
-	uint8_t *path= "/data/OTPData.dat";
+	uint8_t *path= "/data/misc/camera/OTPData.dat";
 	static uint8_t otp_mem[512];
 	struct file* f;
 	uint16_t read_data = 0;

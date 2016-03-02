@@ -313,6 +313,9 @@ void suspend_sys_sync_queue(void)
 static bool suspend_sys_sync_abort;
 static void suspend_sys_sync_handler(unsigned long);
 static DEFINE_TIMER(suspend_sys_sync_timer, suspend_sys_sync_handler, 0, 0);
+/* value should be less then half of input event wake lock timeout value
+ * which is currently set to 5*HZ (see drivers/input/evdev.c)
+ */
 #define SUSPEND_SYS_SYNC_TIMEOUT (HZ/4)
 static void suspend_sys_sync_handler(unsigned long arg)
 {

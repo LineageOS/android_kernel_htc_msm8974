@@ -15,6 +15,7 @@
 #include <linux/device.h>
 #include <linux/smp.h>
 #include <linux/cpu.h>
+#include <linux/cpu_pm.h>
 #include <linux/jiffies.h>
 #include <linux/clockchips.h>
 #include <linux/interrupt.h>
@@ -43,6 +44,9 @@ static void __iomem *timer_base;
 
 static struct delay_timer arch_delay_timer;
 
+/*
+ * Architected system timer support.
+ */
 
 #define ARCH_TIMER_CTRL_ENABLE		(1 << 0)
 #define ARCH_TIMER_CTRL_IT_MASK		(1 << 1)
@@ -52,6 +56,7 @@ static struct delay_timer arch_delay_timer;
 #define ARCH_TIMER_REG_FREQ		1
 #define ARCH_TIMER_REG_TVAL		2
 
+/* Iomapped Register Offsets */
 #define QTIMER_CNTP_LOW_REG		0x000
 #define QTIMER_CNTP_HIGH_REG		0x004
 #define QTIMER_CNTV_LOW_REG		0x008
@@ -232,7 +237,7 @@ static int arch_timer_set_next_event_mem(unsigned long evt,
 
 static int __cpuinit arch_timer_setup(struct clock_event_device *clk)
 {
-	
+	/* setup clock event only once for CPU 0 */
 	if (!smp_processor_id() && clk->irq == arch_timer_ppi)
 		return 0;
 
@@ -243,7 +248,7 @@ static int __cpuinit arch_timer_setup(struct clock_event_device *clk)
 	clk->set_next_event = arch_timer_set_next_event_cp15;
 	clk->irq = arch_timer_ppi;
 
-	
+	/* Be safe... */
 	clk->set_mode(CLOCK_EVT_MODE_SHUTDOWN, clk);
 
 	clockevents_config_and_register(clk, arch_timer_rate,
@@ -255,9 +260,12 @@ static int __cpuinit arch_timer_setup(struct clock_event_device *clk)
 	if (arch_timer_ppi2)
 		enable_percpu_irq(arch_timer_ppi2, 0);
 
+	arch_counter_set_user_access();
+
 	return 0;
 }
 
+/* Is the optional system timer available? */
 static int local_timer_is_architected(void)
 {
 	return (cpu_architecture() >= CPU_ARCH_ARMv7) &&
@@ -272,7 +280,7 @@ static int arch_timer_available(void)
 		arch_timer_reg_write(1, ARCH_TIMER_REG_CTRL, 0);
 		freq = arch_timer_reg_read(1, ARCH_TIMER_REG_FREQ);
 
-		
+		/* Check the timer frequency. */
 		if (freq == 0) {
 			pr_warn("Architected timer frequency not available\n");
 			return -EINVAL;
@@ -361,6 +369,11 @@ static u32 arch_counter_get_cntvct32(void)
 
 	cntvct = get_cntvct_func();
 
+	/*
+	 * The sched_clock infrastructure only knows about counters
+	 * with at most 32bits. Forget about the upper 24 bits for the
+	 * time being...
+	 */
 	return (u32)(cntvct & (u32)~0);
 }
 
@@ -392,11 +405,38 @@ static void __init arch_timer_counter_init(void)
 
 	setup_sched_clock(arch_timer_update_sched_clock, 32, arch_timer_rate);
 
-	
+	/* Use the architected timer for the delay loop. */
 	arch_delay_timer.read_current_timer = &arch_timer_read_current_timer;
 	arch_delay_timer.freq = arch_timer_rate;
 	register_current_timer_delay(&arch_delay_timer);
 }
+
+#ifdef CONFIG_CPU_PM
+static unsigned int saved_cntkctl;
+static int arch_timer_cpu_pm_notify(struct notifier_block *self,
+				unsigned long action, void *hcpu)
+{
+	if (action == CPU_PM_ENTER)
+		saved_cntkctl = arch_timer_get_cntkctl();
+	else if (action == CPU_PM_ENTER_FAILED || action == CPU_PM_EXIT)
+		arch_timer_set_cntkctl(saved_cntkctl);
+	return NOTIFY_OK;
+}
+
+static struct notifier_block arch_timer_cpu_pm_notifier = {
+	.notifier_call = arch_timer_cpu_pm_notify,
+};
+
+static int __init arch_timer_cpu_pm_init(void)
+{
+	return cpu_pm_register_notifier(&arch_timer_cpu_pm_notifier);
+}
+#else
+static int __init arch_timer_cpu_pm_init(void)
+{
+	return 0;
+}
+#endif
 
 static int __init arch_timer_common_register(void)
 {
@@ -433,17 +473,29 @@ static int __init arch_timer_common_register(void)
 		}
 	}
 
+	err = arch_timer_cpu_pm_init();
+	if (err)
+		goto out_free_irq;
+
 	err = local_timer_register(&arch_timer_ops);
 	if (err) {
+		/*
+		 * We couldn't register as a local timer (could be
+		 * because we're on a UP platform, or because some
+		 * other local timer is already present...). Try as a
+		 * global timer instead.
+		 */
 		arch_timer_global_evt.cpumask = cpumask_of(0);
 		err = arch_timer_setup(&arch_timer_global_evt);
 	}
 
 	if (err)
-		goto out_free_irq;
+		goto out_unreg_notify;
 
 	return 0;
 
+out_unreg_notify:
+	cpu_pm_unregister_notifier(&arch_timer_cpu_pm_notifier);
 out_free_irq:
 	free_percpu_irq(arch_timer_ppi, arch_timer_evt);
 	if (arch_timer_ppi2)
@@ -527,6 +579,9 @@ int __init arch_timer_of_register(void)
 	np = of_find_matching_node(NULL, arch_timer_of_match);
 	if (np) {
 		has_cp15 = true;
+		/*
+		 * Try to determine the frequency from the device tree
+		 */
 		if (!of_property_read_u32(np, "clock-frequency", &freq))
 			arch_timer_rate = freq;
 
@@ -553,6 +608,9 @@ int __init arch_timer_of_register(void)
 			get_cntpct_func = counter_get_cntpct_mem;
 			get_cntvct_func = counter_get_cntvct_mem;
 		}
+		/*
+		 * Try to determine the frequency from the device tree
+		 */
 		if (!of_property_read_u32(np, "clock-frequency", &freq))
 			arch_timer_rate = freq;
 

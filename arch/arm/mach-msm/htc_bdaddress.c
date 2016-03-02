@@ -19,6 +19,8 @@
 
 #define ATAG_BT_DEBUG
 
+/* configuration tags specific to Bluetooth*/
+//#define ATAG_BLUETOOTH 0x43294329
 #define MAX_BT_SIZE 0x8U
 
 #define CALIBRATION_DATA_PATH "/calibration_data"
@@ -39,7 +41,7 @@ static unsigned char *get_bt_bd_ram(void)
      p_size = 0;
      p_data = NULL;
      if (offset) {
-          
+          /* of_get_property 會回傳property的address，並把長度填入*p_size */
           p_data = (unsigned char*) of_get_property(offset, BT_FLASH_DATA, &p_size);
 #ifdef ATAG_BT_DEBUG
           if (p_data) {
@@ -55,7 +57,7 @@ static unsigned char *get_bt_bd_ram(void)
 	return (bt_bd_ram);
 }
 
-#if 0 
+#if 0 //remove this for hboot3
 static int __init parse_tag_bt(const struct tag *tag)
 {
 	unsigned char *dptr = (unsigned char *)(&tag->u);
@@ -90,6 +92,9 @@ void bt_export_bd_address(void)
 			cTemp[0], cTemp[1], cTemp[2],
 			cTemp[3], cTemp[4], cTemp[5]);
 
+        /*
+	printk(KERN_INFO "YoYo--BD_ADDRESS=%s\n", bdaddress);
+        */
         printk(KERN_INFO "fd=%02x, apply=%02x\n", cTemp[2]+1, cTemp[5]+2);
         printk(KERN_INFO "fd=%02x, state=%02x\n", cTemp[4]+2, cTemp[1]+1);
         printk(KERN_INFO "fd=%02x, status=%02x\n", cTemp[0]+1, cTemp[3]+2);

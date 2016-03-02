@@ -175,7 +175,13 @@ void report_meminfo(struct seq_file *m, struct sysinfo *sysinfo)
 {
 	int i;
 
+	/*
+	 * Note: This loop reports meminfo from i = 0 ..  NR_DRIVER_ALLOC_PAGES
+	 */
 	for (i = 0; i <= NR_DRIVER_ALLOC_PAGES; i++) {
+	/*
+	 *	Skip Vmalloc since original meminfo has already reported it.
+	 */
 		if (i == NR_VMALLOC_PAGES)
 			continue;
 		report_meminfo_item(m, i);

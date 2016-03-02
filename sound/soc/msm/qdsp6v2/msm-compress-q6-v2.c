@@ -47,6 +47,8 @@
 
 #include <sound/q6adm-v2.h>
 #include <linux/wakelock.h>
+#include <linux/sched.h>
+#include <linux/freezer.h>
 #include <mach/htc_acoustic_alsa.h>
 
 #define DSP_PP_BUFFERING_IN_MSEC	25
@@ -135,6 +137,7 @@ struct msm_compr_audio {
 	uint16_t session_id;
 
 	uint16_t bits_per_sample;
+	atomic_t drain_done_pendding;
 	uint64_t lasttimestamp;
 	int32_t stream_end;
 	uint32_t sample_rate;
@@ -185,6 +188,33 @@ struct msm_compr_dec_params {
 	struct snd_dec_ddp ddp_params;
 };
 
+static int msm_compr_wait_event_freezable(struct msm_compr_audio *prtd, bool eos)
+{
+	DEFINE_WAIT(wait_queue);
+	int wait_times = 0;
+	if (eos) {
+		for (;;) {
+			prepare_to_wait(&prtd->eos_wait, &wait_queue, TASK_UNINTERRUPTIBLE);
+			if (prtd->cmd_ack || prtd->cmd_interrupt)
+				break;
+			freezable_schedule();
+			wait_times++;
+		}
+		finish_wait(&prtd->eos_wait, &wait_queue);
+	} else {
+		for (;;) {
+			prepare_to_wait(&prtd->drain_wait, &wait_queue, TASK_UNINTERRUPTIBLE);
+			if (prtd->drain_ready || prtd->cmd_interrupt || atomic_read(&prtd->xrun))
+				break;
+			freezable_schedule();
+			wait_times++;
+		}
+		finish_wait(&prtd->drain_wait, &wait_queue);
+	}
+	pr_debug("%s: %s done, wait_times %d", __func__, eos ? "wait_eos" : "wait_drain", wait_times);
+	return 0;
+}
+
 static int msm_compr_set_volume(struct snd_compr_stream *cstream,
 				uint32_t volume_l, uint32_t volume_r)
 {
@@ -203,23 +233,24 @@ static int msm_compr_set_volume(struct snd_compr_stream *cstream,
 		if (volume_l != volume_r) {
 			pr_debug("%s: call q6asm_set_lrgain\n", __func__);
 			rc = q6asm_set_lrgain(prtd->audio_client,
-									volume_l, volume_r);
+
+						volume_l, volume_r);
 			if (rc < 0) {
-					pr_err("%s: set lrgain command failed rc=%d\n",
-					__func__, rc);
-					return rc;
+				pr_err("%s: set lrgain command failed rc=%d\n",
+				__func__, rc);
+				return rc;
 			}
 			rc = q6asm_set_volume(prtd->audio_client,
-									COMPRESSED_LR_VOL_MAX_STEPS);
+						COMPRESSED_LR_VOL_MAX_STEPS);
 		} else {
 			pr_debug("%s: call q6asm_set_volume\n", __func__);
 			rc = q6asm_set_lrgain(prtd->audio_client,
-									COMPRESSED_LR_VOL_MAX_STEPS,
-									COMPRESSED_LR_VOL_MAX_STEPS);
+						COMPRESSED_LR_VOL_MAX_STEPS,
+						COMPRESSED_LR_VOL_MAX_STEPS);
 			if (rc < 0) {
-					pr_err("%s: set lrgain command failed rc=%d\n",
-					__func__, rc);
-					return rc;
+				pr_err("%s: set lrgain command failed rc=%d\n",
+				__func__, rc);
+				return rc;
 			}
 			rc = q6asm_set_volume(prtd->audio_client, volume_l);
 		}
@@ -785,8 +816,13 @@ static int msm_compr_configure_dsp(struct snd_compr_stream *cstream)
 	 * there from begining may be DSP limitation
 	 */
 	ret = q6asm_set_volume(prtd->audio_client, COMPRESSED_MASTER_VOL_MAX_STEPS);
+
 	if (ret < 0)
 		pr_err("%s : Set Master Volume failed ret=%d\n", __func__, ret);
+	ret = msm_compr_set_volume(cstream, 0, 0); 
+
+	if (ret < 0)
+		pr_err("%s : msm_compr_set_volume failed ret=%d\n", __func__, ret);
 
 	ret = q6asm_set_softvolume(ac, &softvol);
 	if (ret < 0)
@@ -1195,12 +1231,9 @@ static int msm_compr_drain_buffer(struct msm_compr_audio *prtd,
 	prtd->drain_ready = 0;
 	spin_unlock_irqrestore(&prtd->lock, *flags);
 	pr_debug("%s: wait for buffer to be drained\n",  __func__);
-	rc = wait_event_interruptible(prtd->drain_wait,
-					prtd->drain_ready ||
-					prtd->cmd_interrupt ||
-					atomic_read(&prtd->xrun) ||
-					atomic_read(&prtd->error));
-	pr_debug("%s: out of buffer drain wait with ret %d\n", __func__, rc);
+	msm_compr_wait_event_freezable(prtd, 0);
+	atomic_set(&prtd->drain, 0);
+	pr_debug("%s: out of buffer drain wait\n", __func__);
 	spin_lock_irqsave(&prtd->lock, *flags);
 	if (prtd->cmd_interrupt) {
 		pr_debug("%s: buffer drain interrupted by flush)\n", __func__);
@@ -1517,11 +1550,8 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 
 		spin_unlock_irqrestore(&prtd->lock, flags);
 
-
-		/* Wait indefinitely for  DRAIN. Flush can also signal this*/
-		rc = wait_event_interruptible(prtd->eos_wait,
-				      (prtd->eos_ack || prtd->cmd_interrupt));
-
+		msm_compr_wait_event_freezable(prtd, 1);
+		atomic_set(&prtd->eos, 0);
 		if (rc < 0)
 			pr_err("%s: EOS wait failed\n", __func__);
 
@@ -1940,17 +1970,20 @@ static int msm_compr_config_effect(struct snd_compr_stream *cstream, void *data,
 	struct msm_compr_audio *prtd = cstream->runtime->private_data;
 	struct dsp_effect_param *q6_param = (struct dsp_effect_param*)data;
 	int rc = 0;
-	if (!prtd->audio_client) {
-		pr_err("%s: audio_client not found\n", __func__);
-		return -EACCES;
+	if (prtd != NULL) {
+		if (!prtd->audio_client) {
+			pr_err("%s: audio_client not found\n", __func__);
+			return -EACCES;
+		}
+		rc = q6asm_enable_effect(prtd->audio_client,
+			q6_param->module_id,
+			q6_param->param_id,
+			q6_param->payload_size,
+			payload);
+		pr_debug("[%p] %s: call q6asm_enable_effect, rc %d\n", prtd, __func__, rc);
+		return rc;
 	}
-	rc = q6asm_enable_effect(prtd->audio_client,
-		q6_param->module_id,
-		q6_param->param_id,
-		q6_param->payload_size,
-		payload);
-	pr_debug("[%p] %s: call q6asm_enable_effect, rc %d\n", prtd, __func__, rc);
-	return rc;
+	return -EACCES;
 }
 
 static int msm_compr_set_metadata(struct snd_compr_stream *cstream,
@@ -1964,7 +1997,9 @@ static int msm_compr_set_metadata(struct snd_compr_stream *cstream,
 		return -EINVAL;
 
 	prtd = cstream->runtime->private_data;
-	if (!prtd && !prtd->audio_client)
+	if (!prtd)
+		return -EINVAL;
+	if (!prtd->audio_client)
 		return -EINVAL;
 	ac = prtd->audio_client;
 	if (prtd->stream_end) {

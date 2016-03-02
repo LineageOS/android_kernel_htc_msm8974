@@ -108,6 +108,21 @@ char *board_mid(void)
 }
 EXPORT_SYMBOL(board_mid);
 
+static char android_HWver[64] = {0};
+static int __init board_HWver_setup(char *HWver)
+{
+	pr_info("%s: set HWver to %s\r\n", __func__, HWver);
+	strncpy(android_HWver, HWver, sizeof(android_HWver)/sizeof(android_HWver[0]) - 1);
+	return 1;
+}
+__setup("androidboot.hwversion=", board_HWver_setup);
+
+char *board_HWver(void)
+{
+	return android_HWver;
+}
+EXPORT_SYMBOL(board_HWver);
+
 static int mfg_mode;
 static int fullramdump_flag;
 static int recovery_9k_ramdump;

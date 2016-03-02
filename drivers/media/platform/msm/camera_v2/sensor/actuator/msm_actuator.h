@@ -36,8 +36,10 @@ struct msm_actuator_func_tbl {
 			struct msm_actuator_move_params_t *);
 	int32_t (*actuator_move_focus) (struct msm_actuator_ctrl_t *,
 			struct msm_actuator_move_params_t *);
+//HTC_START
 	int32_t (*actuator_iaf_move_focus) (struct msm_actuator_ctrl_t *,
 			struct msm_actuator_move_params_t *);
+//HTC_END
 	void (*actuator_parse_i2c_params)(struct msm_actuator_ctrl_t *,
 			int16_t, uint32_t, uint16_t);
 	void (*actuator_write_focus)(struct msm_actuator_ctrl_t *,
@@ -47,10 +49,13 @@ struct msm_actuator_func_tbl {
 			int16_t);
 	int32_t (*actuator_set_position)(struct msm_actuator_ctrl_t *,
 		struct msm_actuator_set_position_t *);
+/*HTC_START Harvey 20130628 - Porting OIS*/
 	int32_t (*actuator_set_ois_mode) (struct msm_actuator_ctrl_t *, int);
 	int32_t (*actuator_update_ois_tbl) (struct msm_actuator_ctrl_t *, struct sensor_actuator_info_t *);
+/*HTC_END*/
 };
 
+/*HTC_START Harvey 20130704 - Separate code by different actuator module and dynamic launch*/
 struct msm_actuator_ext {
 	int is_ois_supported;
 	int32_t ois_slave_id;
@@ -60,18 +65,21 @@ struct msm_actuator_ext {
 	int is_af_infinity_supported;
 	struct msm_actuator **actuators;
 };
+/*HTC_END*/
 
 struct msm_actuator {
 	enum actuator_type act_type;
 	struct msm_actuator_func_tbl func_tbl;
 };
 
+/*HTC_START Harvey 20130628 - Porting OIS*/
 enum actuator_ois_state {
 	ACTUATOR_OIS_IDLE,
 	ACTUATOR_OIS_I2C_ADD_DRIVER,
 	ACTUATOR_OIS_OPEN_INIT,
 	ACTUATOR_OIS_POWER_DOWN,
  };
+/*HTC_END*/
 
 struct msm_actuator_ctrl_t {
 	struct i2c_driver *i2c_driver;
@@ -104,7 +112,10 @@ struct msm_actuator_ctrl_t {
 	uint16_t i2c_tbl_index;
 	enum cci_i2c_master_t cci_master;
 	uint32_t subdev_id;
+/*HTC_START Harvey 20130701 - Set otp af value*/
 	struct msm_actuator_af_OTP_info_t af_OTP_info;
+/*HTC_END*/
+/*HTC_START Harvey 20130628 - Porting OIS*/
 	struct msm_camera_i2c_seq_reg_setting i2c_seq_reg_setting;
 	int32_t ois_slave_id;
 	int is_ois_supported;
@@ -115,15 +126,19 @@ struct msm_actuator_ctrl_t {
 	void (*oisbinder_power_down) (void);
 	int32_t (*oisbinder_act_set_ois_mode) (int);
 	int32_t (*oisbinder_mappingTbl_i2c_write) (int, struct sensor_actuator_info_t *);
+/*HTC_END*/
+//HTC_START
 	int small_step_damping;
 	int medium_step_damping;
 	int big_step_damping;
 	int is_af_infinity_supported;
-	
+//HTC_END
+	/*HTC_START, support multiple I2C parser type for actuator modulation*/
 	enum actuator_I2C_func_select act_i2c_select;
-	
+	/*HTC_END*/
 };
 
+/*HTC_START Harvey 20130704 - Separate code by different actuator module and dynamic launch*/
 int32_t msm_actuator_set_default_focus(struct msm_actuator_ctrl_t *a_ctrl,
 	struct msm_actuator_move_params_t *move_params);
 int32_t msm_actuator_init_focus(struct msm_actuator_ctrl_t *a_ctrl,
@@ -135,5 +150,6 @@ int32_t msm_actuator_piezo_move_focus(struct msm_actuator_ctrl_t *a_ctrl,
 	struct msm_actuator_move_params_t *move_params);
 int32_t msm_actuator_set_ois_mode(struct msm_actuator_ctrl_t *a_ctrl, int ois_mode);
 int32_t msm_actuator_update_ois_tbl(struct msm_actuator_ctrl_t *a_ctrl, struct sensor_actuator_info_t * sensor_actuator_info);
+/*HTC_END*/
 
 #endif

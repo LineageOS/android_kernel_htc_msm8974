@@ -153,6 +153,10 @@ static void (*msm_pm_enable_l2_fn)(void);
 static void (*msm_pm_flush_l2_fn)(void);
 static void __iomem *msm_pc_debug_counters;
 
+/*
+ * Default the l2 flush flag to OFF so the caches are flushed during power
+ * collapse unless the explicitly voted by lpm driver.
+ */
 static enum msm_pm_l2_scm_flag msm_pm_flush_l2_flag __refdata = MSM_SCM_L2_OFF;
 
 void msm_pm_set_l2_flush_flag(enum msm_pm_l2_scm_flag flag)
@@ -203,6 +207,9 @@ static int msm_pm_get_pc_mode(struct device_node *node,
 	return ret;
 }
 
+/*
+ * Write out the attribute.
+ */
 static ssize_t msm_pm_mode_attr_show(
 	struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
@@ -511,7 +518,7 @@ static bool msm_pm_pc_hotplug(void)
 	scm_call_atomic1(SCM_SVC_BOOT, SCM_CMD_TERMINATE_PC,
 			SCM_CMD_CORE_HOTPLUGGED);
 
-	
+	/* Should not return here */
 	msm_pc_inc_debug_count(cpu, MSM_PC_FALLTHRU_COUNTER);
 	return 0;
 }
@@ -529,6 +536,14 @@ static int msm_pm_collapse(unsigned long unused)
 	pr_debug("cpu:%d cores_in_pc:%d L2 flag: %d\n",
 			cpu, cpu_count, flag);
 
+	/*
+	 * The scm_handoff_lock will be release by the secure monitor.
+	 * It is used to serialize power-collapses from this point on,
+	 * so that both Linux and the secure context have a consistent
+	 * view regarding the number of running cpus (cpu_count).
+	 *
+	 * It must be acquired before releasing cpu_cnt_lock.
+	 */
 	if (need_scm_handoff_lock)
 		remote_spin_lock_rlock_id(&scm_handoff_lock,
 					  REMOTE_SPINLOCK_TID_START + cpu);
@@ -749,7 +764,7 @@ static enum msm_pm_time_stats_id msm_pm_power_collapse_standalone(
 
 	avsdscr = avs_get_avsdscr();
 	avscsr = avs_get_avscsr();
-	avs_set_avscsr(0); 
+	avs_set_avscsr(0); /* Disable AVS */
 
 	collapsed = msm_pm_spm_power_collapse(cpu, from_idle, false);
 
@@ -823,7 +838,13 @@ static enum msm_pm_time_stats_id msm_pm_power_collapse(bool from_idle)
 	unsigned int avscsr;
 	bool collapsed;
 
-	
+	/* Unvote DIG voltage before entering suspend mode */
+	/* msm_pm_power_collapse is shared by cpu hotplug, idle pc, and suspend.
+	 * Only suspend should unvote dig voltage.
+	 * cpu hotplug: cpu > 0 and from_idle is false.
+	 * idle pc: from_idle is true.
+	 * suspend: cpu == 0 and from_idle is false.
+	 */
 	if ((from_idle && (MSM_PM_DEBUG_IDLE_CLK & msm_pm_debug_mask)) ||
 			(!from_idle && (smp_processor_id() == 0))) {
 		clock_debug_print_enabled();
@@ -852,13 +873,17 @@ static enum msm_pm_time_stats_id msm_pm_power_collapse(bool from_idle)
 	if (MSM_PM_DEBUG_POWER_COLLAPSE & msm_pm_debug_mask)
 		pr_info("CPU%u: %s: pre power down\n", cpu, __func__);
 
+	/* This spews a lot of messages when a core is hotplugged. This
+	 * information is most useful from last core going down during
+	 * power collapse
+	 */
 	if ((!from_idle && cpu_online(cpu))
 			|| (MSM_PM_DEBUG_IDLE_CLK & msm_pm_debug_mask))
 		clock_debug_print_enabled();
 
 	avsdscr = avs_get_avsdscr();
 	avscsr = avs_get_avscsr();
-	avs_set_avscsr(0); 
+	avs_set_avscsr(0); /* Disable AVS */
 
 	if (cpu_online(cpu) && !msm_no_ramp_down_pc)
 		saved_acpuclk_rate = ramp_down_last_cpu(cpu);
@@ -899,7 +924,7 @@ static enum msm_pm_time_stats_id msm_pm_power_collapse(bool from_idle)
 	if (MSM_PM_DEBUG_POWER_COLLAPSE & msm_pm_debug_mask)
 		pr_info("CPU%u: %s: return\n", cpu, __func__);
 
-	
+	/* Vote DIG voltage after leaving suspend mode */
 	if (!cpu && !from_idle)
 		keep_dig_voltage_low_in_idle(true);
 
@@ -911,6 +936,9 @@ static enum msm_pm_time_stats_id msm_pm_power_collapse(bool from_idle)
 			MSM_PM_STAT_IDLE_FAILED_POWER_COLLAPSE;
 }
 
+/******************************************************************************
+ * External Idle/Suspend Functions
+ *****************************************************************************/
 
 void arch_idle(void)
 {
@@ -1021,11 +1049,11 @@ int msm_cpu_pm_enter_sleep(enum msm_pm_sleep_mode mode, bool from_idle)
 	return collapsed;
 }
 
-#define MAX_CPU_SHUTDOWN_TIMEOUT	(10000)	
+#define MAX_CPU_SHUTDOWN_TIMEOUT	(10000)	/* 1s */
 
 static int cpu_shutdown_retry_max[NR_CPUS];
 
-#define MAX_CPU_SHUTDOWN_TIMEOUT	(10000)	
+#define MAX_CPU_SHUTDOWN_TIMEOUT	(10000)	/* 1s */
 
 static int cpu_shutdown_retry_max[NR_CPUS];
 
@@ -1039,6 +1067,11 @@ int msm_pm_wait_cpu_shutdown(unsigned int cpu)
 		return 0;
 
 	for (timeout = 0; timeout < MAX_CPU_SHUTDOWN_TIMEOUT; timeout++) {
+		/*
+		 * Check for the SPM of the core being hotplugged to set
+		 * its sleep state.The SPM sleep state indicates that the
+		 * core has been power collapsed.
+		 */
 		int acc_sts = __raw_readl(msm_pm_slp_sts[cpu].base_addr);
 
 		if (acc_sts & msm_pm_slp_sts[cpu].mask) {
@@ -1084,7 +1117,16 @@ void msm_pm_cpu_enter_lowpower(unsigned int cpu)
 
 static void msm_pm_ack_retention_disable(void *data)
 {
+	/*
+	 * This is a NULL function to ensure that the core has woken up
+	 * and is safe to disable retention.
+	 */
 }
+/**
+ * msm_pm_enable_retention() - Disable/Enable retention on all cores
+ * @enable: Enable/Disable retention
+ *
+ */
 void msm_pm_enable_retention(bool enable)
 {
 	if (enable == msm_pm_ldo_retention_enabled)
@@ -1092,6 +1134,12 @@ void msm_pm_enable_retention(bool enable)
 
 	msm_pm_ldo_retention_enabled = enable;
 
+	/*
+	 * If retention is being disabled, wakeup all online core to ensure
+	 * that it isn't executing retention. Offlined cores need not be woken
+	 * up as they enter the deepest sleep mode, namely RPM assited power
+	 * collapse
+	 */
 	if (!enable) {
 		preempt_disable();
 		smp_call_function_many(&retention_cpus,

@@ -80,14 +80,14 @@ struct htc_headset_pmic_platform_data {
 	unsigned int hs_controller;
 	unsigned int hs_switch;
 
-	/* ADC read method*/
+	
 #ifndef HTC_HEADSET_CONFIG_QPNP_ADC
-	unsigned int adc_mpp;		/* 8064 platform */
-	unsigned int adc_amux;		/* 8064 platform */
+	unsigned int adc_mpp;		
+	unsigned int adc_amux;		
 #else
-	unsigned int adc_channel;	/* 8974 platform */
+	unsigned int adc_channel;	
 #endif
-	/* ADC tables */
+	
 	uint32_t adc_mic;
 	uint32_t adc_mic_bias[2];
 	uint32_t adc_remote[6];
@@ -105,6 +105,9 @@ struct htc_35mm_pmic_info {
 	struct device* pmic_dev;
 #ifdef HTC_HEADSET_CONFIG_QPNP_ADC
 	struct device *dev;
+#endif
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+	int hpin_gpio_fisrt;
 #endif
 };
 

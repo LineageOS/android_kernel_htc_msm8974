@@ -46,10 +46,39 @@
 
 #include <linux/linux_logo.h>
 
+/*
+ * Eventually bump that one up
+ */
 #define DEVTREE_CHUNK_SIZE	0x100000
 
+/*
+ * This is the size of the local memory reserve map that gets copied
+ * into the boot params passed to the kernel. That size is totally
+ * flexible as the kernel just reads the list until it encounters an
+ * entry with size 0, so it can be changed without breaking binary
+ * compatibility
+ */
 #define MEM_RESERVE_MAP_SIZE	8
 
+/*
+ * prom_init() is called very early on, before the kernel text
+ * and data have been mapped to KERNELBASE.  At this point the code
+ * is running at whatever address it has been loaded at.
+ * On ppc32 we compile with -mrelocatable, which means that references
+ * to extern and static variables get relocated automatically.
+ * On ppc64 we have to relocate the references explicitly with
+ * RELOC.  (Note that strings count as static variables.)
+ *
+ * Because OF may have mapped I/O devices into the area starting at
+ * KERNELBASE, particularly on CHRP machines, we can't safely call
+ * OF once the kernel has been mapped to KERNELBASE.  Therefore all
+ * OF calls must be done within prom_init().
+ *
+ * ADDR is used in calls to call_prom.  The 4th and following
+ * arguments to call_prom should be 32-bit values.
+ * On ppc64, 64 bit values are truncated to 32 bits (and
+ * fortunately don't get interpreted as two arguments).
+ */
 #ifdef CONFIG_PPC64
 #define RELOC(x)        (*PTRRELOC(&(x)))
 #define ADDR(x)		(u32) add_reloc_offset((unsigned long)(x))
@@ -61,8 +90,8 @@
 int of_workarounds;
 #endif
 
-#define OF_WA_CLAIM	1	
-#define OF_WA_LONGTRAIL	2	
+#define OF_WA_CLAIM	1	/* do phys/virt claim separately, then map */
+#define OF_WA_LONGTRAIL	2	/* work around longtrail bugs */
 
 #define PROM_BUG() do {						\
         prom_printf("kernel BUG at %s line 0x%x!\n",		\
@@ -118,6 +147,7 @@ static inline int enter_prom(struct prom_args *args, unsigned long entry)
 extern void copy_and_flush(unsigned long dest, unsigned long src,
 			   unsigned long size, unsigned long offset);
 
+/* prom structure */
 static struct prom_t __initdata prom;
 
 static unsigned long prom_entry __initdata;
@@ -140,6 +170,10 @@ static unsigned long __initdata prom_tce_alloc_start;
 static unsigned long __initdata prom_tce_alloc_end;
 #endif
 
+/* Platforms codes are now obsolete in the kernel. Now only used within this
+ * file and ultimately gone too. Feel free to change them if you need, they
+ * are not shared with anything outside of this file anymore
+ */
 #define PLATFORM_PSERIES	0x0100
 #define PLATFORM_PSERIES_LPAR	0x0101
 #define PLATFORM_LPAR		0x0001
@@ -165,12 +199,21 @@ static int __initdata mem_reserve_cnt;
 static cell_t __initdata regbuf[1024];
 
 
+/*
+ * Error results ... some OF calls will return "-1" on error, some
+ * will return 0, some will return either. To simplify, here are
+ * macros to use with any ihandle or phandle return value to check if
+ * it is valid
+ */
 
 #define PROM_ERROR		(-1u)
 #define PHANDLE_VALID(p)	((p) != 0 && (p) != PROM_ERROR)
 #define IHANDLE_VALID(i)	((i) != 0 && (i) != PROM_ERROR)
 
 
+/* This is the one and *ONLY* place where we actually call open
+ * firmware.
+ */
 
 static int __init call_prom(const char *service, int nargs, int nret, ...)
 {
@@ -263,6 +306,7 @@ static void __init prom_print_hex(unsigned long val)
 	call_prom("write", 3, 1, _prom->stdout, buf, nibbles);
 }
 
+/* max number of decimal digits in an unsigned long */
 #define UL_DIGITS 21
 static void __init prom_print_dec(unsigned long val)
 {
@@ -276,7 +320,7 @@ static void __init prom_print_dec(unsigned long val)
 		if (val == 0)
 			break;
 	}
-	
+	/* shift stuff down */
 	size = UL_DIGITS - i;
 	call_prom("write", 3, 1, _prom->stdout, buf+i, size);
 }
@@ -337,11 +381,11 @@ static void __init prom_printf(const char *format, ...)
 				++q;
 				v = va_arg(args, unsigned long);
 				prom_print_hex(v);
-			} else if (*q == 'u') { 
+			} else if (*q == 'u') { /* '%lu' */
 				++q;
 				v = va_arg(args, unsigned long);
 				prom_print_dec(v);
-			} else if (*q == 'd') { 
+			} else if (*q == 'd') { /* %ld */
 				++q;
 				vs = va_arg(args, long);
 				if (vs < 0) {
@@ -362,6 +406,10 @@ static unsigned int __init prom_claim(unsigned long virt, unsigned long size,
 	struct prom_t *_prom = &RELOC(prom);
 
 	if (align == 0 && (OF_WORKAROUNDS & OF_WA_CLAIM)) {
+		/*
+		 * Old OF requires we claim physical and virtual separately
+		 * and then map explicitly (assuming virtual mode)
+		 */
 		int ret;
 		prom_arg_t result;
 
@@ -378,7 +426,7 @@ static unsigned int __init prom_claim(unsigned long virt, unsigned long size,
 				  _prom->memory, size, virt);
 			return -1;
 		}
-		
+		/* the 0x12 is M (coherence) + PP == read/write */
 		call_prom("call-method", 6, 1,
 			  ADDR("map"), _prom->mmumap, 0x12, size, virt, virt);
 		return virt;
@@ -393,13 +441,15 @@ static void __init __attribute__((noreturn)) prom_panic(const char *reason)
 	reason = PTRRELOC(reason);
 #endif
 	prom_print(reason);
+	/* Do not call exit because it clears the screen on pmac
+	 * it also causes some sort of double-fault on early pmacs */
 	if (RELOC(of_platform) == PLATFORM_POWERMAC)
 		asm("trap\n");
 
-	
+	/* ToDo: should put up an SRC here on pSeries */
 	call_prom("exit", 0, 0);
 
-	for (;;)			
+	for (;;)			/* should never get here */
 		;
 }
 
@@ -468,7 +518,7 @@ static int __init prom_setprop(phandle node, const char *nodename,
 		return call_prom("setprop", 4, 1, node, ADDR(pname),
 				 (u32)(unsigned long) value, (u32) valuelen);
 
-	
+	/* gah... setprop doesn't work on longtrail, have to use interpret */
 	p = cmd;
 	add_string(&p, "dev");
 	add_string(&p, nodename);
@@ -481,6 +531,7 @@ static int __init prom_setprop(phandle node, const char *nodename,
 	return call_prom("interpret", 1, 1, (u32)(unsigned long) cmd);
 }
 
+/* We can't use the standard versions because of RELOC headaches. */
 #define isxdigit(c)	(('0' <= (c) && (c) <= '9') \
 			 || ('a' <= (c) && (c) <= 'f') \
 			 || ('A' <= (c) && (c) <= 'F'))
@@ -519,6 +570,11 @@ unsigned long prom_memparse(const char *ptr, const char **retptr)
 	unsigned long ret = prom_strtoul(ptr, retptr);
 	int shift = 0;
 
+	/*
+	 * We can't use a switch here because GCC *may* generate a
+	 * jump table which won't work, because we're not running at
+	 * the address we're linked at.
+	 */
 	if ('G' == **retptr || 'g' == **retptr)
 		shift = 30;
 
@@ -536,6 +592,10 @@ unsigned long prom_memparse(const char *ptr, const char **retptr)
 	return ret;
 }
 
+/*
+ * Early parsing of the command line passed to the kernel, used for
+ * "mem=x" and the options that affect the iommu
+ */
 static void __init early_cmdline_parse(void)
 {
 	struct prom_t *_prom = &RELOC(prom);
@@ -549,10 +609,10 @@ static void __init early_cmdline_parse(void)
 	if ((long)_prom->chosen > 0)
 		l = prom_getprop(_prom->chosen, "bootargs", p, COMMAND_LINE_SIZE-1);
 #ifdef CONFIG_CMDLINE
-	if (l <= 0 || p[0] == '\0') 
+	if (l <= 0 || p[0] == '\0') /* dbl check */
 		strlcpy(RELOC(prom_cmd_line),
 			RELOC(CONFIG_CMDLINE), sizeof(prom_cmd_line));
-#endif 
+#endif /* CONFIG_CMDLINE */
 	prom_printf("command line: %s\n", RELOC(prom_cmd_line));
 
 #ifdef CONFIG_PPC64
@@ -573,96 +633,123 @@ static void __init early_cmdline_parse(void)
 		opt += 4;
 		RELOC(prom_memory_limit) = prom_memparse(opt, (const char **)&opt);
 #ifdef CONFIG_PPC64
-		
+		/* Align to 16 MB == size of ppc64 large page */
 		RELOC(prom_memory_limit) = ALIGN(RELOC(prom_memory_limit), 0x1000000);
 #endif
 	}
 }
 
 #if defined(CONFIG_PPC_PSERIES) || defined(CONFIG_PPC_POWERNV)
+/*
+ * There are two methods for telling firmware what our capabilities are.
+ * Newer machines have an "ibm,client-architecture-support" method on the
+ * root node.  For older machines, we have to call the "process-elf-header"
+ * method in the /packages/elf-loader node, passing it a fake 32-bit
+ * ELF header containing a couple of PT_NOTE sections that contain
+ * structures that contain various information.
+ */
 
+/*
+ * New method - extensible architecture description vector.
+ *
+ * Because the description vector contains a mix of byte and word
+ * values, we declare it as an unsigned char array, and use this
+ * macro to put word values in.
+ */
 #define W(x)	((x) >> 24) & 0xff, ((x) >> 16) & 0xff, \
 		((x) >> 8) & 0xff, (x) & 0xff
 
-#define OV_IGNORE		0x80	
-#define OV_CESSATION_POLICY	0x40	
+/* Option vector bits - generic bits in byte 1 */
+#define OV_IGNORE		0x80	/* ignore this vector */
+#define OV_CESSATION_POLICY	0x40	/* halt if unsupported option present*/
 
-#define OV1_PPC_2_00		0x80	
-#define OV1_PPC_2_01		0x40	
-#define OV1_PPC_2_02		0x20	
-#define OV1_PPC_2_03		0x10	
-#define OV1_PPC_2_04		0x08	
-#define OV1_PPC_2_05		0x04	
-#define OV1_PPC_2_06		0x02	
+/* Option vector 1: processor architectures supported */
+#define OV1_PPC_2_00		0x80	/* set if we support PowerPC 2.00 */
+#define OV1_PPC_2_01		0x40	/* set if we support PowerPC 2.01 */
+#define OV1_PPC_2_02		0x20	/* set if we support PowerPC 2.02 */
+#define OV1_PPC_2_03		0x10	/* set if we support PowerPC 2.03 */
+#define OV1_PPC_2_04		0x08	/* set if we support PowerPC 2.04 */
+#define OV1_PPC_2_05		0x04	/* set if we support PowerPC 2.05 */
+#define OV1_PPC_2_06		0x02	/* set if we support PowerPC 2.06 */
 
-#define OV2_REAL_MODE		0x20	
+/* Option vector 2: Open Firmware options supported */
+#define OV2_REAL_MODE		0x20	/* set if we want OF in real mode */
 
-#define OV3_FP			0x80	
-#define OV3_VMX			0x40	
-#define OV3_DFP			0x20	
+/* Option vector 3: processor options supported */
+#define OV3_FP			0x80	/* floating point */
+#define OV3_VMX			0x40	/* VMX/Altivec */
+#define OV3_DFP			0x20	/* decimal FP */
 
-#define OV5_LPAR		0x80	
-#define OV5_SPLPAR		0x40	
+/* Option vector 5: PAPR/OF options supported */
+#define OV5_LPAR		0x80	/* logical partitioning supported */
+#define OV5_SPLPAR		0x40	/* shared-processor LPAR supported */
+/* ibm,dynamic-reconfiguration-memory property supported */
 #define OV5_DRCONF_MEMORY	0x20
-#define OV5_LARGE_PAGES		0x10	
-#define OV5_DONATE_DEDICATE_CPU 0x02	
+#define OV5_LARGE_PAGES		0x10	/* large pages supported */
+#define OV5_DONATE_DEDICATE_CPU 0x02	/* donate dedicated CPU support */
+/* PCIe/MSI support.  Without MSI full PCIe is not supported */
 #ifdef CONFIG_PCI_MSI
-#define OV5_MSI			0x01	
+#define OV5_MSI			0x01	/* PCIe/MSI support */
 #else
 #define OV5_MSI			0x00
-#endif 
+#endif /* CONFIG_PCI_MSI */
 #ifdef CONFIG_PPC_SMLPAR
-#define OV5_CMO			0x80	
-#define OV5_XCMO			0x40	
+#define OV5_CMO			0x80	/* Cooperative Memory Overcommitment */
+#define OV5_XCMO			0x40	/* Page Coalescing */
 #else
 #define OV5_CMO			0x00
 #define OV5_XCMO			0x00
 #endif
-#define OV5_TYPE1_AFFINITY	0x80	
+#define OV5_TYPE1_AFFINITY	0x80	/* Type 1 NUMA affinity */
 
-#define OV6_LINUX		0x02	
+/* Option Vector 6: IBM PAPR hints */
+#define OV6_LINUX		0x02	/* Linux is our OS */
 
+/*
+ * The architecture vector has an array of PVR mask/value pairs,
+ * followed by # option vectors - 1, followed by the option vectors.
+ */
 static unsigned char ibm_architecture_vec[] = {
-	W(0xfffe0000), W(0x003a0000),	
-	W(0xffff0000), W(0x003e0000),	
-	W(0xffff0000), W(0x003f0000),	
-	W(0xffffffff), W(0x0f000003),	
-	W(0xffffffff), W(0x0f000002),	
-	W(0xfffffffe), W(0x0f000001),	
-	6 - 1,				
+	W(0xfffe0000), W(0x003a0000),	/* POWER5/POWER5+ */
+	W(0xffff0000), W(0x003e0000),	/* POWER6 */
+	W(0xffff0000), W(0x003f0000),	/* POWER7 */
+	W(0xffffffff), W(0x0f000003),	/* all 2.06-compliant */
+	W(0xffffffff), W(0x0f000002),	/* all 2.05-compliant */
+	W(0xfffffffe), W(0x0f000001),	/* all 2.04-compliant and earlier */
+	6 - 1,				/* 6 option vectors */
 
-	
-	3 - 2,				
-	0,				
+	/* option vector 1: processor architectures supported */
+	3 - 2,				/* length */
+	0,				/* don't ignore, don't halt */
 	OV1_PPC_2_00 | OV1_PPC_2_01 | OV1_PPC_2_02 | OV1_PPC_2_03 |
 	OV1_PPC_2_04 | OV1_PPC_2_05 | OV1_PPC_2_06,
 
-	
-	34 - 2,				
+	/* option vector 2: Open Firmware options supported */
+	34 - 2,				/* length */
 	OV2_REAL_MODE,
 	0, 0,
-	W(0xffffffff),			
-	W(0xffffffff),			
-	W(0xffffffff),			
-	W(0xffffffff),			
-	W(0xffffffff),			
-	W(256),				
-	W(0xffffffff),			
-	0,				
-	48,				
+	W(0xffffffff),			/* real_base */
+	W(0xffffffff),			/* real_size */
+	W(0xffffffff),			/* virt_base */
+	W(0xffffffff),			/* virt_size */
+	W(0xffffffff),			/* load_base */
+	W(256),				/* 256MB min RMA */
+	W(0xffffffff),			/* full client load */
+	0,				/* min RMA percentage of total RAM */
+	48,				/* max log_2(hash table size) */
 
-	
-	3 - 2,				
-	0,				
+	/* option vector 3: processor options supported */
+	3 - 2,				/* length */
+	0,				/* don't ignore, don't halt */
 	OV3_FP | OV3_VMX | OV3_DFP,
 
-	
-	2 - 2,				
-	0,				
+	/* option vector 4: IBM PAPR implementation */
+	2 - 2,				/* length */
+	0,				/* don't halt */
 
-	
-	13 - 2,				
-	0,				
+	/* option vector 5: PAPR/OF options */
+	13 - 2,				/* length */
+	0,				/* don't ignore, don't halt */
 	OV5_LPAR | OV5_SPLPAR | OV5_LARGE_PAGES | OV5_DRCONF_MEMORY |
 	OV5_DONATE_DEDICATE_CPU | OV5_MSI,
 	0,
@@ -671,17 +758,22 @@ static unsigned char ibm_architecture_vec[] = {
 	0,
 	0,
 	0,
+	/* WARNING: The offset of the "number of cores" field below
+	 * must match by the macro below. Update the definition if
+	 * the structure layout changes.
+	 */
 #define IBM_ARCH_VEC_NRCORES_OFFSET	100
-	W(NR_CPUS),			
+	W(NR_CPUS),			/* number of cores supported */
 
-	
-	4 - 2,				
+	/* option vector 6: IBM PAPR hints */
+	4 - 2,				/* length */
 	0,
 	0,
 	OV6_LINUX,
 
 };
 
+/* Old method - ELF header with PT_NOTE sections */
 static struct fake_elf {
 	Elf32_Ehdr	elfhdr;
 	Elf32_Phdr	phdr[2];
@@ -689,7 +781,7 @@ static struct fake_elf {
 		u32	namesz;
 		u32	descsz;
 		u32	type;
-		char	name[8];	
+		char	name[8];	/* "PowerPC" */
 		struct chrpdesc {
 			u32	real_mode;
 			u32	real_base;
@@ -703,7 +795,7 @@ static struct fake_elf {
 		u32	namesz;
 		u32	descsz;
 		u32	type;
-		char	name[24];	
+		char	name[24];	/* "IBM,RPA-Client-Config" */
 		struct rpadesc {
 			u32	lpar_affinity;
 			u32	min_rmo_size;
@@ -719,7 +811,7 @@ static struct fake_elf {
 	.elfhdr = {
 		.e_ident = { 0x7f, 'E', 'L', 'F',
 			     ELFCLASS32, ELFDATA2MSB, EV_CURRENT },
-		.e_type = ET_EXEC,	
+		.e_type = ET_EXEC,	/* yeah right */
 		.e_machine = EM_PPC,
 		.e_version = EV_CURRENT,
 		.e_phoff = offsetof(struct fake_elf, phdr),
@@ -743,7 +835,7 @@ static struct fake_elf {
 		.type = 0x1275,
 		.name = "PowerPC",
 		.chrpdesc = {
-			.real_mode = ~0U,	
+			.real_mode = ~0U,	/* ~0 means "don't care" */
 			.real_base = ~0U,
 			.real_size = ~0U,
 			.virt_base = ~0U,
@@ -758,9 +850,9 @@ static struct fake_elf {
 		.name = "IBM,RPA-Client-Config",
 		.rpadesc = {
 			.lpar_affinity = 0,
-			.min_rmo_size = 64,	
+			.min_rmo_size = 64,	/* in megabytes */
 			.min_rmo_percent = 0,
-			.max_pft_size = 48,	
+			.max_pft_size = 48,	/* 2^48 bytes max PFT size */
 			.splpar = 1,
 			.min_load = ~0U,
 			.new_mem_def = 0
@@ -774,20 +866,25 @@ static int __init prom_count_smt_threads(void)
 	char type[64];
 	unsigned int plen;
 
-	
+	/* Pick up th first CPU node we can find */
 	for (node = 0; prom_next_node(&node); ) {
 		type[0] = 0;
 		prom_getprop(node, "device_type", type, sizeof(type));
 
 		if (strcmp(type, RELOC("cpu")))
 			continue;
+		/*
+		 * There is an entry for each smt thread, each entry being
+		 * 4 bytes long.  All cpus should have the same number of
+		 * smt threads, so return after finding the first.
+		 */
 		plen = prom_getproplen(node, "ibm,ppc-interrupt-server#s");
 		if (plen == PROM_ERROR)
 			break;
 		plen >>= 2;
 		prom_debug("Found %lu smt threads per core\n", (unsigned long)plen);
 
-		
+		/* Sanity check */
 		if (plen < 1 || plen > 64) {
 			prom_printf("Threads per core %lu out of bounds, assuming 1\n",
 				    (unsigned long)plen);
@@ -810,6 +907,12 @@ static void __init prom_send_capabilities(void)
 
 	root = call_prom("open", 1, 1, ADDR("/"));
 	if (root != 0) {
+		/* We need to tell the FW about the number of cores we support.
+		 *
+		 * To do that, we count the number of threads on the first core
+		 * (we assume this is the same for all cores) and use it to
+		 * divide NR_CPUS.
+		 */
 		cores = (u32 *)PTRRELOC(&ibm_architecture_vec[IBM_ARCH_VEC_NRCORES_OFFSET]);
 		if (*cores != NR_CPUS) {
 			prom_printf("WARNING ! "
@@ -821,13 +924,13 @@ static void __init prom_send_capabilities(void)
 				    *cores, NR_CPUS);
 		}
 
-		
+		/* try calling the ibm,client-architecture-support method */
 		prom_printf("Calling ibm,client-architecture-support...");
 		if (call_prom_ret("call-method", 3, 2, &ret,
 				  ADDR("ibm,client-architecture-support"),
 				  root,
 				  ADDR(ibm_architecture_vec)) == 0) {
-			
+			/* the call exists... */
 			if (ret)
 				prom_printf("\nWARNING: ibm,client-architecture"
 					    "-support call FAILED!\n");
@@ -839,7 +942,7 @@ static void __init prom_send_capabilities(void)
 		prom_printf(" not implemented\n");
 	}
 
-	
+	/* no ibm,client-architecture-support call, try the old way */
 	elfloader = call_prom("open", 1, 1, ADDR("/packages/elf-loader"));
 	if (elfloader == 0) {
 		prom_printf("couldn't open /packages/elf-loader\n");
@@ -851,8 +954,39 @@ static void __init prom_send_capabilities(void)
 }
 #endif
 
+/*
+ * Memory allocation strategy... our layout is normally:
+ *
+ *  at 14Mb or more we have vmlinux, then a gap and initrd.  In some
+ *  rare cases, initrd might end up being before the kernel though.
+ *  We assume this won't override the final kernel at 0, we have no
+ *  provision to handle that in this version, but it should hopefully
+ *  never happen.
+ *
+ *  alloc_top is set to the top of RMO, eventually shrink down if the
+ *  TCEs overlap
+ *
+ *  alloc_bottom is set to the top of kernel/initrd
+ *
+ *  from there, allocations are done this way : rtas is allocated
+ *  topmost, and the device-tree is allocated from the bottom. We try
+ *  to grow the device-tree allocation as we progress. If we can't,
+ *  then we fail, we don't currently have a facility to restart
+ *  elsewhere, but that shouldn't be necessary.
+ *
+ *  Note that calls to reserve_mem have to be done explicitly, memory
+ *  allocated with either alloc_up or alloc_down isn't automatically
+ *  reserved.
+ */
 
 
+/*
+ * Allocates memory in the RMO upward from the kernel/initrd
+ *
+ * When align is 0, this is a special case, it means to allocate in place
+ * at the current location of alloc_bottom or fail (that is basically
+ * extending the previous allocation). Used for the device-tree flattening
+ */
 static unsigned long __init alloc_up(unsigned long size, unsigned long align)
 {
 	unsigned long base = RELOC(alloc_bottom);
@@ -893,6 +1027,11 @@ static unsigned long __init alloc_up(unsigned long size, unsigned long align)
 	return addr;
 }
 
+/*
+ * Allocates memory downward, either from top of RMO, or if highmem
+ * is set, from the top of RAM.  Note that this one doesn't handle
+ * failures.  It does claim memory if highmem is not set.
+ */
 static unsigned long __init alloc_down(unsigned long size, unsigned long align,
 				       int highmem)
 {
@@ -904,12 +1043,16 @@ static unsigned long __init alloc_down(unsigned long size, unsigned long align,
 		prom_panic("alloc_down() called with mem not initialized\n");
 
 	if (highmem) {
-		
+		/* Carve out storage for the TCE table. */
 		addr = _ALIGN_DOWN(RELOC(alloc_top_high) - size, align);
 		if (addr <= RELOC(alloc_bottom))
 			return 0;
+		/* Will we bump into the RMO ? If yes, check out that we
+		 * didn't overlap existing allocations there, if we did,
+		 * we are dead, we must be the first in town !
+		 */
 		if (addr < RELOC(rmo_top)) {
-			
+			/* Good, we are first */
 			if (RELOC(alloc_top) == RELOC(rmo_top))
 				RELOC(alloc_top) = RELOC(rmo_top) = addr;
 			else
@@ -943,12 +1086,15 @@ static unsigned long __init alloc_down(unsigned long size, unsigned long align,
 	return addr;
 }
 
+/*
+ * Parse a "reg" cell
+ */
 static unsigned long __init prom_next_cell(int s, cell_t **cellp)
 {
 	cell_t *p = *cellp;
 	unsigned long r = 0;
 
-	
+	/* Ignore more than 2 cells */
 	while (s > sizeof(unsigned long) / 4) {
 		p++;
 		s--;
@@ -964,6 +1110,14 @@ static unsigned long __init prom_next_cell(int s, cell_t **cellp)
 	return r;
 }
 
+/*
+ * Very dumb function for adding to the memory reserve list, but
+ * we don't need anything smarter at this point
+ *
+ * XXX Eventually check for collisions.  They should NEVER happen.
+ * If problems seem to show up, it would be a good start to track
+ * them down.
+ */
 static void __init reserve_mem(u64 base, u64 size)
 {
 	u64 top = base + size;
@@ -972,6 +1126,10 @@ static void __init reserve_mem(u64 base, u64 size)
 	if (size == 0)
 		return;
 
+	/* We need to always keep one empty entry so that we
+	 * have our terminator with "size" set to 0 since we are
+	 * dumb and just copy this entire array to the boot params
+	 */
 	base = _ALIGN_DOWN(base, PAGE_SIZE);
 	top = _ALIGN_UP(top, PAGE_SIZE);
 	size = top - base;
@@ -983,6 +1141,10 @@ static void __init reserve_mem(u64 base, u64 size)
 	RELOC(mem_reserve_cnt) = cnt + 1;
 }
 
+/*
+ * Initialize memory allocation mechanism, parse "memory" nodes and
+ * obtain that way the top of memory and RMO to setup out local allocator
+ */
 static void __init prom_init_mem(void)
 {
 	phandle node;
@@ -992,6 +1154,11 @@ static void __init prom_init_mem(void)
 	struct prom_t *_prom = &RELOC(prom);
 	u32 rac, rsc;
 
+	/*
+	 * We iterate the memory nodes to find
+	 * 1) top of RMO (first node)
+	 * 2) top of memory
+	 */
 	rac = 2;
 	prom_getprop(_prom->root, "#address-cells", &rac, sizeof(rac));
 	rsc = 1;
@@ -1007,6 +1174,10 @@ static void __init prom_init_mem(void)
 		prom_getprop(node, "device_type", type, sizeof(type));
 
 		if (type[0] == 0) {
+			/*
+			 * CHRP Longtrail machines have no device_type
+			 * on the memory node, so check the name instead...
+			 */
 			prom_getprop(node, "name", type, sizeof(type));
 		}
 		if (strcmp(type, RELOC("memory")))
@@ -1024,7 +1195,7 @@ static void __init prom_init_mem(void)
 		memset(path, 0, PROM_SCRATCH_SIZE);
 		call_prom("package-to-path", 3, 1, node, path, PROM_SCRATCH_SIZE-1);
 		prom_debug("  node %s :\n", path);
-#endif 
+#endif /* DEBUG_PROM */
 
 		while ((endp - p) >= (rac + rsc)) {
 			unsigned long base, size;
@@ -1044,6 +1215,11 @@ static void __init prom_init_mem(void)
 
 	RELOC(alloc_bottom) = PAGE_ALIGN((unsigned long)&RELOC(_end) + 0x4000);
 
+	/*
+	 * If prom_memory_limit is set we reduce the upper limits *except* for
+	 * alloc_top_high. This must be the real top of RAM so we can put
+	 * TCE's up there.
+	 */
 
 	RELOC(alloc_top_high) = RELOC(ram_top);
 
@@ -1062,12 +1238,24 @@ static void __init prom_init_mem(void)
 		}
 	}
 
+	/*
+	 * Setup our top alloc point, that is top of RMO or top of
+	 * segment 0 when running non-LPAR.
+	 * Some RS64 machines have buggy firmware where claims up at
+	 * 1GB fail.  Cap at 768MB as a workaround.
+	 * Since 768MB is plenty of room, and we need to cap to something
+	 * reasonable on 32-bit, cap at 768MB on all machines.
+	 */
 	if (!RELOC(rmo_top))
 		RELOC(rmo_top) = RELOC(ram_top);
 	RELOC(rmo_top) = min(0x30000000ul, RELOC(rmo_top));
 	RELOC(alloc_top) = RELOC(rmo_top);
 	RELOC(alloc_top_high) = RELOC(ram_top);
 
+	/*
+	 * Check if we have an initrd after the kernel but still inside
+	 * the RMO.  If we do move our bottom point to after it.
+	 */
 	if (RELOC(prom_initrd_start) &&
 	    RELOC(prom_initrd_start) < RELOC(rmo_top) &&
 	    RELOC(prom_initrd_end) > RELOC(alloc_bottom))
@@ -1104,10 +1292,11 @@ static u64 __initdata prom_opal_base;
 static u64 __initdata prom_opal_entry;
 #endif
 
+/* XXX Don't change this structure without updating opal-takeover.S */
 static struct opal_secondary_data {
-	s64				ack;	
-	u64				go;	
-	struct opal_takeover_args	args;	
+	s64				ack;	/*  0 */
+	u64				go;	/*  8 */
+	struct opal_takeover_args	args;	/* 16 */
 } opal_secondary_data;
 
 extern char opal_secondary_entry;
@@ -1116,6 +1305,10 @@ static void prom_query_opal(void)
 {
 	long rc;
 
+	/* We must not query for OPAL presence on a machine that
+	 * supports TNK takeover (970 blades), as this uses the same
+	 * h-call with different arguments and will crash
+	 */
 	if (PHANDLE_VALID(call_prom("finddevice", 1, 1,
 				    ADDR("/tnk-memory-map")))) {
 		prom_printf("TNK takeover detected, skipping OPAL check\n");
@@ -1183,14 +1376,14 @@ static void __init prom_opal_hold_cpus(void)
 	data->ack = -1;
 	data->go = 0;
 
-	
+	/* look for cpus */
 	for (node = 0; prom_next_node(&node); ) {
 		type[0] = 0;
 		prom_getprop(node, "device_type", type, sizeof(type));
 		if (strcmp(type, RELOC("cpu")) != 0)
 			continue;
 
-		
+		/* Skip non-configured cpus. */
 		if (prom_getprop(node, "status", type, sizeof(type)) > 0)
 			if (strcmp(type, RELOC("okay")) != 0)
 				continue;
@@ -1209,6 +1402,10 @@ static void __init prom_opal_hold_cpus(void)
 			}
 			prom_debug("starting ... ");
 
+			/* Init the acknowledge var which will be reset by
+			 * the secondary cpu when it awakens from its OF
+			 * spinloop.
+			 */
 			data->ack = -1;
 			rc = prom_rtas_call(RELOC(prom_rtas_start_cpu), 3, 1,
 					    NULL, cpu, entry, data);
@@ -1249,12 +1446,19 @@ static void prom_opal_takeover(void)
 		top_addr = _ALIGN_UP(args->rd_loc + args->rd_size, align);
 	}
 
+	/* Pickup an address for the HAL. We want to go really high
+	 * up to avoid problem with future kexecs. On the other hand
+	 * we don't want to be all over the TCEs on P5IOC2 machines
+	 * which are going to be up there too. We assume the machine
+	 * has plenty of memory, and we ask for the HAL for now to
+	 * be just below the 1G point, or above the initrd
+	 */
 	opal_addr = _ALIGN_DOWN(0x40000000 - RELOC(prom_opal_size), align);
 	if (opal_addr < top_addr)
 		opal_addr = top_addr;
 	args->hal_addr = opal_addr;
 
-	
+	/* Copy the command line to the kernel image */
 	strlcpy(RELOC(boot_command_line), RELOC(prom_cmd_line),
 		COMMAND_LINE_SIZE);
 
@@ -1274,6 +1478,9 @@ static void prom_opal_takeover(void)
 		opal_do_takeover(args);
 }
 
+/*
+ * Allocate room for and instantiate OPAL
+ */
 static void __init prom_instantiate_opal(void)
 {
 	phandle opal_node;
@@ -1340,8 +1547,11 @@ static void __init prom_instantiate_opal(void)
 	prom_debug("prom_instantiate_opal: end...\n");
 }
 
-#endif 
+#endif /* CONFIG_PPC_POWERNV */
 
+/*
+ * Allocate room for and instantiate RTAS
+ */
 static void __init prom_instantiate_rtas(void)
 {
 	phandle rtas_node;
@@ -1389,7 +1599,7 @@ static void __init prom_instantiate_rtas(void)
 		     &entry, sizeof(entry));
 
 #ifdef CONFIG_PPC_POWERNV
-	
+	/* PowerVN takeover hack */
 	RELOC(prom_rtas_data) = base;
 	RELOC(prom_rtas_entry) = entry;
 	prom_getprop(rtas_node, "start-cpu", &RELOC(prom_rtas_start_cpu), 4);
@@ -1402,6 +1612,9 @@ static void __init prom_instantiate_rtas(void)
 }
 
 #ifdef CONFIG_PPC64
+/*
+ * Allocate room for and initialize TCE tables
+ */
 static void __init prom_initialize_tce_table(void)
 {
 	phandle node;
@@ -1419,11 +1632,11 @@ static void __init prom_initialize_tce_table(void)
 
 	prom_debug("starting prom_initialize_tce_table\n");
 
-	
+	/* Cache current top of allocs so we reserve a single block */
 	local_alloc_top = RELOC(alloc_top_high);
 	local_alloc_bottom = local_alloc_top;
 
-	
+	/* Search all nodes looking for PHBs. */
 	for (node = 0; prom_next_node(&node); ) {
 		compatible[0] = 0;
 		type[0] = 0;
@@ -1436,7 +1649,7 @@ static void __init prom_initialize_tce_table(void)
 		if ((type[0] == 0) || (strstr(type, RELOC("pci")) == NULL))
 			continue;
 
-		
+		/* Keep the old logic intact to avoid regression. */
 		if (compatible[0] != 0) {
 			if ((strstr(compatible, RELOC("python")) == NULL) &&
 			    (strstr(compatible, RELOC("Speedwagon")) == NULL) &&
@@ -1456,12 +1669,23 @@ static void __init prom_initialize_tce_table(void)
 				 sizeof(minsize)) == PROM_ERROR)
 			minsize = 4UL << 20;
 
+		/*
+		 * Even though we read what OF wants, we just set the table
+		 * size to 4 MB.  This is enough to map 2GB of PCI DMA space.
+		 * By doing this, we avoid the pitfalls of trying to DMA to
+		 * MMIO space and the DMA alias hole.
+		 *
+		 * On POWER4, firmware sets the TCE region by assuming
+		 * each TCE table is 8MB. Using this memory for anything
+		 * else will impact performance, so we always allocate 8MB.
+		 * Anton
+		 */
 		if (__is_processor(PV_POWER4) || __is_processor(PV_POWER4p))
 			minsize = 8UL << 20;
 		else
 			minsize = 4UL << 20;
 
-		
+		/* Align to the greater of the align or size */
 		align = max(minalign, minsize);
 		base = alloc_down(minsize, align, 1);
 		if (base == 0)
@@ -1469,15 +1693,15 @@ static void __init prom_initialize_tce_table(void)
 		if (base < local_alloc_bottom)
 			local_alloc_bottom = base;
 
-		
+		/* It seems OF doesn't null-terminate the path :-( */
 		memset(path, 0, PROM_SCRATCH_SIZE);
-		
+		/* Call OF to setup the TCE hardware */
 		if (call_prom("package-to-path", 3, 1, node,
 			      path, PROM_SCRATCH_SIZE-1) == PROM_ERROR) {
 			prom_printf("package-to-path failed\n");
 		}
 
-		
+		/* Save away the TCE table attributes for later use. */
 		prom_setprop(node, path, "linux,tce-base", &base, sizeof(base));
 		prom_setprop(node, path, "linux,tce-size", &minsize, sizeof(minsize));
 
@@ -1486,6 +1710,9 @@ static void __init prom_initialize_tce_table(void)
 		prom_debug("\tbase = 0x%x\n", base);
 		prom_debug("\tsize = 0x%x\n", minsize);
 
+		/* Initialize the table to have a one-to-one mapping
+		 * over the allocated size.
+		 */
 		tce_entryp = (u64 *)base;
 		for (i = 0; i < (minsize >> 3) ;tce_entryp++, i++) {
 			tce_entry = (i << PAGE_SHIFT);
@@ -1508,14 +1735,38 @@ static void __init prom_initialize_tce_table(void)
 
 	reserve_mem(local_alloc_bottom, local_alloc_top - local_alloc_bottom);
 
+	/* These are only really needed if there is a memory limit in
+	 * effect, but we don't know so export them always. */
 	RELOC(prom_tce_alloc_start) = local_alloc_bottom;
 	RELOC(prom_tce_alloc_end) = local_alloc_top;
 
-	
+	/* Flag the first invalid entry */
 	prom_debug("ending prom_initialize_tce_table\n");
 }
 #endif
 
+/*
+ * With CHRP SMP we need to use the OF to start the other processors.
+ * We can't wait until smp_boot_cpus (the OF is trashed by then)
+ * so we have to put the processors into a holding pattern controlled
+ * by the kernel (not OF) before we destroy the OF.
+ *
+ * This uses a chunk of low memory, puts some holding pattern
+ * code there and sends the other processors off to there until
+ * smp_boot_cpus tells them to do something.  The holding pattern
+ * checks that address until its cpu # is there, when it is that
+ * cpu jumps to __secondary_start().  smp_boot_cpus() takes care
+ * of setting those values.
+ *
+ * We also use physical address 0x4 here to tell when a cpu
+ * is in its holding pattern code.
+ *
+ * -- Cort
+ */
+/*
+ * We want to reference the copy of __secondary_hold_* in the
+ * 0 - 0x100 address range
+ */
 #define LOW_ADDR(x)	(((unsigned long) &(x)) & 0xff)
 
 static void __init prom_hold_cpus(void)
@@ -1539,16 +1790,21 @@ static void __init prom_hold_cpus(void)
 	prom_debug("    1) *acknowledge   = 0x%x\n", *acknowledge);
 	prom_debug("    1) secondary_hold = 0x%x\n", secondary_hold);
 
+	/* Set the common spinloop variable, so all of the secondary cpus
+	 * will block when they are awakened from their OF spinloop.
+	 * This must occur for both SMP and non SMP kernels, since OF will
+	 * be trashed when we move the kernel.
+	 */
 	*spinloop = 0;
 
-	
+	/* look for cpus */
 	for (node = 0; prom_next_node(&node); ) {
 		type[0] = 0;
 		prom_getprop(node, "device_type", type, sizeof(type));
 		if (strcmp(type, RELOC("cpu")) != 0)
 			continue;
 
-		
+		/* Skip non-configured cpus. */
 		if (prom_getprop(node, "status", type, sizeof(type)) > 0)
 			if (strcmp(type, RELOC("okay")) != 0)
 				continue;
@@ -1558,10 +1814,14 @@ static void __init prom_hold_cpus(void)
 
 		prom_debug("cpu hw idx   = %lu\n", reg);
 
+		/* Init the acknowledge var which will be reset by
+		 * the secondary cpu when it awakens from its OF
+		 * spinloop.
+		 */
 		*acknowledge = (unsigned long)-1;
 
 		if (reg != _prom->cpu) {
-			
+			/* Primary Thread of non-boot cpu or any thread */
 			prom_printf("starting cpu hw idx %lu... ", reg);
 			call_prom("start-cpu", 3, 0, node,
 				  secondary_hold, reg);
@@ -1578,7 +1838,7 @@ static void __init prom_hold_cpus(void)
 #ifdef CONFIG_SMP
 		else
 			prom_printf("boot cpu hw idx %lu\n", reg);
-#endif 
+#endif /* CONFIG_SMP */
 	}
 
 	prom_debug("prom_hold_cpus: end...\n");
@@ -1589,23 +1849,28 @@ static void __init prom_init_client_services(unsigned long pp)
 {
 	struct prom_t *_prom = &RELOC(prom);
 
-	
+	/* Get a handle to the prom entry point before anything else */
 	RELOC(prom_entry) = pp;
 
-	
+	/* get a handle for the stdout device */
 	_prom->chosen = call_prom("finddevice", 1, 1, ADDR("/chosen"));
 	if (!PHANDLE_VALID(_prom->chosen))
-		prom_panic("cannot find chosen"); 
+		prom_panic("cannot find chosen"); /* msg won't be printed :( */
 
-	
+	/* get device tree root */
 	_prom->root = call_prom("finddevice", 1, 1, ADDR("/"));
 	if (!PHANDLE_VALID(_prom->root))
-		prom_panic("cannot find device tree root"); 
+		prom_panic("cannot find device tree root"); /* msg won't be printed :( */
 
 	_prom->mmumap = 0;
 }
 
 #ifdef CONFIG_PPC32
+/*
+ * For really old powermacs, we need to map things we claim.
+ * For that, we need the ihandle of the mmu.
+ * Also, on the longtrail, we need to work around other bugs.
+ */
 static void __init prom_find_mmu(void)
 {
 	struct prom_t *_prom = &RELOC(prom);
@@ -1618,7 +1883,7 @@ static void __init prom_find_mmu(void)
 	if (prom_getprop(oprom, "model", version, sizeof(version)) <= 0)
 		return;
 	version[sizeof(version) - 1] = 0;
-	
+	/* XXX might need to add other versions here */
 	if (strcmp(version, "Open Firmware, 1.0.5") == 0)
 		of_workarounds = OF_WA_CLAIM;
 	else if (strncmp(version, "FirmWorks,3.", 12) == 0) {
@@ -1630,7 +1895,7 @@ static void __init prom_find_mmu(void)
 	prom_getprop(_prom->chosen, "mmu", &_prom->mmumap,
 		     sizeof(_prom->mmumap));
 	if (!IHANDLE_VALID(_prom->memory) || !IHANDLE_VALID(_prom->mmumap))
-		of_workarounds &= ~OF_WA_CLAIM;		
+		of_workarounds &= ~OF_WA_CLAIM;		/* hmmm */
 }
 #else
 #define prom_find_mmu()
@@ -1648,7 +1913,7 @@ static void __init prom_init_stdout(void)
 
 	_prom->stdout = val;
 
-	
+	/* Get the full OF pathname of the stdout device */
 	memset(path, 0, 256);
 	call_prom("instance-to-path", 3, 1, _prom->stdout, path, 255);
 	val = call_prom("instance-to-package", 1, 1, _prom->stdout);
@@ -1658,7 +1923,7 @@ static void __init prom_init_stdout(void)
 	prom_setprop(_prom->chosen, "/chosen", "linux,stdout-path",
 		     path, strlen(path) + 1);
 
-	
+	/* If it's a display, note it */
 	memset(type, 0, sizeof(type));
 	prom_getprop(val, "device_type", type, sizeof(type));
 	if (strcmp(type, RELOC("display")) == 0)
@@ -1675,7 +1940,7 @@ static int __init prom_find_machine_type(void)
 	int x;
 #endif
 
-	
+	/* Look for a PowerMac or a Cell */
 	len = prom_getprop(_prom->root, "compatible",
 			   compat, sizeof(compat)-1);
 	if (len > 0) {
@@ -1689,18 +1954,28 @@ static int __init prom_find_machine_type(void)
 			    strstr(p, RELOC("MacRISC")))
 				return PLATFORM_POWERMAC;
 #ifdef CONFIG_PPC64
+			/* We must make sure we don't detect the IBM Cell
+			 * blades as pSeries due to some firmware issues,
+			 * so we do it here.
+			 */
 			if (strstr(p, RELOC("IBM,CBEA")) ||
 			    strstr(p, RELOC("IBM,CPBW-1.0")))
 				return PLATFORM_GENERIC;
-#endif 
+#endif /* CONFIG_PPC64 */
 			i += sl + 1;
 		}
 	}
 #ifdef CONFIG_PPC64
-	
+	/* Try to detect OPAL */
 	if (PHANDLE_VALID(call_prom("finddevice", 1, 1, ADDR("/ibm,opal"))))
 		return PLATFORM_OPAL;
 
+	/* Try to figure out if it's an IBM pSeries or any other
+	 * PAPR compliant platform. We assume it is if :
+	 *  - /device_type is "chrp" (please, do NOT use that for future
+	 *    non-IBM designs !
+	 *  - it has /rtas
+	 */
 	len = prom_getprop(_prom->root, "device_type",
 			   compat, sizeof(compat)-1);
 	if (len <= 0)
@@ -1708,7 +1983,7 @@ static int __init prom_find_machine_type(void)
 	if (strcmp(compat, RELOC("chrp")))
 		return PLATFORM_GENERIC;
 
-	
+	/* Default to pSeries. We need to know if we are running LPAR */
 	rtas = call_prom("finddevice", 1, 1, ADDR("/rtas"));
 	if (!PHANDLE_VALID(rtas))
 		return PLATFORM_GENERIC;
@@ -1728,6 +2003,14 @@ static int __init prom_set_color(ihandle ih, int i, int r, int g, int b)
 	return call_prom("call-method", 6, 1, ADDR("color!"), ih, i, b, g, r);
 }
 
+/*
+ * If we have a display that we don't know how to drive,
+ * we will want to try to execute OF's open method for it
+ * later.  However, OF will probably fall over if we do that
+ * we've taken over the MMU.
+ * So we check whether we will need to open the display,
+ * and if so, open it now.
+ */
 static void __init prom_check_displays(void)
 {
 	char type[16], *path;
@@ -1762,10 +2045,14 @@ static void __init prom_check_displays(void)
 		if (strcmp(type, RELOC("display")) != 0)
 			continue;
 
-		
+		/* It seems OF doesn't null-terminate the path :-( */
 		path = RELOC(prom_scratch);
 		memset(path, 0, PROM_SCRATCH_SIZE);
 
+		/*
+		 * leave some room at the end of the path for appending extra
+		 * arguments
+		 */
 		if (call_prom("package-to-path", 3, 1, node, path,
 			      PROM_SCRATCH_SIZE-10) == PROM_ERROR)
 			continue;
@@ -1777,10 +2064,12 @@ static void __init prom_check_displays(void)
 			continue;
 		}
 
-		
+		/* Success */
 		prom_printf("done\n");
 		prom_setprop(node, path, "linux,opened", NULL, 0);
 
+		/* Setup a usable color table when the appropriate
+		 * method is available. Should update this to set-colors */
 		clut = RELOC(default_colors);
 		for (i = 0; i < 16; i++, clut += 3)
 			if (prom_set_color(ih, i, clut[0], clut[1],
@@ -1793,11 +2082,12 @@ static void __init prom_check_displays(void)
 			if (prom_set_color(ih, i + 32, clut[0], clut[1],
 					   clut[2]) != 0)
 				break;
-#endif 
+#endif /* CONFIG_LOGO_LINUX_CLUT224 */
 	}
 }
 
 
+/* Return (relocated) pointer to this much memory: moves initrd if reqd. */
 static void __init *make_room(unsigned long *mem_start, unsigned long *mem_end,
 			      unsigned long needed, unsigned long align)
 {
@@ -1845,6 +2135,10 @@ static unsigned long __init dt_find_string(char *str)
 	return 0;
 }
 
+/*
+ * The Open Firmware 1275 specification states properties must be 31 bytes or
+ * less, however not all firmwares obey this. Make it 64 bytes to be safe.
+ */
 #define MAX_PROPERTY_NAME 64
 
 static void __init scan_dt_build_strings(phandle node,
@@ -1857,37 +2151,37 @@ static void __init scan_dt_build_strings(phandle node,
 
 	sstart =  (char *)RELOC(dt_string_start);
 
-	
+	/* get and store all property names */
 	prev_name = RELOC("");
 	for (;;) {
-		
+		/* 64 is max len of name including nul. */
 		namep = make_room(mem_start, mem_end, MAX_PROPERTY_NAME, 1);
 		if (call_prom("nextprop", 3, 1, node, prev_name, namep) != 1) {
-			
+			/* No more nodes: unwind alloc */
 			*mem_start = (unsigned long)namep;
 			break;
 		}
 
- 		
+ 		/* skip "name" */
  		if (strcmp(namep, RELOC("name")) == 0) {
  			*mem_start = (unsigned long)namep;
  			prev_name = RELOC("name");
  			continue;
  		}
-		
+		/* get/create string entry */
 		soff = dt_find_string(namep);
 		if (soff != 0) {
 			*mem_start = (unsigned long)namep;
 			namep = sstart + soff;
 		} else {
-			
+			/* Trim off some if we can */
 			*mem_start = (unsigned long)namep + strlen(namep) + 1;
 			RELOC(dt_string_end) = *mem_start;
 		}
 		prev_name = namep;
 	}
 
-	
+	/* do all our children */
 	child = call_prom("child", 1, 1, node);
 	while (child != 0) {
 		scan_dt_build_strings(child, mem_start, mem_end);
@@ -1907,14 +2201,14 @@ static void __init scan_dt_build_struct(phandle node, unsigned long *mem_start,
 
 	dt_push_token(OF_DT_BEGIN_NODE, mem_start, mem_end);
 
-	
+	/* get the node's full name */
 	namep = (char *)*mem_start;
 	room = *mem_end - *mem_start;
 	if (room > 255)
 		room = 255;
 	l = call_prom("package-to-path", 3, 1, node, namep, room);
 	if (l >= 0) {
-		
+		/* Didn't fit?  Get more room. */
 		if (l >= room) {
 			if (l >= *mem_end - *mem_start)
 				namep = make_room(mem_start, mem_end, l+1, 1);
@@ -1922,6 +2216,10 @@ static void __init scan_dt_build_struct(phandle node, unsigned long *mem_start,
 		}
 		namep[l] = '\0';
 
+		/* Fixup an Apple bug where they have bogus \0 chars in the
+		 * middle of the path in some properties, and extract
+		 * the unit name (everything after the last '/').
+		 */
 		for (lp = p = namep, ep = namep + l; p < ep; p++) {
 			if (*p == '/')
 				lp = namep;
@@ -1932,12 +2230,12 @@ static void __init scan_dt_build_struct(phandle node, unsigned long *mem_start,
 		*mem_start = _ALIGN((unsigned long)lp + 1, 4);
 	}
 
-	
+	/* get it again for debugging */
 	path = RELOC(prom_scratch);
 	memset(path, 0, PROM_SCRATCH_SIZE);
 	call_prom("package-to-path", 3, 1, node, path, PROM_SCRATCH_SIZE-1);
 
-	
+	/* get and store all properties */
 	prev_name = RELOC("");
 	sstart = (char *)RELOC(dt_string_start);
 	for (;;) {
@@ -1945,13 +2243,13 @@ static void __init scan_dt_build_struct(phandle node, unsigned long *mem_start,
 			      RELOC(pname)) != 1)
 			break;
 
- 		
+ 		/* skip "name" */
  		if (strcmp(RELOC(pname), RELOC("name")) == 0) {
  			prev_name = RELOC("name");
  			continue;
  		}
 
-		
+		/* find string offset */
 		soff = dt_find_string(RELOC(pname));
 		if (soff == 0) {
 			prom_printf("WARNING: Can't find string index for"
@@ -1960,19 +2258,19 @@ static void __init scan_dt_build_struct(phandle node, unsigned long *mem_start,
 		}
 		prev_name = sstart + soff;
 
-		
+		/* get length */
 		l = call_prom("getproplen", 2, 1, node, RELOC(pname));
 
-		
+		/* sanity checks */
 		if (l == PROM_ERROR)
 			continue;
 
-		
+		/* push property head */
 		dt_push_token(OF_DT_PROP, mem_start, mem_end);
 		dt_push_token(l, mem_start, mem_end);
 		dt_push_token(soff, mem_start, mem_end);
 
-		
+		/* push property content */
 		valp = make_room(mem_start, mem_end, l, 4);
 		call_prom("getprop", 4, 1, node, RELOC(pname), valp, l);
 		*mem_start = _ALIGN(*mem_start, 4);
@@ -1981,6 +2279,9 @@ static void __init scan_dt_build_struct(phandle node, unsigned long *mem_start,
 			has_phandle = 1;
 	}
 
+	/* Add a "linux,phandle" property if no "phandle" property already
+	 * existed (can happen with OPAL)
+	 */
 	if (!has_phandle) {
 		soff = dt_find_string(RELOC("linux,phandle"));
 		if (soff == 0)
@@ -1995,7 +2296,7 @@ static void __init scan_dt_build_struct(phandle node, unsigned long *mem_start,
 		}
 	}
 
-	
+	/* do all our children */
 	child = call_prom("child", 1, 1, node);
 	while (child != 0) {
 		scan_dt_build_struct(child, mem_start, mem_end);
@@ -2014,45 +2315,49 @@ static void __init flatten_device_tree(void)
 	char *namep;
 	u64 *rsvmap;
 
+	/*
+	 * Check how much room we have between alloc top & bottom (+/- a
+	 * few pages), crop to 1MB, as this is our "chunk" size
+	 */
 	room = RELOC(alloc_top) - RELOC(alloc_bottom) - 0x4000;
 	if (room > DEVTREE_CHUNK_SIZE)
 		room = DEVTREE_CHUNK_SIZE;
 	prom_debug("starting device tree allocs at %x\n", RELOC(alloc_bottom));
 
-	
+	/* Now try to claim that */
 	mem_start = (unsigned long)alloc_up(room, PAGE_SIZE);
 	if (mem_start == 0)
 		prom_panic("Can't allocate initial device-tree chunk\n");
 	mem_end = mem_start + room;
 
-	
+	/* Get root of tree */
 	root = call_prom("peer", 1, 1, (phandle)0);
 	if (root == (phandle)0)
 		prom_panic ("couldn't get device tree root\n");
 
-	 
+	/* Build header and make room for mem rsv map */ 
 	mem_start = _ALIGN(mem_start, 4);
 	hdr = make_room(&mem_start, &mem_end,
 			sizeof(struct boot_param_header), 4);
 	RELOC(dt_header_start) = (unsigned long)hdr;
 	rsvmap = make_room(&mem_start, &mem_end, sizeof(mem_reserve_map), 8);
 
-	
+	/* Start of strings */
 	mem_start = PAGE_ALIGN(mem_start);
 	RELOC(dt_string_start) = mem_start;
-	mem_start += 4; 
+	mem_start += 4; /* hole */
 
-	
+	/* Add "linux,phandle" in there, we'll need it */
 	namep = make_room(&mem_start, &mem_end, 16, 1);
 	strcpy(namep, RELOC("linux,phandle"));
 	mem_start = (unsigned long)namep + strlen(namep) + 1;
 
-	
+	/* Build string array */
 	prom_printf("Building dt strings...\n"); 
 	scan_dt_build_strings(root, &mem_start, &mem_end);
 	RELOC(dt_string_end) = mem_start;
 
-	
+	/* Build structure */
 	mem_start = PAGE_ALIGN(mem_start);
 	RELOC(dt_struct_start) = mem_start;
 	prom_printf("Building dt structure...\n"); 
@@ -2060,7 +2365,7 @@ static void __init flatten_device_tree(void)
 	dt_push_token(OF_DT_END, &mem_start, &mem_end);
 	RELOC(dt_struct_end) = PAGE_ALIGN(mem_start);
 
-	
+	/* Finish header */
 	hdr->boot_cpuid_phys = _prom->cpu;
 	hdr->magic = OF_DT_HEADER;
 	hdr->totalsize = RELOC(dt_struct_end) - RELOC(dt_header_start);
@@ -2069,10 +2374,10 @@ static void __init flatten_device_tree(void)
 	hdr->dt_strings_size = RELOC(dt_string_end) - RELOC(dt_string_start);
 	hdr->off_mem_rsvmap = ((unsigned long)rsvmap) - RELOC(dt_header_start);
 	hdr->version = OF_DT_VERSION;
-	
+	/* Version 16 is not backward compatible */
 	hdr->last_comp_version = 0x10;
 
-	
+	/* Copy the reserve map in */
 	memcpy(rsvmap, RELOC(mem_reserve_map), sizeof(mem_reserve_map));
 
 #ifdef DEBUG_PROM
@@ -2085,6 +2390,9 @@ static void __init flatten_device_tree(void)
 				    RELOC(mem_reserve_map)[i].size);
 	}
 #endif
+	/* Bump mem_reserve_cnt to cause further reservations to fail
+	 * since it's too late.
+	 */
 	RELOC(mem_reserve_cnt) = MEM_RESERVE_MAP_SIZE;
 
 	prom_printf("Device tree strings 0x%x -> 0x%x\n",
@@ -2095,10 +2403,12 @@ static void __init flatten_device_tree(void)
 }
 
 #ifdef CONFIG_PPC_MAPLE
+/* PIBS Version 1.05.0000 04/26/2005 has an incorrect /ht/isa/ranges property.
+ * The values are bad, and it doesn't even have the right number of cells. */
 static void __init fixup_device_tree_maple(void)
 {
 	phandle isa;
-	u32 rloc = 0x01002000; 
+	u32 rloc = 0x01002000; /* IO space; PCI device = 4 */
 	u32 isa_ranges[6];
 	char *name;
 
@@ -2107,7 +2417,7 @@ static void __init fixup_device_tree_maple(void)
 	if (!PHANDLE_VALID(isa)) {
 		name = "/ht@0/isa@6";
 		isa = call_prom("finddevice", 1, 1, ADDR(name));
-		rloc = 0x01003000; 
+		rloc = 0x01003000; /* IO space; PCI device = 6 */
 	}
 	if (!PHANDLE_VALID(isa))
 		return;
@@ -2137,6 +2447,7 @@ static void __init fixup_device_tree_maple(void)
 
 #define CPC925_MC_START		0xf8000000
 #define CPC925_MC_LENGTH	0x1000000
+/* The values for memory-controller don't have right number of cells */
 static void __init fixup_device_tree_maple_memory_controller(void)
 {
 	phandle mc;
@@ -2177,11 +2488,16 @@ static void __init fixup_device_tree_maple_memory_controller(void)
 #endif
 
 #ifdef CONFIG_PPC_CHRP
+/*
+ * Pegasos and BriQ lacks the "ranges" property in the isa node
+ * Pegasos needs decimal IRQ 14/15, not hexadecimal
+ * Pegasos has the IDE configured in legacy mode, but advertised as native
+ */
 static void __init fixup_device_tree_chrp(void)
 {
 	phandle ph;
 	u32 prop[6];
-	u32 rloc = 0x01006000; 
+	u32 rloc = 0x01006000; /* IO space; PCI device = 12 */
 	char *name;
 	int rc;
 
@@ -2190,7 +2506,7 @@ static void __init fixup_device_tree_chrp(void)
 	if (!PHANDLE_VALID(ph)) {
 		name = "/pci@ff500000/isa@6";
 		ph = call_prom("finddevice", 1, 1, ADDR(name));
-		rloc = 0x01003000; 
+		rloc = 0x01003000; /* IO space; PCI device = 6 */
 	}
 	if (PHANDLE_VALID(ph)) {
 		rc = prom_getproplen(ph, "ranges");
@@ -2234,7 +2550,7 @@ static void __init fixup_device_tree_pmac(void)
 	u32 interrupts[2];
 	u32 parent;
 
-	
+	/* Some G5s have a missing interrupt definition, fix it up here */
 	u3 = call_prom("finddevice", 1, 1, ADDR("/u3@0,f8000000"));
 	if (!PHANDLE_VALID(u3))
 		return;
@@ -2245,19 +2561,19 @@ static void __init fixup_device_tree_pmac(void)
 	if (!PHANDLE_VALID(mpic))
 		return;
 
-	
+	/* check if proper rev of u3 */
 	if (prom_getprop(u3, "device-rev", &u3_rev, sizeof(u3_rev))
 	    == PROM_ERROR)
 		return;
 	if (u3_rev < 0x35 || u3_rev > 0x39)
 		return;
-	
+	/* does it need fixup ? */
 	if (prom_getproplen(i2c, "interrupts") > 0)
 		return;
 
 	prom_printf("fixing up bogus interrupts for u3 i2c...\n");
 
-	
+	/* interrupt on this revision of u3 is number 0 and level */
 	interrupts[0] = 0;
 	interrupts[1] = 1;
 	prom_setprop(i2c, "/u3@0,f8000000/i2c@f8001000", "interrupts",
@@ -2271,24 +2587,34 @@ static void __init fixup_device_tree_pmac(void)
 #endif
 
 #ifdef CONFIG_PPC_EFIKA
+/*
+ * The MPC5200 FEC driver requires an phy-handle property to tell it how
+ * to talk to the phy.  If the phy-handle property is missing, then this
+ * function is called to add the appropriate nodes and link it to the
+ * ethernet node.
+ */
 static void __init fixup_device_tree_efika_add_phy(void)
 {
 	u32 node;
 	char prop[64];
 	int rv;
 
-	
+	/* Check if /builtin/ethernet exists - bail if it doesn't */
 	node = call_prom("finddevice", 1, 1, ADDR("/builtin/ethernet"));
 	if (!PHANDLE_VALID(node))
 		return;
 
-	
+	/* Check if the phy-handle property exists - bail if it does */
 	rv = prom_getprop(node, "phy-handle", prop, sizeof(prop));
 	if (!rv)
 		return;
 
+	/*
+	 * At this point the ethernet device doesn't have a phy described.
+	 * Now we need to add the missing phy node and linkage
+	 */
 
-	
+	/* Check for an MDIO bus node - if missing then create one */
 	node = call_prom("finddevice", 1, 1, ADDR("/builtin/mdio"));
 	if (!PHANDLE_VALID(node)) {
 		prom_printf("Adding Ethernet MDIO node\n");
@@ -2308,6 +2634,8 @@ static void __init fixup_device_tree_efika_add_phy(void)
 			" finish-device");
 	};
 
+	/* Check for a PHY device node - if missing then create one and
+	 * give it's phandle to the ethernet node */
 	node = call_prom("finddevice", 1, 1,
 			 ADDR("/builtin/mdio/ethernet-phy"));
 	if (!PHANDLE_VALID(node)) {
@@ -2338,7 +2666,7 @@ static void __init fixup_device_tree_efika(void)
 	char prop[64];
 	int rv, len;
 
-	
+	/* Check if we're really running on a EFIKA */
 	node = call_prom("finddevice", 1, 1, ADDR("/"));
 	if (!PHANDLE_VALID(node))
 		return;
@@ -2351,19 +2679,21 @@ static void __init fixup_device_tree_efika(void)
 
 	prom_printf("Applying EFIKA device tree fixups\n");
 
-	
+	/* Claiming to be 'chrp' is death */
 	node = call_prom("finddevice", 1, 1, ADDR("/"));
 	rv = prom_getprop(node, "device_type", prop, sizeof(prop));
 	if (rv != PROM_ERROR && (strcmp(prop, "chrp") == 0))
 		prom_setprop(node, "/", "device_type", "efika", sizeof("efika"));
 
+	/* CODEGEN,description is exposed in /proc/cpuinfo so
+	   fix that too */
 	rv = prom_getprop(node, "CODEGEN,description", prop, sizeof(prop));
 	if (rv != PROM_ERROR && (strstr(prop, "CHRP")))
 		prom_setprop(node, "/", "CODEGEN,description",
 			     "Efika 5200B PowerPC System",
 			     sizeof("Efika 5200B PowerPC System"));
 
-	
+	/* Fixup bestcomm interrupts property */
 	node = call_prom("finddevice", 1, 1, ADDR("/builtin/bestcomm"));
 	if (PHANDLE_VALID(node)) {
 		len = prom_getproplen(node, "interrupts");
@@ -2374,7 +2704,7 @@ static void __init fixup_device_tree_efika(void)
 		}
 	}
 
-	
+	/* Fixup sound interrupts property */
 	node = call_prom("finddevice", 1, 1, ADDR("/builtin/sound"));
 	if (PHANDLE_VALID(node)) {
 		rv = prom_getprop(node, "interrupts", prop, sizeof(prop));
@@ -2385,7 +2715,7 @@ static void __init fixup_device_tree_efika(void)
 		}
 	}
 
-	
+	/* Make sure ethernet phy-handle property exists */
 	fixup_device_tree_efika_add_phy();
 }
 #else
@@ -2444,10 +2774,14 @@ static void __init prom_check_initrd(unsigned long r3, unsigned long r4)
 		prom_debug("initrd_start=0x%x\n", RELOC(prom_initrd_start));
 		prom_debug("initrd_end=0x%x\n", RELOC(prom_initrd_end));
 	}
-#endif 
+#endif /* CONFIG_BLK_DEV_INITRD */
 }
 
 
+/*
+ * We enter here early on, when the Open Firmware prom is still
+ * handling exceptions and the MMU hash table for us.
+ */
 
 unsigned long __init prom_init(unsigned long r3, unsigned long r4,
 			       unsigned long pp,
@@ -2464,55 +2798,103 @@ unsigned long __init prom_init(unsigned long r3, unsigned long r4,
 
 	_prom = &RELOC(prom);
 
+	/*
+	 * First zero the BSS
+	 */
 	memset(&RELOC(__bss_start), 0, __bss_stop - __bss_start);
 
+	/*
+	 * Init interface to Open Firmware, get some node references,
+	 * like /chosen
+	 */
 	prom_init_client_services(pp);
 
+	/*
+	 * See if this OF is old enough that we need to do explicit maps
+	 * and other workarounds
+	 */
 	prom_find_mmu();
 
+	/*
+	 * Init prom stdout device
+	 */
 	prom_init_stdout();
 
 	prom_printf("Preparing to boot %s", RELOC(linux_banner));
 
+	/*
+	 * Get default machine type. At this point, we do not differentiate
+	 * between pSeries SMP and pSeries LPAR
+	 */
 	RELOC(of_platform) = prom_find_machine_type();
 	prom_printf("Detected machine type: %x\n", RELOC(of_platform));
 
 #ifndef CONFIG_NONSTATIC_KERNEL
-	
+	/* Bail if this is a kdump kernel. */
 	if (PHYSICAL_START > 0)
 		prom_panic("Error: You can't boot a kdump kernel from OF!\n");
 #endif
 
+	/*
+	 * Check for an initrd
+	 */
 	prom_check_initrd(r3, r4);
 
 #if defined(CONFIG_PPC_PSERIES) || defined(CONFIG_PPC_POWERNV)
+	/*
+	 * On pSeries, inform the firmware about our capabilities
+	 */
 	if (RELOC(of_platform) == PLATFORM_PSERIES ||
 	    RELOC(of_platform) == PLATFORM_PSERIES_LPAR)
 		prom_send_capabilities();
 #endif
 
+	/*
+	 * Copy the CPU hold code
+	 */
 	if (RELOC(of_platform) != PLATFORM_POWERMAC)
 		copy_and_flush(0, kbase, 0x100, 0);
 
+	/*
+	 * Do early parsing of command line
+	 */
 	early_cmdline_parse();
 
+	/*
+	 * Initialize memory management within prom_init
+	 */
 	prom_init_mem();
 
+	/*
+	 * Determine which cpu is actually running right _now_
+	 */
 	prom_find_boot_cpu();
 
+	/* 
+	 * Initialize display devices
+	 */
 	prom_check_displays();
 
 #ifdef CONFIG_PPC64
+	/*
+	 * Initialize IOMMU (TCE tables) on pSeries. Do that before anything else
+	 * that uses the allocator, we need to make sure we get the top of memory
+	 * available for us here...
+	 */
 	if (RELOC(of_platform) == PLATFORM_PSERIES)
 		prom_initialize_tce_table();
 #endif
 
+	/*
+	 * On non-powermacs, try to instantiate RTAS. PowerMacs don't
+	 * have a usable RTAS implementation.
+	 */
 	if (RELOC(of_platform) != PLATFORM_POWERMAC &&
 	    RELOC(of_platform) != PLATFORM_OPAL)
 		prom_instantiate_rtas();
 
 #ifdef CONFIG_PPC_POWERNV
-	
+	/* Detect HAL and try instanciating it & doing takeover */
 	if (RELOC(of_platform) == PLATFORM_PSERIES_LPAR) {
 		prom_query_opal();
 		if (RELOC(of_platform) == PLATFORM_OPAL) {
@@ -2523,10 +2905,18 @@ unsigned long __init prom_init(unsigned long r3, unsigned long r4,
 		prom_instantiate_opal();
 #endif
 
+	/*
+	 * On non-powermacs, put all CPUs in spin-loops.
+	 *
+	 * PowerMacs use a different mechanism to spin CPUs
+	 */
 	if (RELOC(of_platform) != PLATFORM_POWERMAC &&
 	    RELOC(of_platform) != PLATFORM_OPAL)
 		prom_hold_cpus();
 
+	/*
+	 * Fill in some infos for use by the kernel later on
+	 */
 	if (RELOC(prom_memory_limit))
 		prom_setprop(_prom->chosen, "/chosen", "linux,memory-limit",
 			     &RELOC(prom_memory_limit),
@@ -2550,21 +2940,42 @@ unsigned long __init prom_init(unsigned long r3, unsigned long r4,
 	}
 #endif
 
+	/*
+	 * Fixup any known bugs in the device-tree
+	 */
 	fixup_device_tree();
 
+	/*
+	 * Now finally create the flattened device-tree
+	 */
 	prom_printf("copying OF device tree...\n");
 	flatten_device_tree();
 
+	/*
+	 * in case stdin is USB and still active on IBM machines...
+	 * Unfortunately quiesce crashes on some powermacs if we have
+	 * closed stdin already (in particular the powerbook 101). It
+	 * appears that the OPAL version of OFW doesn't like it either.
+	 */
 	if (RELOC(of_platform) != PLATFORM_POWERMAC &&
 	    RELOC(of_platform) != PLATFORM_OPAL)
 		prom_close_stdin();
 
+	/*
+	 * Call OF "quiesce" method to shut down pending DMA's from
+	 * devices etc...
+	 */
 	prom_printf("Calling quiesce...\n");
 	call_prom("quiesce", 0, 0);
 
+	/*
+	 * And finally, call the kernel passing it the flattened device
+	 * tree and NULL as r5, thus triggering the new entry point which
+	 * is common to us and kexec
+	 */
 	hdr = RELOC(dt_header_start);
 
-	
+	/* Don't print anything after quiesce under OPAL, it crashes OFW */
 	if (RELOC(of_platform) != PLATFORM_OPAL) {
 		prom_printf("returning from prom_init\n");
 		prom_debug("->dt_header_start=0x%x\n", hdr);
@@ -2575,7 +2986,7 @@ unsigned long __init prom_init(unsigned long r3, unsigned long r4,
 #endif
 
 #ifdef CONFIG_PPC_EARLY_DEBUG_OPAL
-	
+	/* OPAL early debug gets the OPAL base & entry in r8 and r9 */
 	__start(hdr, kbase, 0, 0, 0,
 		RELOC(prom_opal_base), RELOC(prom_opal_entry));
 #else

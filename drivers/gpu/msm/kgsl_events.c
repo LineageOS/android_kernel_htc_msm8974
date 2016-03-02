@@ -13,314 +13,294 @@
 
 #include <linux/slab.h>
 #include <linux/list.h>
-#include <linux/module.h>
+#include <linux/workqueue.h>
 #include <kgsl_device.h>
 
 #include "kgsl_trace.h"
+#include "adreno.h"
 
-static inline struct list_head *_get_list_head(struct kgsl_device *device,
-		struct kgsl_context *context)
+/*
+ * Define an kmem cache for the event structures since we allocate and free them
+ * so frequently
+ */
+static struct kmem_cache *events_cache;
+
+static inline void signal_event(struct kgsl_device *device,
+		struct kgsl_event *event, int result)
 {
-	return (context) ? &context->events : &device->events;
+	list_del(&event->node);
+	event->result = result;
+	queue_work(device->events_wq, &event->work);
 }
 
-static void _add_event_to_list(struct list_head *head, struct kgsl_event *event)
+/**
+ * _kgsl_event_worker() - Work handler for processing GPU event callbacks
+ * @work: Pointer to the work_struct for the event
+ *
+ * Each event callback has its own work struct and is run on a event specific
+ * workqeuue.  This is the worker that queues up the event callback function.
+ */
+static void _kgsl_event_worker(struct work_struct *work)
 {
-	struct list_head *n;
+	struct kgsl_event *event = container_of(work, struct kgsl_event, work);
+	int id = KGSL_CONTEXT_ID(event->context);
 
-	for (n = head->next; n != head; n = n->next) {
-		struct kgsl_event *e =
-			list_entry(n, struct kgsl_event, list);
-
-		if (timestamp_cmp(e->timestamp, event->timestamp) > 0) {
-			list_add(&event->list, n->prev);
-			break;
-		}
-	}
-
-	if (n == head)
-		list_add_tail(&event->list, head);
-}
-
-static inline void _do_signal_event(struct kgsl_device *device,
-		struct kgsl_event *event, unsigned int timestamp,
-		unsigned int type)
-{
-	int id = event->context ? event->context->id : KGSL_MEMSTORE_GLOBAL;
-
-	trace_kgsl_fire_event(id, timestamp, type, jiffies - event->created,
+	trace_kgsl_fire_event(id, event->timestamp, event->result, jiffies - event->created,
 		event->func);
 
 	if (event->func)
-		event->func(device, event->priv, id, timestamp, type);
+		event->func(event->device, event->context, event->priv, event->result);
 
-	list_del(&event->list);
 	kgsl_context_put(event->context);
-	kfree(event);
+	kmem_cache_free(events_cache, event);
 }
 
-static void _retire_events(struct kgsl_device *device,
-		struct list_head *head, unsigned int timestamp)
+/**
+ * kgsl_process_event_group() - Handle all the retired events in a group
+ * @device: Pointer to a KGSL device
+ * @group: Pointer to a GPU events group to process
+ */
+void kgsl_process_event_group(struct kgsl_device *device,
+		struct kgsl_event_group *group)
+{
+	struct kgsl_event *event, *tmp;
+	unsigned int timestamp;
+	struct kgsl_context *context;
+
+	if (group == NULL)
+		return;
+
+	context = group->context;
+
+	_kgsl_context_get(context);
+
+	spin_lock(&group->lock);
+
+	timestamp = kgsl_readtimestamp(device, context, KGSL_TIMESTAMP_RETIRED);
+
+	/*
+	 * If no timestamps have been retired since the last time we were here
+	 * then we can avoid going through this loop
+	 */
+	if (timestamp_cmp(timestamp, group->processed) <= 0)
+		goto out;
+
+	list_for_each_entry_safe(event, tmp, &group->events, node) {
+		if (timestamp_cmp(event->timestamp, timestamp) <= 0)
+			signal_event(device, event, KGSL_EVENT_RETIRED);
+	}
+
+	group->processed = timestamp;
+
+out:
+	spin_unlock(&group->lock);
+	kgsl_context_put(context);
+}
+EXPORT_SYMBOL(kgsl_process_event_group);
+
+/**
+ * kgsl_cancel_events_timestamp() - Cancel pending events for a given timestamp
+ * @device: Pointer to a KGSL device
+ * @group: Ponter to the GPU event group that owns the event
+ * @timestamp: Registered expiry timestamp for the event
+ */
+void kgsl_cancel_events_timestamp(struct kgsl_device *device,
+		struct kgsl_event_group *group, unsigned int timestamp)
 {
 	struct kgsl_event *event, *tmp;
 
-	list_for_each_entry_safe(event, tmp, head, list) {
-		if (timestamp_cmp(timestamp, event->timestamp) < 0)
-			break;
+	spin_lock(&group->lock);
 
-		_do_signal_event(device, event, event->timestamp,
-			KGSL_EVENT_TIMESTAMP_RETIRED);
+	list_for_each_entry_safe(event, tmp, &group->events, node) {
+		if (timestamp_cmp(timestamp, event->timestamp) == 0)
+			signal_event(device, event, KGSL_EVENT_CANCELLED);
 	}
-}
 
-static struct kgsl_event *_find_event(struct kgsl_device *device,
-		struct list_head *head, unsigned int timestamp,
+	spin_unlock(&group->lock);
+}
+EXPORT_SYMBOL(kgsl_cancel_events_timestamp);
+
+/**
+ * kgsl_cancel_events() - Cancel all pending events in the group
+ * @device: Pointer to a KGSL device
+ * @group: Pointer to a kgsl_events_group
+ */
+void kgsl_cancel_events(struct kgsl_device *device,
+		struct kgsl_event_group *group)
+{
+	struct kgsl_event *event, *tmp;
+
+	spin_lock(&group->lock);
+
+	list_for_each_entry_safe(event, tmp, &group->events, node)
+		signal_event(device, event, KGSL_EVENT_CANCELLED);
+
+	spin_unlock(&group->lock);
+}
+EXPORT_SYMBOL(kgsl_cancel_events);
+
+/**
+ * kgsl_cancel_event() - Cancel a specific event from a group
+ * @device: Pointer to a KGSL device
+ * @group: Pointer to the group that contains the events
+ * @timestamp: Registered expiry timestamp for the event
+ * @func: Registered callback for the function
+ * @priv: Registered priv data for the function
+ */
+void kgsl_cancel_event(struct kgsl_device *device,
+		struct kgsl_event_group *group, unsigned int timestamp,
 		kgsl_event_func func, void *priv)
 {
 	struct kgsl_event *event, *tmp;
+	spin_lock(&group->lock);
 
-	list_for_each_entry_safe(event, tmp, head, list) {
+	list_for_each_entry_safe(event, tmp, &group->events, node) {
 		if (timestamp == event->timestamp && func == event->func &&
 			event->priv == priv)
-			return event;
+			signal_event(device, event, KGSL_EVENT_CANCELLED);
 	}
 
-	return NULL;
+	spin_unlock(&group->lock);
 }
+EXPORT_SYMBOL(kgsl_cancel_event);
 
-static void _signal_event(struct kgsl_device *device,
-		struct list_head *head, unsigned int timestamp,
-		unsigned int cur, unsigned int type)
+/**
+ * kgsl_add_event() - Add a new GPU event to a group
+ * @device: Pointer to a KGSL device
+ * @group: Pointer to the group to add the event to
+ * @timestamp: Timestamp that the event will expire on
+ * @func: Callback function for the event
+ * @priv: Private data to send to the callback function
+ */
+int kgsl_add_event(struct kgsl_device *device, struct kgsl_event_group *group,
+		unsigned int timestamp, kgsl_event_func func, void *priv)
 {
-	struct kgsl_event *event, *tmp;
-
-	list_for_each_entry_safe(event, tmp, head, list) {
-		if (timestamp_cmp(timestamp, event->timestamp) == 0)
-			_do_signal_event(device, event, cur, type);
-	}
-}
-
-static void _signal_events(struct kgsl_device *device,
-		struct list_head *head, uint32_t timestamp,
-		unsigned int type)
-{
-	struct kgsl_event *event, *tmp;
-
-	list_for_each_entry_safe(event, tmp, head, list)
-		_do_signal_event(device, event, timestamp, type);
-
-}
-
-void kgsl_signal_event(struct kgsl_device *device,
-		struct kgsl_context *context, unsigned int timestamp,
-		unsigned int type)
-{
-	struct list_head *head = _get_list_head(device, context);
-	uint32_t cur;
-
-	BUG_ON(!mutex_is_locked(&device->mutex));
-
-	cur = kgsl_readtimestamp(device, context, KGSL_TIMESTAMP_RETIRED);
-	_signal_event(device, head, timestamp, cur, type);
-
-	if (context && list_empty(&context->events))
-		list_del_init(&context->events_list);
-}
-EXPORT_SYMBOL(kgsl_signal_event);
-
-void kgsl_signal_events(struct kgsl_device *device,
-		struct kgsl_context *context, unsigned int type)
-{
-	struct list_head *head = _get_list_head(device, context);
-	uint32_t cur;
-
-	BUG_ON(!mutex_is_locked(&device->mutex));
-
-
-	cur = kgsl_readtimestamp(device, context, KGSL_TIMESTAMP_RETIRED);
-
-	_signal_events(device, head, cur, type);
-
-
-	if (context)
-		list_del_init(&context->events_list);
-}
-EXPORT_SYMBOL(kgsl_signal_events);
-
-int kgsl_add_event(struct kgsl_device *device, u32 id, u32 ts,
-	kgsl_event_func func, void *priv, void *owner)
-{
+	unsigned int queued, retired;
+	struct kgsl_context *context = group->context;
 	struct kgsl_event *event;
-	unsigned int queued = 0, cur_ts;
-	struct kgsl_context *context = NULL;
 
-	BUG_ON(!mutex_is_locked(&device->mutex));
-
-	if (func == NULL)
+	if (!func)
 		return -EINVAL;
 
-	if (id != KGSL_MEMSTORE_GLOBAL) {
-		context = kgsl_context_get(device, id);
-		if (context == NULL)
+	/*
+	 * If the caller is creating their own timestamps, let them schedule
+	 * events in the future. Otherwise only allow timestamps that have been
+	 * queued.
+	 */
+	if (!context || !(context->flags & KGSL_CONTEXT_USER_GENERATED_TS)) {
+		queued = kgsl_readtimestamp(device, context, KGSL_TIMESTAMP_QUEUED);
+		if (timestamp_cmp(timestamp, queued) > 0)
 			return -EINVAL;
 	}
 
-	if (context == NULL ||
-		((context->flags & KGSL_CONTEXT_USER_GENERATED_TS) == 0)) {
+	event = kmem_cache_alloc(events_cache, GFP_KERNEL);
+	if (event == NULL)
+		return -ENOMEM;
 
-		queued = kgsl_readtimestamp(device, context,
-						KGSL_TIMESTAMP_QUEUED);
+	/* Get a reference to the context while the event is active */
+	_kgsl_context_get(context);
 
-		if (timestamp_cmp(ts, queued) > 0) {
-			kgsl_context_put(context);
-			return -EINVAL;
-		}
-	}
+	event->device = device;
+	event->context = context;
+	event->timestamp = timestamp;
+	event->priv = priv;
+	event->func = func;
+	event->created = jiffies;
 
-	cur_ts = kgsl_readtimestamp(device, context, KGSL_TIMESTAMP_RETIRED);
+	INIT_WORK(&event->work, _kgsl_event_worker);
 
+	trace_kgsl_register_event(KGSL_CONTEXT_ID(context), timestamp, func);
 
-	if (timestamp_cmp(cur_ts, ts) >= 0) {
-		trace_kgsl_fire_event(id, cur_ts, ts, 0, func);
+	spin_lock(&group->lock);
 
-		func(device, priv, id, ts, KGSL_EVENT_TIMESTAMP_RETIRED);
-		kgsl_context_put(context);
+	/*
+	 * Check to see if the requested timestamp has already retired.  If so,
+	 * schedule the callback right away
+	 */
+	retired = kgsl_readtimestamp(device, context, KGSL_TIMESTAMP_RETIRED);
+
+	if (timestamp_cmp(retired, timestamp) >= 0) {
+		event->result = KGSL_EVENT_RETIRED;
+		queue_work(device->events_wq, &event->work);
+		spin_unlock(&group->lock);
 		return 0;
 	}
 
-	event = kzalloc(sizeof(*event), GFP_KERNEL);
-	if (event == NULL) {
-		kgsl_context_put(context);
-		return -ENOMEM;
-	}
+	/* Add the event to the group list */
+	list_add_tail(&event->node, &group->events);
 
-	event->context = context;
-	event->timestamp = ts;
-	event->priv = priv;
-	event->func = func;
-	event->owner = owner;
-	event->created = jiffies;
+	spin_unlock(&group->lock);
 
-	trace_kgsl_register_event(id, ts, func);
-
-	
-
-	if (context) {
-		_add_event_to_list(&context->events, event);
-
-
-		if (list_empty(&context->events_list))
-			list_add_tail(&context->events_list,
-				&device->events_pending_list);
-
-	} else
-		_add_event_to_list(&device->events, event);
-
-	queue_work(device->work_queue, &device->ts_expired_ws);
 	return 0;
 }
 EXPORT_SYMBOL(kgsl_add_event);
 
-void kgsl_cancel_events(struct kgsl_device *device, void *owner)
-{
-	struct kgsl_event *event, *event_tmp;
-	unsigned int cur;
+static DEFINE_RWLOCK(group_lock);
+static LIST_HEAD(group_list);
 
-	BUG_ON(!mutex_is_locked(&device->mutex));
-
-	cur = kgsl_readtimestamp(device, NULL, KGSL_TIMESTAMP_RETIRED);
-
-	list_for_each_entry_safe(event, event_tmp, &device->events, list) {
-		if (event->owner != owner)
-			continue;
-
-		_do_signal_event(device, event, cur, KGSL_EVENT_CANCELLED);
-	}
-}
-EXPORT_SYMBOL(kgsl_cancel_events);
-
-
-void kgsl_cancel_event(struct kgsl_device *device, struct kgsl_context *context,
-		unsigned int timestamp, kgsl_event_func func,
-		void *priv)
-{
-	struct kgsl_event *event;
-	struct list_head *head;
-
-	BUG_ON(!mutex_is_locked(&device->mutex));
-
-	head = _get_list_head(device, context);
-
-	event = _find_event(device, head, timestamp, func, priv);
-
-	if (event) {
-		unsigned int cur = kgsl_readtimestamp(device, context,
-			KGSL_TIMESTAMP_RETIRED);
-
-		_do_signal_event(device, event, cur, KGSL_EVENT_CANCELLED);
-	}
-}
-EXPORT_SYMBOL(kgsl_cancel_event);
-
-static inline int _mark_next_event(struct kgsl_device *device,
-		struct list_head *head)
-{
-	struct kgsl_event *event;
-
-	if (!list_empty(head)) {
-		event = list_first_entry(head, struct kgsl_event, list);
-
-
-		if (device->ftbl->next_event)
-			return device->ftbl->next_event(device, event);
-	}
-
-	return 0;
-}
-
-static int kgsl_process_context_events(struct kgsl_device *device,
-		struct kgsl_context *context)
-{
-	while (1) {
-		unsigned int timestamp = kgsl_readtimestamp(device, context,
-			KGSL_TIMESTAMP_RETIRED);
-
-		_retire_events(device, &context->events, timestamp);
-
-
-		if (!_mark_next_event(device, &context->events))
-			break;
-	}
-
-
-	return list_empty(&context->events) ? 0 : 1;
-}
-
+/**
+ * kgsl_process_events() - Work queue for processing new timestamp events
+ * @work: Pointer to a work_struct
+ */
 void kgsl_process_events(struct work_struct *work)
 {
+	struct kgsl_event_group *group;
 	struct kgsl_device *device = container_of(work, struct kgsl_device,
-		ts_expired_ws);
-	struct kgsl_context *context, *tmp;
-	uint32_t timestamp;
+		event_work);
 
-	kgsl_mutex_lock(&device->mutex, &device->mutex_owner);
-
-	timestamp = kgsl_readtimestamp(device, NULL, KGSL_TIMESTAMP_RETIRED);
-	_retire_events(device, &device->events, timestamp);
-	_mark_next_event(device, &device->events);
-
-	
-	list_for_each_entry_safe(context, tmp, &device->events_pending_list,
-		events_list) {
-
-		if (_kgsl_context_get(context)) {
-
-			if (kgsl_process_context_events(device, context) == 0)
-				list_del_init(&context->events_list);
-			kgsl_context_put(context);
-		}
-	}
-
-	kgsl_mutex_unlock(&device->mutex, &device->mutex_owner);
+	read_lock(&group_lock);
+	list_for_each_entry(group, &group_list, group)
+		kgsl_process_event_group(device, group);
+	read_unlock(&group_lock);
 }
 EXPORT_SYMBOL(kgsl_process_events);
+
+/**
+ * kgsl_del_event_group() - Remove a GPU event group
+ * @group: GPU event group to remove
+ */
+void kgsl_del_event_group(struct kgsl_event_group *group)
+{
+	/* Make sure that all the events have been deleted from the list */
+	BUG_ON(!list_empty(&group->events));
+
+	write_lock(&group_lock);
+	list_del(&group->group);
+	write_unlock(&group_lock);
+}
+EXPORT_SYMBOL(kgsl_del_event_group);
+
+/**
+ * kgsl_add_event_group() - Add a new GPU event group
+ * group: Pointer to the new group to add to the list
+ */
+void kgsl_add_event_group(struct kgsl_event_group *group,
+		struct kgsl_context *context)
+{
+	spin_lock_init(&group->lock);
+	INIT_LIST_HEAD(&group->events);
+
+	group->context = context;
+
+	write_lock(&group_lock);
+	list_add_tail(&group->group, &group_list);
+	write_unlock(&group_lock);
+}
+EXPORT_SYMBOL(kgsl_add_event_group);
+
+/**
+ * kgsl_events_exit() - Destroy the event kmem cache on module exit
+ */
+void kgsl_events_exit(void)
+{
+	if (events_cache)
+		kmem_cache_destroy(events_cache);
+}
+
+/**
+ * kgsl_events_init() - Create the event kmem cache on module start
+ */
+void __init kgsl_events_init(void)
+{
+	events_cache = KMEM_CACHE(kgsl_event, 0);
+}

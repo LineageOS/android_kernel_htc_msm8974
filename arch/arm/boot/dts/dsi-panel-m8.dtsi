@@ -102,7 +102,6 @@
 		qcom,mdss-dsi-default-command-state = "dsi_hs_mode";
 		qcom,mdss-pan-physical-width-dimension = <61>;
 		qcom,mdss-pan-physical-height-dimension = <109>;
-		qcom,mdss-shrink-pwm = <6 79 255>;
 		qcom,mdss-dsi-lp11-init;
 		htc,mdss-camera-blk = <177>;
 		htc,mdss-camera-dua-blk = <177>;
@@ -111,6 +110,7 @@
 		htc,cabc-video-cmds = [39 01 00 00 00 00 02 55 03];
 		htc,dimming-on-cmds = [39 01 00 00 00 00 02 53 2C];
 		htc,panel-id=<2>;
+		htc,brt-bl-table = <30 6>, <142 79>, <255 255>;
 	};
 
 	qcom,mdss_dsi_sharp_1080p_video {
@@ -190,7 +190,6 @@
 		qcom,mdss-dsi-default-command-state = "dsi_hs_mode";
 		qcom,mdss-pan-physical-width-dimension = <61>;
 		qcom,mdss-pan-physical-height-dimension = <109>;
-		qcom,mdss-shrink-pwm = <6 79 255>;
 		qcom,mdss-pwm-ctl-type = <1>;
 		qcom,mdss-dsi-lp11-init;
 		htc,mdss-camera-blk = <177>;
@@ -200,6 +199,7 @@
 		htc,cabc-video-cmds = [39 01 00 00 00 00 02 55 03];
 		htc,dimming-on-cmds = [39 01 00 00 00 00 02 53 2C];
 		htc,panel-id=<0>;
+		htc,brt-bl-table = <30 6>, <142 79>, <255 255>;
 	};
 	qcom,mdss_dsi_glu_sharp_1080p_cmd {
 		compatible = "qcom,mdss-dsi-panel";
@@ -281,13 +281,13 @@
 		qcom,mdss-dsi-default-command-state = "dsi_hs_mode";
 		qcom,mdss-pan-physical-width-dimension = <64>;
 		qcom,mdss-pan-physical-height-dimension = <114>;
-		qcom,mdss-shrink-pwm = <6 79 255>;
 		htc,mdss-camera-blk = <177>;
 		htc,mdss-camera-dua-blk = <177>;
 		htc,cabc-off-cmds = [39 01 00 00 00 00 02 55 00];
 		htc,cabc-ui-cmds = [39 01 00 00 00 00 02 55 02];
 		htc,dimming-on-cmds = [39 01 00 00 00 00 02 53 0C];
 		htc,panel-id=<4>;
+		htc,brt-bl-table = <30 6>, <142 79>, <255 255>;
 	};
 
 	qcom,mdss_dsi_m8_sharp_novatek_35695_1080p_cmd {
@@ -469,7 +469,6 @@
 		qcom,mdss-dsi-default-command-state = "dsi_hs_mode";
 		qcom,mdss-pan-physical-width-dimension = <61>;
 		qcom,mdss-pan-physical-height-dimension = <109>;
-		qcom,mdss-shrink-pwm = <6 79 255>;
 		qcom,mdss-dsi-lp11-init;
 		htc,mdss-camera-blk = <177>;
 		htc,mdss-camera-dua-blk = <177>;
@@ -478,7 +477,6 @@
 		htc,cabc-video-cmds = [39 01 00 00 00 00 02 55 83];
 		htc,dimming-on-cmds = [39 01 00 00 00 00 02 53 2C];
 		htc,mdss-pp-hue = <0xfef>;
-		qcom,mdss-shrink-pwm-power-hack = <6 56 255>;
 		htc,mdss-camera-blk-power-hack = <130>;
 		htc,cabc-ui-cmds-power-hack = [
 					39 01 00 00 00 00 02 55 82
@@ -495,6 +493,8 @@
 					39 01 00 00 01 00 02 92 2A /* fps 30 */
 					39 01 00 00 01 00 02 FF 01 /* Enter CMD1 */];
 		htc,panel-id=<3>;
+		htc,brt-bl-table = <30 6>, <142 79>, <255 255>;
+		htc,brt-bl-table-power-hack = <30 6>, <142 56>, <255 255>;
 	};
 
 	qcom,mdss_dsi_m8_sharp_novatek_35595_1080p_cmd {
@@ -673,7 +673,6 @@
 		qcom,mdss-dsi-default-command-state = "dsi_hs_mode";
 		qcom,mdss-pan-physical-width-dimension = <61>;
 		qcom,mdss-pan-physical-height-dimension = <109>;
-		qcom,mdss-shrink-pwm = <6 79 255>;
 		qcom,mdss-dsi-lp11-init;
 		qcom,partial-update-enabled;
 		qcom,ulps-enabled;
@@ -685,7 +684,6 @@
 		htc,cabc-video-cmds = [39 01 00 00 00 00 02 55 83];
 		htc,dimming-on-cmds = [39 01 00 00 00 00 02 53 2C];
 		htc,mdss-pp-hue = <0xfef>;
-		qcom,mdss-shrink-pwm-power-hack = <6 56 255>;
 		htc,mdss-camera-blk-power-hack = <130>;
 		htc,cabc-ui-cmds-power-hack = [
 					39 01 00 00 00 00 02 55 82
@@ -713,6 +711,8 @@
 					15 00 00 00 00 00 02 B9 80 /* BIST OFF */
 					15 01 00 00 00 00 02 FF 10 /* Enter CMD1 */];
 		htc,panel-id=<1>;
+		htc,brt-bl-table = <30 6>, <142 79>, <255 255>;
+		htc,brt-bl-table-power-hack = <30 6>, <142 56>, <255 255>;
 	};
 
 	qcom,mdss_dsi_m8_sharp_novatek_35695_1080p_video {
@@ -901,7 +901,6 @@
 		qcom,mdss-dsi-default-command-state = "dsi_hs_mode";
 		qcom,mdss-pan-physical-width-dimension = <61>;
 		qcom,mdss-pan-physical-height-dimension = <109>;
-		qcom,mdss-shrink-pwm = <6 79 255>;
 		qcom,mdss-dsi-lp11-init;
 		htc,mdss-camera-blk = <177>;
 		htc,mdss-camera-dua-blk = <177>;
@@ -910,6 +909,7 @@
 		htc,cabc-video-cmds = [39 01 00 00 00 00 02 55 83];
 		htc,dimming-on-cmds = [39 01 00 00 00 00 02 53 2C];
 		htc,panel-id=<3>;
+		htc,brt-bl-table = <30 6>, <142 79>, <255 255>;
 	};
 
 	qcom,mdss_dsi_m8_lg_novatek_35695_1080p_video {
@@ -1607,7 +1607,6 @@
 		qcom,mdss-dsi-default-command-state = "dsi_hs_mode";
 		qcom,mdss-pan-physical-width-dimension = <61>;
 		qcom,mdss-pan-physical-height-dimension = <109>;
-		qcom,mdss-shrink-pwm = <6 79 255>;
 		qcom,mdss-dsi-lp11-init;
 		htc,mdss-camera-blk = <177>;
 		htc,mdss-camera-dua-blk = <177>;
@@ -1616,6 +1615,7 @@
 		htc,cabc-video-cmds = [39 01 00 00 00 00 02 55 83];
 		htc,dimming-on-cmds = [39 01 00 00 00 00 02 53 2C];
 		htc,panel-id=<5>;
+		htc,brt-bl-table = <30 6>, <142 79>, <255 255>;
 	};
 
 	qcom,mdss_dsi_m8_lg_novatek_35595_1080p_cmd {
@@ -2291,7 +2291,6 @@
 		qcom,mdss-dsi-default-command-state = "dsi_hs_mode";
 		qcom,mdss-pan-physical-width-dimension = <61>;
 		qcom,mdss-pan-physical-height-dimension = <109>;
-		qcom,mdss-shrink-pwm = <6 79 255>;
 		qcom,mdss-dsi-lp11-init;
 		qcom,partial-update-enabled;
 		qcom,ulps-enabled;
@@ -2303,7 +2302,6 @@
 		htc,cabc-video-cmds = [39 01 00 00 00 00 02 55 83];
 		htc,dimming-on-cmds = [39 01 00 00 00 00 02 53 2C];
 		htc,mdss-pp-hue = <0xfef>;
-		qcom,mdss-shrink-pwm-power-hack = <6 56 255>;
 		htc,mdss-camera-blk-power-hack = <130>;
 		htc,cabc-ui-cmds-power-hack = [
 					39 01 00 00 00 00 02 55 82
@@ -2331,6 +2329,8 @@
 					15 00 00 00 00 00 02 B9 80 /* BIST OFF */
 					15 01 00 00 00 00 02 FF 10 /* Enter CMD1 */];
 		htc,panel-id=<6>;
+		htc,brt-bl-table = <30 6>, <142 79>, <255 255>;
+		htc,brt-bl-table-power-hack = <30 6>, <142 56>, <255 255>;
 	};
 };
 &mdss_dsi0 {

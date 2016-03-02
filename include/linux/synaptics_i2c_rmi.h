@@ -94,10 +94,10 @@ struct synaptics_config {
 };
 
 struct synaptics_i2c_rmi_platform_data {
-	uint32_t version;	
-				
-				
-	int (*power)(int on);	
+	uint32_t version;	/* Use this entry for panels with */
+				/* (major << 8 | minor) version or above. */
+				/* If non-zero another array entry follows */
+	int (*power)(int on);	/* Only valid in first array entry */
 	struct synaptics_virtual_key *virtual_key;
 	uint8_t virtual_key_num;
 	struct kobject *vk_obj;
@@ -108,20 +108,20 @@ struct synaptics_i2c_rmi_platform_data {
 	uint32_t key_area;
 	uint32_t flags;
 	unsigned long irqflags;
-	uint32_t inactive_left; 
-	uint32_t inactive_right; 
-	uint32_t inactive_top; 
-	uint32_t inactive_bottom; 
-	uint32_t snap_left_on; 
-	uint32_t snap_left_off; 
-	uint32_t snap_right_on; 
-	uint32_t snap_right_off; 
-	uint32_t snap_top_on; 
-	uint32_t snap_top_off; 
-	uint32_t snap_bottom_on; 
-	uint32_t snap_bottom_off; 
-	uint32_t fuzz_x; 
-	uint32_t fuzz_y; 
+	uint32_t inactive_left; /* 0x10000 = screen width */
+	uint32_t inactive_right; /* 0x10000 = screen width */
+	uint32_t inactive_top; /* 0x10000 = screen height */
+	uint32_t inactive_bottom; /* 0x10000 = screen height */
+	uint32_t snap_left_on; /* 0x10000 = screen width */
+	uint32_t snap_left_off; /* 0x10000 = screen width */
+	uint32_t snap_right_on; /* 0x10000 = screen width */
+	uint32_t snap_right_off; /* 0x10000 = screen width */
+	uint32_t snap_top_on; /* 0x10000 = screen height */
+	uint32_t snap_top_off; /* 0x10000 = screen height */
+	uint32_t snap_bottom_on; /* 0x10000 = screen height */
+	uint32_t snap_bottom_off; /* 0x10000 = screen height */
+	uint32_t fuzz_x; /* 0x10000 = screen width */
+	uint32_t fuzz_y; /* 0x10000 = screen height */
 	int abs_x_min;
 	int abs_x_max;
 	int abs_y_min;
@@ -195,4 +195,4 @@ enum {
 };
 
 extern uint8_t getPowerKeyState(void);
-#endif 
+#endif /* _LINUX_SYNAPTICS_I2C_RMI_H */

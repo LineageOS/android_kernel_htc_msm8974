@@ -34,6 +34,7 @@ obj-$(CONFIG_AR0260) += ar0260.o
 obj-$(CONFIG_IMX214_800M_FOV77) += imx214_800m_fov77.o
 obj-$(CONFIG_IMX214_800M_FOV87) += imx214_800m_fov87.o
 obj-$(CONFIG_S5K5E_ONELANE) += s5k5e_onelane.o
+obj-$(CONFIG_A116A1) += a11_6a1.o
 obj-$(CONFIG_GC_0339) += gc_0339.o
 obj-$(CONFIG_MI380) += mi380.o
 obj-$(CONFIG_s5k5e) += s5k5e.o

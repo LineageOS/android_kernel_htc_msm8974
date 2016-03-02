@@ -575,6 +575,7 @@
 	qcom,rconn-mohm-sw-est-ocv = <10>;
 	qcom,enable-batt-full-fake-ocv = <1>;
 	qcom,qb-mode-cc-criteria-uah = <10000>;
+	qcom,soc-overrate-criteria-for-sw-ocv = <5>;
 	status = "ok";
 };
 

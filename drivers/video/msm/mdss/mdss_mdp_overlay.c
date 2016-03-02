@@ -937,13 +937,6 @@ static int mdss_mdp_overlay_start(struct msm_fb_data_type *mfd)
 		mdss_mdp_footswitch_ctrl_splash(0);
 		if (rc)
 			goto ctl_error;
-
-		if (!is_mdss_iommu_attached())
-			rc = mdss_iommu_attach(mdss_res);
-			if (rc) {
-				pr_err("mdss iommu attach failed rc=%d\n", rc);
-				goto ctl_error;
-			}
 	}
 	if (!rc)
 		goto end;
@@ -1587,11 +1580,6 @@ static void mdss_mdp_overlay_pan_display(struct msm_fb_data_type *mfd,
 
 	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON, false);
 
-	ret = mdss_iommu_ctrl(1);
-	if (IS_ERR_VALUE(ret)) {
-		pr_err("IOMMU attach failed\n");
-		goto pan_display_error;
-	}
 
 	bpp = fbi->var.bits_per_pixel / 8;
 	offset = fbi->var.xoffset * bpp +
@@ -1606,6 +1594,12 @@ static void mdss_mdp_overlay_pan_display(struct msm_fb_data_type *mfd,
 	ret = mdss_mdp_overlay_start(mfd);
 	if (ret) {
 		pr_err("unable to start overlay %d (%d)\n", mfd->index, ret);
+		goto pan_display_error;
+	}
+
+	ret = mdss_iommu_ctrl(1);
+	if (IS_ERR_VALUE(ret)) {
+		pr_err("IOMMU attach failed\n");
 		goto pan_display_error;
 	}
 

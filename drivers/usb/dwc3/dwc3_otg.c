@@ -58,7 +58,7 @@ static void send_usb_connect_notify(struct work_struct *w)
 	mutex_lock(&notify_sem);
 	list_for_each_entry(notifier, &g_lh_usb_notifier_list, notifier_link) {
 		if (notifier->func != NULL) {
-			
+			/* Notify other drivers about connect type. */
 			notifier->func(dotg->connect_type);
 		}
 	}
@@ -105,6 +105,14 @@ static void dwc3_otg_reset(struct dwc3_otg *dotg);
 static void dwc3_otg_notify_host_mode(struct usb_otg *otg, int host_mode);
 static void dwc3_otg_reset(struct dwc3_otg *dotg);
 
+/**
+ * dwc3_otg_set_host_regs - reset dwc3 otg registers to host operation.
+ *
+ * This function sets the OTG registers to work in A-Device host mode.
+ * This function should be called just before entering to A-Device mode.
+ *
+ * @w: Pointer to the dwc3 otg struct
+ */
 static void dwc3_otg_set_host_regs(struct dwc3_otg *dotg)
 {
 	u32 reg;
@@ -112,7 +120,7 @@ static void dwc3_otg_set_host_regs(struct dwc3_otg *dotg)
 	struct dwc3_ext_xceiv *ext_xceiv = dotg->ext_xceiv;
 
 	if (ext_xceiv && !ext_xceiv->otg_capability) {
-		
+		/* Set OCTL[6](PeriMode) to 0 (host) */
 		reg = dwc3_readl(dotg->regs, DWC3_OCTL);
 		reg &= ~DWC3_OTG_OCTL_PERIMODE;
 		dwc3_writel(dotg->regs, DWC3_OCTL, reg);
@@ -120,7 +128,16 @@ static void dwc3_otg_set_host_regs(struct dwc3_otg *dotg)
 		reg = dwc3_readl(dwc->regs, DWC3_GCTL);
 		reg &= ~(DWC3_GCTL_PRTCAPDIR(DWC3_GCTL_PRTCAP_OTG));
 		reg |= DWC3_GCTL_PRTCAPDIR(DWC3_GCTL_PRTCAP_HOST);
+		/*
+		 * Allow ITP generated off of ref clk based counter instead
+		 * of UTMI/ULPI clk based counter, when superspeed only is
+		 * active so that UTMI/ULPI can be suspened.
+		 */
 		reg |= DWC3_GCTL_SOFITPSYNC;
+		/*
+		 * Set this bit so that device attempts three more times at SS,
+		 * even if it failed previously to operate in SS mode.
+		 */
 		reg |= DWC3_GCTL_U2RSTECN;
 		reg &= ~(DWC3_GCTL_PWRDNSCALEMASK);
 		reg |= DWC3_GCTL_PWRDNSCALE(2);
@@ -171,6 +188,15 @@ static void dwc3_otg_set_hsphy_auto_suspend(struct dwc3_otg *dotg, bool susp)
 	dwc3_writel(dwc->regs, DWC3_GUSB2PHYCFG(0), reg);
 }
 
+/**
+ * dwc3_otg_set_host_power - Enable port power control for host operation
+ *
+ * This function enables the OTG Port Power required to operate in Host mode
+ * This function should be called only after XHCI driver has set the port
+ * power in PORTSC register.
+ *
+ * @w: Pointer to the dwc3 otg struct
+ */
 void dwc3_otg_set_host_power(struct dwc3_otg *dotg)
 {
 	u32 osts;
@@ -182,6 +208,14 @@ void dwc3_otg_set_host_power(struct dwc3_otg *dotg)
 	dwc3_writel(dotg->regs, DWC3_OCTL, DWC3_OTG_OCTL_PRTPWRCTL);
 }
 
+/**
+ * dwc3_otg_set_peripheral_regs - reset dwc3 otg registers to peripheral operation.
+ *
+ * This function sets the OTG registers to work in B-Device peripheral mode.
+ * This function should be called just before entering to B-Device mode.
+ *
+ * @w: Pointer to the dwc3 otg workqueue.
+ */
 static void dwc3_otg_set_peripheral_regs(struct dwc3_otg *dotg)
 {
 	u32 reg;
@@ -189,14 +223,22 @@ static void dwc3_otg_set_peripheral_regs(struct dwc3_otg *dotg)
 	struct dwc3_ext_xceiv *ext_xceiv = dotg->ext_xceiv;
 
 	if (ext_xceiv && !ext_xceiv->otg_capability) {
-		
+		/* Set OCTL[6](PeriMode) to 1 (peripheral) */
 		reg = dwc3_readl(dotg->regs, DWC3_OCTL);
 		reg |= DWC3_OTG_OCTL_PERIMODE;
 		dwc3_writel(dotg->regs, DWC3_OCTL, reg);
+		/*
+		 * TODO: add more OTG registers writes for PERIPHERAL mode here,
+		 * see figure 12-19 B-device flow in dwc3 Synopsis spec
+		 */
 	} else {
 		reg = dwc3_readl(dwc->regs, DWC3_GCTL);
 		reg &= ~(DWC3_GCTL_PRTCAPDIR(DWC3_GCTL_PRTCAP_OTG));
 		reg |= DWC3_GCTL_PRTCAPDIR(DWC3_GCTL_PRTCAP_DEVICE);
+		/*
+		 * Set this bit so that device attempts three more times at SS,
+		 * even if it failed previously to operate in SS mode.
+	 */
 		reg |= DWC3_GCTL_U2RSTECN;
 		reg &= ~(DWC3_GCTL_PWRDNSCALEMASK);
 		reg |= DWC3_GCTL_PWRDNSCALE(2);
@@ -205,6 +247,14 @@ static void dwc3_otg_set_peripheral_regs(struct dwc3_otg *dotg)
 	}
 }
 
+/**
+ * dwc3_otg_start_host -  helper function for starting/stoping the host controller driver.
+ *
+ * @otg: Pointer to the otg_transceiver structure.
+ * @on: start / stop the host controller driver.
+ *
+ * Returns 0 on success otherwise negative errno.
+ */
 static int dwc3_otg_start_host(struct usb_otg *otg, int on)
 {
 	struct dwc3_otg *dotg = container_of(otg, struct dwc3_otg, otg);
@@ -237,8 +287,25 @@ static int dwc3_otg_start_host(struct usb_otg *otg, int on)
 			return ret;
 		}
 
+		/*
+		 * This should be revisited for more testing post-silicon.
+		 * In worst case we may need to disconnect the root hub
+		 * before stopping the controller so that it does not
+		 * interfere with runtime pm/system pm.
+		 * We can also consider registering and unregistering xhci
+		 * platform device. It is almost similar to add_hcd and
+		 * remove_hcd, But we may not use standard set_host method
+		 * anymore.
+		 */
 		dwc3_otg_set_hsphy_auto_suspend(dotg, true);
 		dwc3_otg_set_host_regs(dotg);
+		/*
+		 * FIXME If micro A cable is disconnected during system suspend,
+		 * xhci platform device will be removed before runtime pm is
+		 * enabled for xhci device. Due to this, disable_depth becomes
+		 * greater than one and runtimepm is not enabled for next microA
+		 * connect. Fix this by calling pm_runtime_init for xhci device.
+		 */
 		pm_runtime_init(&dwc->xhci->dev);
 		ret = platform_device_add(dwc->xhci);
 		if (ret) {
@@ -253,7 +320,7 @@ static int dwc3_otg_start_host(struct usb_otg *otg, int on)
 		dotg->connect_type = CONNECT_TYPE_INTERNAL;
 		queue_work(dotg->usb_wq, &dotg->notifier_work);
 
-		
+		/* re-init OTG EVTEN register as XHCI reset clears it */
 		if (ext_xceiv && !ext_xceiv->otg_capability)
 			dwc3_otg_reset(dotg);
 	} else {
@@ -269,6 +336,11 @@ static int dwc3_otg_start_host(struct usb_otg *otg, int on)
 		dwc3_otg_notify_host_mode(otg, on);
 
 		platform_device_del(dwc->xhci);
+		/*
+		 * Perform USB hardware RESET (both core reset and DBM reset)
+		 * when moving from host to peripheral. This is required for
+		 * peripheral mode to work.
+		 */
 		if (ext_xceiv && ext_xceiv->otg_capability &&
 						ext_xceiv->ext_block_reset)
 			ext_xceiv->ext_block_reset(ext_xceiv, true);
@@ -276,7 +348,7 @@ static int dwc3_otg_start_host(struct usb_otg *otg, int on)
 		dwc3_otg_set_hsphy_auto_suspend(dotg, false);
 		dwc3_otg_set_peripheral_regs(dotg);
 
-		
+		/* re-init core and OTG registers as block reset clears these */
 		dwc3_post_host_reset_core_init(dwc);
 		if (ext_xceiv && !ext_xceiv->otg_capability)
 			dwc3_otg_reset(dotg);
@@ -285,6 +357,14 @@ static int dwc3_otg_start_host(struct usb_otg *otg, int on)
 	return 0;
 }
 
+/**
+ * dwc3_otg_set_host -  bind/unbind the host controller driver.
+ *
+ * @otg: Pointer to the otg_transceiver structure.
+ * @host: Pointer to the usb_bus structure.
+ *
+ * Returns 0 on success otherwise negative errno.
+ */
 static int dwc3_otg_set_host(struct usb_otg *otg, struct usb_bus *host)
 {
 	struct dwc3_otg *dotg = container_of(otg, struct dwc3_otg, otg);
@@ -293,6 +373,11 @@ static int dwc3_otg_set_host(struct usb_otg *otg, struct usb_bus *host)
 		dev_dbg(otg->phy->dev, "%s: set host %s, portpower\n",
 					__func__, host->bus_name);
 		otg->host = host;
+		/*
+		 * Though XHCI power would be set by now, but some delay is
+		 * required for XHCI controller before setting OTG Port Power
+		 * TODO: Tune this delay
+		 */
 		msleep(300);
 		dwc3_otg_set_host_power(dotg);
 	} else {
@@ -302,6 +387,14 @@ static int dwc3_otg_set_host(struct usb_otg *otg, struct usb_bus *host)
 	return 0;
 }
 
+/**
+ * dwc3_otg_start_peripheral -  bind/unbind the peripheral controller.
+ *
+ * @otg: Pointer to the otg_transceiver structure.
+ * @gadget: pointer to the usb_gadget structure.
+ *
+ * Returns 0 on success otherwise negative errno.
+ */
 static int dwc3_otg_start_peripheral(struct usb_otg *otg, int on)
 {
 	struct dwc3_otg *dotg = container_of(otg, struct dwc3_otg, otg);
@@ -314,6 +407,8 @@ static int dwc3_otg_start_peripheral(struct usb_otg *otg, int on)
 		dev_dbg(otg->phy->dev, "%s: turn on gadget %s\n",
 					__func__, otg->gadget->name);
 
+		/* Core reset is not required during start peripheral. Only
+		 * DBM reset is required, hence perform only DBM reset here */
 		if (ext_xceiv && ext_xceiv->otg_capability &&
 						ext_xceiv->ext_block_reset)
 			ext_xceiv->ext_block_reset(ext_xceiv, false);
@@ -331,6 +426,14 @@ static int dwc3_otg_start_peripheral(struct usb_otg *otg, int on)
 	return 0;
 }
 
+/**
+ * dwc3_otg_set_peripheral -  bind/unbind the peripheral controller driver.
+ *
+ * @otg: Pointer to the otg_transceiver structure.
+ * @gadget: pointer to the usb_gadget structure.
+ *
+ * Returns 0 on success otherwise negative errno.
+ */
 static int dwc3_otg_set_peripheral(struct usb_otg *otg,
 				struct usb_gadget *gadget)
 {
@@ -355,6 +458,13 @@ static int dwc3_otg_set_peripheral(struct usb_otg *otg,
 	return 0;
 }
 
+/**
+ * dwc3_ext_chg_det_done - callback to handle charger detection completion
+ * @otg: Pointer to the otg transceiver structure
+ * @charger: Pointer to the external charger structure
+ *
+ * Returns 0 on success
+ */
 static void dwc3_ext_chg_det_done(struct usb_otg *otg, struct dwc3_charger *chg)
 {
 	struct dwc3_otg *dotg = container_of(otg, struct dwc3_otg, otg);
@@ -366,7 +476,7 @@ static void dwc3_ext_chg_det_done(struct usb_otg *otg, struct dwc3_charger *chg)
 		dotg->connect_type = CONNECT_TYPE_AC;
 		break;
 	case DWC3_UNSUPPORTED_CHARGER:
-		
+		/* ignore QCT re-detect mechanism. use HTC style*/
 		chg->chg_type = DWC3_SDP_CHARGER;
 	default:
 		dotg->connect_type = CONNECT_TYPE_UNKNOWN;
@@ -374,12 +484,23 @@ static void dwc3_ext_chg_det_done(struct usb_otg *otg, struct dwc3_charger *chg)
 		queue_delayed_work(system_nrt_wq, &dotg->ac_detect_work, 2 * HZ);
 		break;
 	}
+	/*
+	 * Ignore chg_detection notification if BSV has gone off by this time.
+	 * STOP chg_det as part of !BSV handling would reset the chg_det flags
+	 */
 	if (test_bit(B_SESS_VLD, &dotg->inputs)) {
 		queue_delayed_work(system_nrt_wq, &dotg->sm_work, 0);
 		queue_work(dotg->usb_wq, &dotg->notifier_work);
 	}
 }
 
+/**
+ * dwc3_set_charger - bind/unbind external charger driver
+ * @otg: Pointer to the otg transceiver structure
+ * @charger: Pointer to the external charger structure
+ *
+ * Returns 0 on success
+ */
 int dwc3_set_charger(struct usb_otg *otg, struct dwc3_charger *charger)
 {
 	struct dwc3_otg *dotg = container_of(otg, struct dwc3_otg, otg);
@@ -391,6 +512,13 @@ int dwc3_set_charger(struct usb_otg *otg, struct dwc3_charger *charger)
 	return 0;
 }
 
+/**
+ * dwc3_ext_event_notify - callback to handle events from external transceiver
+ * @otg: Pointer to the otg transceiver structure
+ * @event: Event reported by transceiver
+ *
+ * Returns 0 on success
+ */
 static void dwc3_ext_event_notify(struct usb_otg *otg,
 					enum dwc3_ext_events event)
 {
@@ -401,7 +529,7 @@ static void dwc3_ext_event_notify(struct usb_otg *otg,
 	int ret = 0;
 
 	printk(KERN_INFO "[USB] %s : init %d ,event %d ,id %d ,vbus %d\n",__func__,init,event,ext_xceiv->id,ext_xceiv->bsv);
-	
+	/* Flush processing any pending events before handling new ones */
 	if (init)
 		flush_delayed_work(&dotg->sm_work);
 
@@ -410,12 +538,14 @@ static void dwc3_ext_event_notify(struct usb_otg *otg,
 			dev_warn(phy->dev, "PHY_RESUME event out of LPM!!!!\n");
 		} else {
 			dev_dbg(phy->dev, "ext PHY_RESUME event received\n");
-			
+			/* ext_xceiver would have taken h/w out of LPM by now */
 			ret = pm_runtime_get(phy->dev);
 			if ((phy->state == OTG_STATE_A_HOST) &&
 							dotg->host_bus_suspend)
 				dotg->host_bus_suspend = 0;
 			if (ret == -EACCES) {
+				/* pm_runtime_get may fail during system
+				   resume with -EACCES error */
 				pm_runtime_disable(phy->dev);
 				pm_runtime_set_active(phy->dev);
 				pm_runtime_enable(phy->dev);
@@ -461,6 +591,13 @@ static void dwc3_ext_event_notify(struct usb_otg *otg,
 	}
 }
 
+/**
+ * dwc3_set_ext_xceiv - bind/unbind external transceiver driver
+ * @otg: Pointer to the otg transceiver structure
+ * @ext_xceiv: Pointer to the external transceiver struccture
+ *
+ * Returns 0 on success
+ */
 int dwc3_set_ext_xceiv(struct usb_otg *otg, struct dwc3_ext_xceiv *ext_xceiv)
 {
 	struct dwc3_otg *dotg = container_of(otg, struct dwc3_otg, otg);
@@ -524,16 +661,16 @@ static int dwc3_otg_set_power(struct usb_phy *phy, unsigned mA)
 	dev_info(phy->dev, "Avail curr from USB = %u\n", mA);
 
 	if (dotg->charger->max_power <= 2 && mA > 2) {
-		
+		/* Enable charging */
 		if (power_supply_set_online(dotg->psy, true))
 			goto psy_error;
 		if (power_supply_set_current_limit(dotg->psy, 1000*mA))
 			goto psy_error;
 	} else if (dotg->charger->max_power > 0 && (mA == 0 || mA == 2)) {
-		
+		/* Disable charging */
 		if (power_supply_set_online(dotg->psy, false))
 			goto psy_error;
-		
+		/* Set max current limit */
 		if (power_supply_set_current_limit(dotg->psy, 0))
 			goto psy_error;
 	}
@@ -547,9 +684,16 @@ psy_error:
 	return -ENXIO;
 }
 
+/* IRQs which OTG driver is interested in handling */
 #define DWC3_OEVT_MASK		(DWC3_OEVTEN_OTGCONIDSTSCHNGEVNT | \
 				 DWC3_OEVTEN_OTGBDEVVBUSCHNGEVNT)
 
+/**
+ * dwc3_otg_interrupt - interrupt handler for dwc3 otg events.
+ * @_dotg: Pointer to out controller context structure
+ *
+ * Returns IRQ_HANDLED on success otherwise IRQ_NONE.
+ */
 static irqreturn_t dwc3_otg_interrupt(int irq, void *_dotg)
 {
 	struct dwc3_otg *dotg = (struct dwc3_otg *)_dotg;
@@ -567,6 +711,10 @@ static irqreturn_t dwc3_otg_interrupt(int irq, void *_dotg)
 
 	if ((oevt_reg & DWC3_OEVTEN_OTGCONIDSTSCHNGEVNT) ||
 	    (oevt_reg & DWC3_OEVTEN_OTGBDEVVBUSCHNGEVNT)) {
+		/*
+		 * ID sts has changed, set inputs later, in the workqueue
+		 * function, switch from A to B or from B to A.
+		 */
 
 		if (oevt_reg & DWC3_OEVTEN_OTGCONIDSTSCHNGEVNT) {
 			if (osts & DWC3_OTG_OSTS_CONIDSTS) {
@@ -594,13 +742,18 @@ static irqreturn_t dwc3_otg_interrupt(int irq, void *_dotg)
 
 		ret = IRQ_HANDLED;
 
-		
+		/* Clear the interrupts we handled */
 		dwc3_writel(dotg->regs, DWC3_OEVT, handled_irqs);
 	}
 
 	return ret;
 }
 
+/**
+ * dwc3_otg_init_sm - initialize OTG statemachine input
+ * @dotg: Pointer to the dwc3_otg structure
+ *
+ */
 void dwc3_otg_init_sm(struct dwc3_otg *dotg)
 {
 	u32 osts = dwc3_readl(dotg->regs, DWC3_OSTS);
@@ -610,17 +763,41 @@ void dwc3_otg_init_sm(struct dwc3_otg *dotg)
 
 	dev_dbg(phy->dev, "Initialize OTG inputs, osts: 0x%x\n", osts);
 
+	/*
+	 * VBUS initial state is reported after PMIC
+	 * driver initialization. Wait for it.
+	 */
 	ret = wait_for_completion_timeout(&dotg->dwc3_xcvr_vbus_init, HZ * 15);
 	if (!ret) {
 		dev_err(phy->dev, "%s: completion timeout\n", __func__);
-		
+		/* We can safely assume no cable connected */
 		set_bit(ID, &dotg->inputs);
 	}
 
 	ext_xceiv = dotg->ext_xceiv;
 	dwc3_otg_reset(dotg);
+/*
+	if (ext_xceiv && !ext_xceiv->otg_capability) {
+		if (osts & DWC3_OTG_OSTS_CONIDSTS)
+			set_bit(ID, &dotg->inputs);
+		else
+			clear_bit(ID, &dotg->inputs);
+
+		if (osts & DWC3_OTG_OSTS_BSESVALID)
+			set_bit(B_SESS_VLD, &dotg->inputs);
+		else
+			clear_bit(B_SESS_VLD, &dotg->inputs);
+	}*/
 }
 
+/**
+ * dwc3_otg_sm_work - workqueue function.
+ *
+ * @w: Pointer to the dwc3 otg workqueue
+ *
+ * NOTE: After any change in phy->state,
+ * we must reschdule the state machine.
+ */
 static void dwc3_otg_sm_work(struct work_struct *w)
 {
 	struct dwc3_otg *dotg = container_of(w, struct dwc3_otg, sm_work.work);
@@ -632,8 +809,9 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 
 	mutex_lock(&smwork_sem);
 	pm_runtime_resume(phy->dev);
+/*	dev_dbg(phy->dev, "%s state\n", otg_state_string(phy->state));*/
 	printk(KERN_INFO "[USB] %s , state : %s\n",__func__,otg_state_string(phy->state));
-	
+	/* Check OTG state */
 	switch (phy->state) {
 	case OTG_STATE_UNDEFINED:
 		dwc3_otg_init_sm(dotg);
@@ -645,7 +823,7 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 					 "couldn't get usb power supply\n");
 		}
 
-		
+		/* Switch to A or B-Device according to ID / BSV */
 		if (!test_bit(ID, &dotg->inputs)) {
 			dev_dbg(phy->dev, "!id\n");
 			phy->state = OTG_STATE_A_IDLE;
@@ -689,10 +867,10 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 			dev_dbg(phy->dev, "b_sess_vld\n");
 			if (charger) {
 				printk(KERN_INFO "[USB] %s , b_sess_vld, chg_type : %d\n",__func__, charger->chg_type);
-				
+				/* Has charger been detected? If no detect it */
 				switch (charger->chg_type) {
 				case DWC3_STOP_CHARGE_CASE:
-					
+					/* !!we never test this function in dwc3 driver. we should do it if we get this accessory. */
 					dev_dbg(phy->dev, "lpm, invalid charger\n");
 					dwc3_otg_set_power(phy, 0);
 					pm_runtime_put_sync(phy->dev);
@@ -725,6 +903,15 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 					if (dotg->charger_retry_count <
 							max_chgr_retry_count)
 						dotg->charger_retry_count++;
+					/*
+					 * In case of floating charger, if
+					 * retry count equal to max retry count
+					 * notify PMIC about floating charger
+					 * and put Hw in low power mode. Else
+					 * perform charger detection again by
+					 * calling start_detection() with false
+					 * and then with true argument.
+					 */
 					if (dotg->charger_retry_count ==
 						max_chgr_retry_count) {
 						dwc3_otg_set_power(phy, 0);
@@ -753,8 +940,13 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 					break;
 				}
 			} else {
-				
+				/* no charger registered, start peripheral */
 				if (dwc3_otg_start_peripheral(&dotg->otg, 1)) {
+					/*
+					 * Probably set_peripheral not called
+					 * yet. We will re-try as soon as it
+					 * will be called
+					 */
 					dev_err(phy->dev, "enter lpm as\n"
 						"unable to start B-device\n");
 					phy->state = OTG_STATE_UNDEFINED;
@@ -800,7 +992,7 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 		break;
 
 	case OTG_STATE_A_IDLE:
-		
+		/* Switch to A-Device*/
 		if (test_bit(ID, &dotg->inputs)) {
 			dev_dbg(phy->dev, "id\n");
 			phy->state = OTG_STATE_B_IDLE;
@@ -811,12 +1003,20 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 			ret = dwc3_otg_start_host(&dotg->otg, 1);
 			if ((ret == -EPROBE_DEFER) &&
 						dotg->vbus_retry_count < 3) {
+				/*
+				 * Get regulator failed as regulator driver is
+				 * not up yet. Will try to start host after 1sec
+				 */
 				phy->state = OTG_STATE_A_IDLE;
 				dev_dbg(phy->dev, "Unable to get vbus regulator. Retrying...\n");
 				delay = VBUS_REG_CHECK_DELAY;
 				work = 1;
 				dotg->vbus_retry_count++;
 			} else if (ret) {
+				/*
+				 * Probably set_host was not called yet.
+				 * We will re-try as soon as it will be called
+				 */
 				dev_dbg(phy->dev, "enter lpm as\n"
 					"unable to start A-device\n");
 				phy->state = OTG_STATE_UNDEFINED;
@@ -831,6 +1031,14 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 			dev_dbg(phy->dev, "id\n");
 			dwc3_otg_start_host(&dotg->otg, 0);
 			phy->state = OTG_STATE_B_IDLE;
+			/*
+ 			 * For specific unknown AC charger, it'll pull low USB id
+ 			 * pin to ground and pull up Vbus. The USB driver will enter
+ 			 * host mode and set B_SESS_VLD bit due to pull low USB id pin
+ 			 * and pull up Vbus. The B_SESS_VLD bit will make otg state
+ 			 * machine enter worng state while unplug this unknown AC charger.
+ 			 * Clear B_SESS_VLD bit while host mode enter peripheral.
+ 			 */
 			clear_bit(B_SESS_VLD, &dotg->inputs);
 			dotg->vbus_retry_count = 0;
 			work = 1;
@@ -848,24 +1056,43 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 }
 
 
+/**
+ * dwc3_otg_reset - reset dwc3 otg registers.
+ *
+ * @w: Pointer to the dwc3 otg workqueue
+ */
 static void dwc3_otg_reset(struct dwc3_otg *dotg)
 {
 	static int once;
 	struct dwc3_ext_xceiv *ext_xceiv = dotg->ext_xceiv;
 
+	/*
+	 * OCFG[2] - OTG-Version = 1
+	 * OCFG[1] - HNPCap = 0
+	 * OCFG[0] - SRPCap = 0
+	 */
 	if (ext_xceiv && !ext_xceiv->otg_capability)
 		dwc3_writel(dotg->regs, DWC3_OCFG, 0x4);
 
+	/*
+	 * OCTL[6] - PeriMode = 1
+	 * OCTL[5] - PrtPwrCtl = 0
+	 * OCTL[4] - HNPReq = 0
+	 * OCTL[3] - SesReq = 0
+	 * OCTL[2] - TermSelDLPulse = 0
+	 * OCTL[1] - DevSetHNPEn = 0
+	 * OCTL[0] - HstSetHNPEn = 0
+	 */
 	if (!once) {
 		if (ext_xceiv && !ext_xceiv->otg_capability)
 			dwc3_writel(dotg->regs, DWC3_OCTL, 0x40);
 		once++;
 	}
 
-	
+	/* Clear all otg events (interrupts) indications  */
 	dwc3_writel(dotg->regs, DWC3_OEVT, 0xFFFF);
 
-	
+	/* Enable ID/BSV StsChngEn event*/
 	if (ext_xceiv && !ext_xceiv->otg_capability)
 		dwc3_writel(dotg->regs, DWC3_OEVTEN,
 				DWC3_OEVTEN_OTGCONIDSTSCHNGEVNT |
@@ -888,11 +1115,17 @@ static void dwc3_notify_usb_attached(struct usb_phy *phy)
 
 
 
+/* The dedicated 9V detection GPIO will be high if VBUS is in and over 6V.
+ * Since D+/D- status is not involved, there is no timing issue between
+ * D+/D- and VBUS. 9V AC should NOT be found here.
+ */
 static void ac_detect_expired_work(struct work_struct *w)
 {
+/* !!we never test this function in dwc3 driver. we should do it if we get this accessory. */
 	struct delayed_work *dw = container_of(w, struct delayed_work, work);
 	struct dwc3_otg *dotg = container_of(dw, struct dwc3_otg, ac_detect_work);
 	u32 line_state;
+/*	u32 delay = 0;*/
 
 	line_state = htc_dwc3_get_line_state(dotg->dwc);
 	USBH_INFO("%s: count = %d, connect_type = %d\n", __func__,
@@ -902,8 +1135,12 @@ static void ac_detect_expired_work(struct work_struct *w)
 		return;
 
 	printk("[USB] %s: line state = %x\n",__func__,(line_state & (3 << 8)));
-	
+	/* detect shorted D+/D-, indicating AC power */
 	if (line_state != (3 << 8)) {
+		/* Some carkit can't be recognized as AC mode.
+		 * Add SW solution here to notify battery driver should
+		 * work as AC charger when car mode activated.
+		 */
 #ifdef CONFIG_CABLE_DETECT_ACCESSORY
 		if (cable_get_accessory_type() == DOCK_STATE_CAR
 			||cable_get_accessory_type() == DOCK_STATE_AUDIO_DOCK) {
@@ -941,7 +1178,7 @@ static void ac_detect_expired_work(struct work_struct *w)
 				dotg->ac_detect_count = 0;
 				dotg->otg.phy->state = OTG_STATE_B_IDLE;
 				dwc3_otg_start_peripheral(&dotg->otg, 0);
-				
+				/* no schedule sm_work */
 				queue_delayed_work(system_nrt_wq, &dotg->sm_work, 0);
 				queue_work(dotg->usb_wq, &dotg->notifier_work);
 				return;
@@ -949,6 +1186,12 @@ static void ac_detect_expired_work(struct work_struct *w)
 		}
 #endif
 		dotg->ac_detect_count++;
+/*
+		if (dotg->ac_detect_count == 1)
+			delay = 5 * HZ;
+		else if (dotg->ac_detect_count == 2)
+			delay = 10 * HZ;
+*/
 		queue_delayed_work(system_nrt_wq, &dotg->ac_detect_work, 2 * HZ);
 	} else {
 		USBH_INFO("AC charger\n");
@@ -1004,7 +1247,7 @@ static int dwc3_otg_send_event(struct usb_otg *otg, enum usb_otg_event event)
 	char udev_event[128];
 	char *envp[] = { module_name, udev_event, NULL };
 	int ret = 0;
-	
+	/* we only broadcast customize event now*/
 	switch (event) {
 		case OTG_EVENT_INSUFFICIENT_POWER:
 		case OTG_EVENT_DEV_NOT_SUPPORTED:
@@ -1022,6 +1265,12 @@ static int dwc3_otg_send_event(struct usb_otg *otg, enum usb_otg_event event)
 
 }
 
+/**
+ * dwc3_otg_init - Initializes otg related registers
+ * @dwc: Pointer to out controller context structure
+ *
+ * Returns 0 on success otherwise negative errno.
+ */
 int dwc3_otg_init(struct dwc3 *dwc)
 {
 	u32	reg;
@@ -1031,20 +1280,29 @@ int dwc3_otg_init(struct dwc3 *dwc)
 	dev_dbg(dwc->dev, "dwc3_otg_init\n");
 
 
+	/*
+	 * GHWPARAMS6[10] bit is SRPSupport.
+	 * This bit also reflects DWC_USB3_EN_OTG
+	 */
 	reg = dwc3_readl(dwc->regs, DWC3_GHWPARAMS6);
 	if (!(reg & DWC3_GHWPARAMS6_SRP_SUPPORT)) {
+		/*
+		 * No OTG support in the HW core.
+		 * We return 0 to indicate no error, since this is acceptable
+		 * situation, just continue probe the dwc3 driver without otg.
+		 */
 		dev_dbg(dwc->dev, "dwc3_otg address space is not supported\n");
 		return 0;
 	}
 
-	
+	/* Allocate and init otg instance */
 	dotg = kzalloc(sizeof(struct dwc3_otg), GFP_KERNEL);
 	if (!dotg) {
 		dev_err(dwc->dev, "unable to allocate dwc3_otg\n");
 		return -ENOMEM;
 	}
 
-	
+	/* DWC3 has separate IRQ line for OTG events (ID/BSV etc.) */
 	dotg->irq = platform_get_irq_byname(to_platform_device(dwc->dev),
 								"otg_irq");
 	if (dotg->irq < 0) {
@@ -1059,7 +1317,7 @@ int dwc3_otg_init(struct dwc3 *dwc)
 	dotg->otg.set_host = dwc3_otg_set_host;
 	dotg->otg.send_event = dwc3_otg_send_event;
 
-	
+	/* This reference is used by dwc3 modules for checking otg existance */
 	dwc->dotg = dotg;
 	the_dwc3_otg = dotg;
 	dotg->connect_type_ready = 0;
@@ -1127,11 +1385,17 @@ err1:
 	return ret;
 }
 
+/**
+ * dwc3_otg_exit
+ * @dwc: Pointer to out controller context structure
+ *
+ * Returns 0 on success otherwise negative errno.
+ */
 void dwc3_otg_exit(struct dwc3 *dwc)
 {
 	struct dwc3_otg *dotg = dwc->dotg;
 
-	
+	/* dotg is null when GHWPARAMS6[10]=SRPSupport=0, see dwc3_otg_init */
 	if (dotg) {
 		if (dotg->charger)
 			dotg->charger->start_detection(dotg->charger, false);

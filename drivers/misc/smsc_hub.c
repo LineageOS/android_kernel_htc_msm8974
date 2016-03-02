@@ -41,6 +41,7 @@ struct hsic_hub {
 static struct hsic_hub *smsc_hub;
 static struct platform_driver smsc_hub_driver;
 
+/* APIs for setting/clearing bits and for reading/writing values */
 static inline int hsic_hub_get_u8(struct i2c_client *client, u8 reg)
 {
 	int ret;
@@ -134,13 +135,31 @@ static int i2c_hsic_hub_probe(struct i2c_client *client,
 
 	switch (smsc_hub->pdata->model_id) {
 	case SMSC3503_ID:
+		/*
+		 * CONFIG_N bit in SP_ILOCK register has to be set before
+		 * changing other registers to change default configuration
+		 * of hsic hub.
+		 */
 		hsic_hub_set_bits(client, SMSC3503_SP_ILOCK, CONFIG_N);
 
+		/*
+		 * Can change default configuartion like VID,PID,
+		 * strings etc by writing new values to hsic hub registers
+		 */
 		hsic_hub_write_word_data(client, SMSC3503_VENDORID, 0x05C6);
 
+		/*
+		 * CONFIG_N bit in SP_ILOCK register has to be cleared
+		 * for new values in registers to be effective after
+		 * writing to other registers.
+		 */
 		hsic_hub_clear_bits(client, SMSC3503_SP_ILOCK, CONFIG_N);
 		break;
 	case SMSC4604_ID:
+		/*
+		 * SMSC4604 requires an I2C attach command to be issued
+		 * if I2C bus is connected
+		 */
 		return smsc4604_send_connect_cmd(client);
 	default:
 		return -EINVAL;
@@ -173,6 +192,11 @@ static int msm_hsic_hub_init_clock(struct hsic_hub *hub, int init)
 {
 	int ret;
 
+	/*
+	 * xo_clk_gpio controls an external xo clock which feeds
+	 * the hub reference clock. When this gpio is present,
+	 * assume that no other clocks are required.
+	 */
 	if (hub->pdata->xo_clk_gpio)
 		return 0;
 
@@ -189,7 +213,7 @@ static int msm_hsic_hub_init_clock(struct hsic_hub *hub, int init)
 	if (IS_ERR(hub->ref_clk)) {
 		dev_dbg(hub->dev, "failed to get ref_clk\n");
 
-		
+		/* In the absence of dedicated ref_clk, xo clocks the HUB */
 		smsc_hub->xo_handle = msm_xo_get(MSM_XO_TCXO_D1, "hsic_hub");
 		if (IS_ERR(smsc_hub->xo_handle)) {
 			dev_err(hub->dev, "not able to get the handle\n"
@@ -212,8 +236,8 @@ static int msm_hsic_hub_init_clock(struct hsic_hub *hub, int init)
 
 	return ret;
 }
-#define HSIC_HUB_INT_VOL_MIN	1800000 
-#define HSIC_HUB_INT_VOL_MAX	2950000 
+#define HSIC_HUB_INT_VOL_MIN	1800000 /* uV */
+#define HSIC_HUB_INT_VOL_MAX	2950000 /* uV */
 static int msm_hsic_hub_init_gpio(struct hsic_hub *hub, int init)
 {
 	int ret;
@@ -259,7 +283,7 @@ static int msm_hsic_hub_init_gpio(struct hsic_hub *hub, int init)
 			return ret;
 		}
 
-		
+		/* Enable LDO if required for external pull-up */
 		smsc_hub->int_pad_reg = devm_regulator_get(hub->dev, "hub-int");
 		if (IS_ERR(smsc_hub->int_pad_reg)) {
 			dev_dbg(hub->dev, "unable to get ext hub_int reg\n");
@@ -285,9 +309,9 @@ static int msm_hsic_hub_init_gpio(struct hsic_hub *hub, int init)
 	return 0;
 }
 
-#define HSIC_HUB_VDD_VOL_MIN	1650000 
-#define HSIC_HUB_VDD_VOL_MAX	1950000 
-#define HSIC_HUB_VDD_LOAD	36000	
+#define HSIC_HUB_VDD_VOL_MIN	1650000 /* uV */
+#define HSIC_HUB_VDD_VOL_MAX	1950000 /* uV */
+#define HSIC_HUB_VDD_LOAD	36000	/* uA */
 static int msm_hsic_hub_init_vdd(struct hsic_hub *hub, int init)
 {
 	int ret;
@@ -392,6 +416,12 @@ static int sms_hub_remove_child(struct device *dev, void *data)
 {
 	struct platform_device *pdev = to_platform_device(dev);
 
+	/*
+	 * Runtime PM is disabled before the driver's remove method
+	 * is called.  So resume the device before unregistering
+	 * the device. Don't worry about the PM usage counter as
+	 * the device will be freed.
+	 */
 	pm_runtime_get_sync(dev);
 	of_device_unregister(pdev);
 
@@ -574,6 +604,10 @@ static int __devinit smsc_hub_probe(struct platform_device *pdev)
 	}
 
 	gpio_direction_output(pdata->hub_reset, 0);
+	/*
+	 * Hub reset should be asserted for minimum 2microsec
+	 * before deasserting.
+	 */
 	udelay(5);
 	gpio_direction_output(pdata->hub_reset, 1);
 
@@ -602,10 +636,10 @@ static int __devinit smsc_hub_probe(struct platform_device *pdev)
 	memset(&i2c_info, 0, sizeof(struct i2c_board_info));
 	strlcpy(i2c_info.type, "i2c_hsic_hub", I2C_NAME_SIZE);
 
-	
+	/* 250ms delay is required for SMSC4604 HUB to get I2C up */
 	msleep(250);
 
-	
+	/* Assign I2C slave address per SMSC model */
 	switch (pdata->model_id) {
 	case SMSC3503_ID:
 		normal_i2c[0] = SMSC3503_I2C_ADDR;

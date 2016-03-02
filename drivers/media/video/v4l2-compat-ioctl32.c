@@ -39,7 +39,7 @@ struct v4l2_window32 {
 	struct v4l2_rect        w;
 	enum v4l2_field  	field;
 	__u32			chromakey;
-	compat_caddr_t		clips; 
+	compat_caddr_t		clips; /* actually struct v4l2_clip32 * */
 	__u32			clipcount;
 	compat_caddr_t		bitmap;
 };
@@ -154,10 +154,19 @@ struct v4l2_format32 {
 		struct v4l2_window32	win;
 		struct v4l2_vbi_format	vbi;
 		struct v4l2_sliced_vbi_format	sliced;
-		__u8	raw_data[200];        
+		__u8	raw_data[200];        /* user-defined */
 	} fmt;
 };
 
+/**
+ * struct v4l2_create_buffers32 - VIDIOC_CREATE_BUFS32 argument
+ * @index:	on return, index of the first created buffer
+ * @count:	entry: number of requested buffers,
+ *		return: number of created buffers
+ * @memory:	buffer memory type
+ * @format:	frame format, for which buffers are requested
+ * @reserved:	future extensions
+ */
 struct v4l2_create_buffers32 {
 	__u32			index;
 	__u32			count;
@@ -260,16 +269,16 @@ static int put_v4l2_create32(struct v4l2_create_buffers *kp, struct v4l2_create_
 
 struct v4l2_standard32 {
 	__u32		     index;
-	__u32		     id[2]; 
+	__u32		     id[2]; /* __u64 would get the alignment wrong */
 	__u8		     name[24];
-	struct v4l2_fract    frameperiod; 
+	struct v4l2_fract    frameperiod; /* Frames, not fields */
 	__u32		     framelines;
 	__u32		     reserved[4];
 };
 
 static int get_v4l2_standard32(struct v4l2_standard *kp, struct v4l2_standard32 __user *up)
 {
-	
+	/* other fields are not set by the user, nor used by the driver */
 	if (!access_ok(VERIFY_READ, up, sizeof(struct v4l2_standard32)) ||
 		get_user(kp->index, &up->index))
 		return -EFAULT;
@@ -310,7 +319,7 @@ struct v4l2_buffer32 {
 	struct v4l2_timecode	timecode;
 	__u32			sequence;
 
-	
+	/* memory location */
 	enum v4l2_memory        memory;
 	union {
 		__u32           offset;
@@ -356,6 +365,8 @@ static int put_v4l2_plane32(struct v4l2_plane *up, struct v4l2_plane32 *up32,
 				sizeof(__u32)))
 		return -EFAULT;
 
+	/* For MMAP, driver might've set up the offset, so copy it back.
+	 * USERPTR stays the same (was userspace-provided), so no copying. */
 	if (memory == V4L2_MEMORY_MMAP)
 		if (copy_in_user(&up32->m.mem_offset, &up->m.mem_offset,
 					sizeof(__u32)))
@@ -395,6 +406,8 @@ static int get_v4l2_buffer32(struct v4l2_buffer *kp, struct v4l2_buffer32 __user
 		num_planes = kp->length;
 		if (num_planes == 0) {
 			kp->m.planes = NULL;
+			/* num_planes == 0 is legal, e.g. when userspace doesn't
+			 * need planes array on DQBUF*/
 			return 0;
 		}
 
@@ -406,6 +419,8 @@ static int get_v4l2_buffer32(struct v4l2_buffer *kp, struct v4l2_buffer32 __user
 				num_planes * sizeof(struct v4l2_plane32)))
 			return -EFAULT;
 
+		/* We don't really care if userspace decides to kill itself
+		 * by passing a very big num_planes value */
 		uplane = compat_alloc_user_space(num_planes *
 						sizeof(struct v4l2_plane));
 		kp->m.planes = uplane;
@@ -544,16 +559,18 @@ static int put_v4l2_framebuffer32(struct v4l2_framebuffer *kp, struct v4l2_frame
 }
 
 struct v4l2_input32 {
-	__u32	     index;		
-	__u8	     name[32];		
-	__u32	     type;		
-	__u32	     audioset;		
-	__u32        tuner;             
+	__u32	     index;		/*  Which input */
+	__u8	     name[32];		/*  Label */
+	__u32	     type;		/*  Type of input */
+	__u32	     audioset;		/*  Associated audios (bitfield) */
+	__u32        tuner;             /*  Associated tuner */
 	v4l2_std_id  std;
 	__u32	     status;
 	__u32	     reserved[4];
 } __attribute__ ((packed));
 
+/* The 64-bit v4l2_input struct has extra padding at the end of the struct.
+   Otherwise it is identical to the 32-bit version. */
 static inline int get_v4l2_input32(struct v4l2_input *kp, struct v4l2_input32 __user *up)
 {
 	if (copy_from_user(kp, up, sizeof(struct v4l2_input32)))
@@ -573,7 +590,7 @@ struct v4l2_ext_controls32 {
        __u32 count;
        __u32 error_idx;
        __u32 reserved[2];
-       compat_caddr_t controls; 
+       compat_caddr_t controls; /* actually struct v4l2_ext_control32 * */
 };
 
 struct v4l2_ext_control32 {
@@ -583,11 +600,16 @@ struct v4l2_ext_control32 {
 	union {
 		__s32 value;
 		__s64 value64;
-		compat_caddr_t string; 
+		compat_caddr_t string; /* actually char * */
 	};
 } __attribute__ ((packed));
 
+/* The following function really belong in v4l2-common, but that causes
+   a circular dependency between modules. We need to think about this, but
+   for now this will do. */
 
+/* Return non-zero if this control is a pointer type. Currently only
+   type STRING is a pointer type. */
 static inline int ctrl_is_pointer(u32 id)
 {
 	switch (id) {
@@ -669,6 +691,9 @@ static int put_v4l2_ext_controls32(struct v4l2_ext_controls *kp, struct v4l2_ext
 	while (--n >= 0) {
 		unsigned size = sizeof(*ucontrols);
 
+		/* Do not modify the pointer when copying a pointer control.
+		   The contents of the pointer was changed, not the pointer
+		   itself. */
 		if (ctrl_is_pointer(kcontrols->id))
 			size -= sizeof(ucontrols->value64);
 		if (copy_in_user(ucontrols, kcontrols, size))
@@ -748,7 +773,7 @@ static long do_video_ioctl(struct file *file, unsigned int cmd, unsigned long ar
 	int compatible_arg = 1;
 	long err = 0;
 
-	
+	/* First, convert the command. */
 	switch (cmd) {
 	case VIDIOC_G_FMT32: cmd = VIDIOC_G_FMT; break;
 	case VIDIOC_S_FMT32: cmd = VIDIOC_S_FMT; break;
@@ -852,6 +877,9 @@ static long do_video_ioctl(struct file *file, unsigned int cmd, unsigned long ar
 		set_fs(old_fs);
 	}
 
+	/* Special case: even after an error we need to put the
+	   results back for these ioctls since the error_idx will
+	   contain information on which control failed. */
 	switch (cmd) {
 	case VIDIOC_G_EXT_CTRLS:
 	case VIDIOC_S_EXT_CTRLS:

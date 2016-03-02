@@ -61,14 +61,14 @@ void bldr_log_parser(const char *bldr_log, char *bldr_log_buf, unsigned long bld
 		return;
 	}
 
-	for(i=0; i<bldr_log_size; i++) 
+	for(i=0; i<bldr_log_size; i++) //Scan all of bldr_log string
 	{
 		bool terminal_match = true;
 
 		if((i+terminal_pattern_len) > bldr_log_size)
 			break;
 
-		for(j=0; j < terminal_pattern_len; j++) 
+		for(j=0; j < terminal_pattern_len; j++) //Compare bldr_log string & terminal pattern
 		{
 			if(bldr_log[i+j] != terminal_pattern[j])
 			{
@@ -77,13 +77,13 @@ void bldr_log_parser(const char *bldr_log, char *bldr_log_buf, unsigned long bld
 			}
 		}
 
-		if(terminal_match) 
+		if(terminal_match) //Means it found a completed line log
 		{
 			bool specific_match = true;
 			int specific_pattern_start = i-specific_pattern_len;
 			line_length = i+terminal_pattern_len-last_index;
 
-			for(k=0; k < specific_pattern_len; k++) 
+			for(k=0; k < specific_pattern_len; k++) //Compare the end of line log string & specific pattern
 			{
 				if(bldr_log[specific_pattern_start+k] != specific_pattern[k])
 				{
@@ -92,9 +92,9 @@ void bldr_log_parser(const char *bldr_log, char *bldr_log_buf, unsigned long bld
 				}
 			}
 
-			if(specific_match) 
+			if(specific_match) //Means it found the line log that involved specific pattern
 			{
-				
+				//Copy the line log to log buffer but remove specific pattern string.
 				memcpy(bldr_log_buf_ptr, bldr_log_ptr, line_length-terminal_pattern_len-specific_pattern_len);
 				bldr_log_buf_ptr +=(line_length-terminal_pattern_len-specific_pattern_len);
 				memcpy(bldr_log_buf_ptr, terminal_pattern, terminal_pattern_len);
@@ -123,7 +123,7 @@ static bool bldr_rst_msg_parser(char *bldr_log_buf, unsigned long bldr_log_buf_s
 	bool is_ramdump_mode = false;
 	bool found_ramdump_pattern_rst = false;
 
-	for(i=0; i<bldr_log_buf_size; i++) 
+	for(i=0; i<bldr_log_buf_size; i++) //Scan all of bldr_log_buf string
 	{
 		bool ramdump_pattern_rst_match = true;
 		bool ramdump_pattern_vib_match = true;
@@ -131,7 +131,7 @@ static bool bldr_rst_msg_parser(char *bldr_log_buf, unsigned long bldr_log_buf_s
 		if(!found_ramdump_pattern_rst &&
 			(i+ramdump_pattern_rst_len) <= bldr_log_buf_size)
 		{
-			for(j=0; j < ramdump_pattern_rst_len; j++) 
+			for(j=0; j < ramdump_pattern_rst_len; j++) //Compare bldr_log string & ramdump pattern rst
 			{
 				if(bldr_log_buf[i+j] != ramdump_pattern_rst[j])
 				{
@@ -140,7 +140,7 @@ static bool bldr_rst_msg_parser(char *bldr_log_buf, unsigned long bldr_log_buf_s
 				}
 			}
 
-			if(ramdump_pattern_rst_match) 
+			if(ramdump_pattern_rst_match) //Means it found the line log that involved ramdump pattern rst
 			{
 				if(is_last_bldr)
 					bldr_ramdump_pattern_rst_buf_ptr = bldr_log_buf+i;
@@ -154,7 +154,7 @@ static bool bldr_rst_msg_parser(char *bldr_log_buf, unsigned long bldr_log_buf_s
 			(i+ramdump_pattern_vib_len) <= bldr_log_buf_size &&
 			is_last_bldr)
 		{
-			for(k=0; k < ramdump_pattern_vib_len; k++) 
+			for(k=0; k < ramdump_pattern_vib_len; k++) //Compare bldr_log string & ramdump pattern vib
 			{
 				if(bldr_log_buf[i+k] != ramdump_pattern_vib[k])
 				{
@@ -163,13 +163,13 @@ static bool bldr_rst_msg_parser(char *bldr_log_buf, unsigned long bldr_log_buf_s
 				}
 			}
 
-			if(ramdump_pattern_vib_match) 
+			if(ramdump_pattern_vib_match) //Means it found the line log that involved ramdump pattern vib
 				is_ramdump_mode = true;
 		}
 
 		if(found_ramdump_pattern_rst &&
 			is_ramdump_mode &&
-			is_last_bldr)  
+			is_last_bldr)  //Found all of ramdump patterns
 		{
 			memcpy(bldr_ramdump_pattern_rst_buf_ptr, ramdump_pattern_real, ramdump_pattern_real_len);
 			break;

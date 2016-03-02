@@ -25,16 +25,20 @@
 #include "pil-q6v5.h"
 #include "pil-msa.h"
 
+/* Q6 Register Offsets */
 #define QDSP6SS_RST_EVB			0x010
 
+/* AXI Halting Registers */
 #define MSS_Q6_HALT_BASE		0x180
 #define MSS_MODEM_HALT_BASE		0x200
 #define MSS_NC_HALT_BASE		0x280
 
+/* RMB Status Register Values */
 #define STATUS_PBL_SUCCESS		0x1
 #define STATUS_XPU_UNLOCKED		0x1
 #define STATUS_XPU_UNLOCKED_SCRIBBLED	0x2
 
+/* PBL/MBA interface registers */
 #define RMB_MBA_IMAGE			0x00
 #define RMB_PBL_STATUS			0x04
 #define RMB_MBA_COMMAND			0x08
@@ -53,6 +57,7 @@
 #define STATUS_META_DATA_AUTH_SUCCESS	0x3
 #define STATUS_AUTH_COMPLETE		0x4
 
+/* External BHS */
 #define EXTERNAL_BHS_ON			BIT(0)
 #define EXTERNAL_BHS_STATUS		BIT(4)
 #define BHS_TIMEOUT_US			50
@@ -158,7 +163,7 @@ static int pil_msa_wait_for_mba_ready(struct q6v5_data *drv)
 	int ret;
 	u32 status;
 
-	
+	/* Wait for PBL completion. */
 	ret = readl_poll_timeout(drv->rmb_base + RMB_PBL_STATUS, status,
 		status != 0, POLL_INTERVAL_US, pbl_mba_boot_timeout_ms * 1000);
 	if (ret) {
@@ -171,7 +176,7 @@ static int pil_msa_wait_for_mba_ready(struct q6v5_data *drv)
 		return -EINVAL;
 	}
 
-	
+	/* Wait for MBA completion. */
 	ret = readl_poll_timeout(drv->rmb_base + RMB_MBA_STATUS, status,
 		status != 0, POLL_INTERVAL_US, pbl_mba_boot_timeout_ms * 1000);
 	if (ret) {
@@ -214,11 +219,15 @@ static int pil_msa_pbl_reset(struct pil_desc *pil)
 	phys_addr_t start_addr = pil_get_entry_addr(pil);
 	int ret;
 
+	/*
+	 * Bring subsystem out of reset and enable required
+	 * regulators and clocks.
+	 */
 	ret = pil_msa_pbl_power_up(drv);
 	if (ret)
 		goto err_power;
 
-	
+	/* Deassert reset to subsystem and wait for propagation */
 	writel_relaxed(0, drv->restart_reg);
 	mb();
 	udelay(2);
@@ -227,10 +236,10 @@ static int pil_msa_pbl_reset(struct pil_desc *pil)
 	if (ret)
 		goto err_clks;
 
-	
+	/* Program Image Address */
 	if (drv->self_auth) {
 		writel_relaxed(start_addr, drv->rmb_base + RMB_MBA_IMAGE);
-		
+		/* Ensure write to RMB base occurs before reset is released. */
 		mb();
 	} else {
 		writel_relaxed((start_addr >> 4) & 0x0FFFFFF0,
@@ -241,7 +250,7 @@ static int pil_msa_pbl_reset(struct pil_desc *pil)
 	if (ret)
 		goto err_q6v5_reset;
 
-	
+	/* Wait for MBA to start. Check for PBL and MBA errors while waiting. */
 	if (drv->self_auth) {
 		ret = pil_msa_wait_for_mba_ready(drv);
 		if (ret)
@@ -312,7 +321,7 @@ static int pil_msa_mba_init_image(struct pil_desc *pil,
 	s32 status;
 	int ret;
 
-	
+	/* Make metadata physically contiguous and 4K aligned. */
 	mdata_virt = dma_alloc_coherent(pil->dev, size, &mdata_phys,
 					GFP_KERNEL);
 	if (!mdata_virt) {
@@ -320,13 +329,13 @@ static int pil_msa_mba_init_image(struct pil_desc *pil,
 		return -ENOMEM;
 	}
 	memcpy(mdata_virt, metadata, size);
-	
+	/* wmb() ensures copy completes prior to starting authentication. */
 	wmb();
 
-	
+	/* Initialize length counter to 0 */
 	writel_relaxed(0, drv->rmb_base + RMB_PMI_CODE_LENGTH);
 
-	
+	/* Pass address of meta-data to the MBA and perform authentication */
 	writel_relaxed(mdata_phys, drv->rmb_base + RMB_PMI_META_DATA);
 	writel_relaxed(CMD_META_DATA_READY, drv->rmb_base + RMB_MBA_COMMAND);
 	ret = readl_poll_timeout(drv->rmb_base + RMB_MBA_STATUS, status,
@@ -352,12 +361,12 @@ static int pil_msa_mba_verify_blob(struct pil_desc *pil, phys_addr_t phy_addr,
 	s32 status;
 	u32 img_length = readl_relaxed(drv->rmb_base + RMB_PMI_CODE_LENGTH);
 
-	
+	/* Begin image authentication */
 	if (img_length == 0) {
 		writel_relaxed(phy_addr, drv->rmb_base + RMB_PMI_CODE_START);
 		writel_relaxed(CMD_LOAD_READY, drv->rmb_base + RMB_MBA_COMMAND);
 	}
-	
+	/* Increment length counter */
 	img_length += size;
 	writel_relaxed(img_length, drv->rmb_base + RMB_PMI_CODE_LENGTH);
 
@@ -376,7 +385,7 @@ static int pil_msa_mba_auth(struct pil_desc *pil)
 	int ret;
 	s32 status;
 
-	
+	/* Wait for all segments to be authenticated or an error to occur */
 	ret = readl_poll_timeout(drv->rmb_base + RMB_MBA_STATUS, status,
 			status == STATUS_AUTH_COMPLETE || status < 0,
 			50, modem_auth_timeout_ms * 1000);
