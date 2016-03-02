@@ -55,6 +55,8 @@ struct msm_sensor_power_setting ov2722_power_setting[] = {
 	},
 };
 
+//For power down sequece, keep reset pin low
+//For better code maintainability (copy data variable), keep the same array size with ov2722_power_down_setting
 struct msm_sensor_power_setting ov2722_power_down_setting[] = {
 	{
 		.seq_type = SENSOR_GPIO,
@@ -125,7 +127,7 @@ static int ov2722_read_fuseid(struct sensorb_cfg_data *cdata,
 		pr_err("%s: i2c_write failed\n", __func__);
 		return rc;
 	}
-	
+	// clear
 	for (i = 0x3d00; i <= 0x3d1f; i++) {
 		rc = s_ctrl->sensor_i2c_client->i2c_func_tbl->i2c_write(s_ctrl->sensor_i2c_client, i, 0, MSM_CAMERA_I2C_BYTE_DATA);
 		if (rc < 0) {
@@ -253,12 +255,12 @@ static int32_t ov2722_platform_probe(struct platform_device *pdev)
 	int32_t rc = 0;
 	const struct of_device_id *match;
 	match = of_match_device(ov2722_dt_match, &pdev->dev);
-	
+	/* HTC_START_sungfeng klocwork */
 	if (!match) {
 		pr_err("%s:%d\n", __func__, __LINE__);
 		return -EINVAL;
 	}
-	
+	/* HTC_END */
 	rc = msm_sensor_platform_probe(pdev, match->data);
 	return rc;
 }
@@ -298,6 +300,7 @@ int32_t ov2722_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl)
     pr_info("%s: -\n", __func__);
     return status;
 }
+//For power down sequece, keep reset pin low
 int32_t ov2722_sensor_power_down(struct msm_sensor_ctrl_t *s_ctrl)
 {
     int32_t status;
@@ -308,7 +311,7 @@ int32_t ov2722_sensor_power_down(struct msm_sensor_ctrl_t *s_ctrl)
     s_ctrl->power_setting_array.power_setting = ov2722_power_down_setting;
     s_ctrl->power_setting_array.size = ARRAY_SIZE(ov2722_power_down_setting);
 
-    
+    //When release regulator, need the same data pointer from power up sequence.
     for(i = 0; i < s_ctrl->power_setting_array.size;  i++)
     {
         data_size = sizeof(ov2722_power_down_setting[i].data)/sizeof(void *);

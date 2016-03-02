@@ -22,12 +22,39 @@
 #define BAM_MUX_HDR_CMD_DATA			0
 #define BAM_MUX_HDR_CMD_OPEN			1
 #define BAM_MUX_HDR_CMD_CLOSE			2
-#define BAM_MUX_HDR_CMD_STATUS			3 
+#define BAM_MUX_HDR_CMD_STATUS			3 /* unused */
 #define BAM_MUX_HDR_CMD_OPEN_NO_A2_PC		4
 #define BUFFER_SIZE				2048
 
+/**
+ * struct bam_ops_if - collection of function pointers to allow swappable
+ * runtime functionality
+ * @smsm_change_state_ptr: pointer to smsm_change_state function
+ * @smsm_get_state_ptr: pointer to smsm_get_state function
+ * @smsm_state_cb_register_ptr: pointer to smsm_state_cb_register function
+ * @smsm_state_cb_deregister_ptr: pointer to smsm_state_cb_deregister function
+ * @sps_connect_ptr: pointer to sps_connect function
+ * @sps_disconnect_ptr: pointer to sps_disconnect function
+ * @sps_register_bam_device_ptr: pointer to sps_register_bam_device
+ * @sps_deregister_bam_device_ptr: pointer to sps_deregister_bam_device
+ * function
+ * @sps_alloc_endpoint_ptr: pointer to sps_alloc_endpoint function
+ * @sps_free_endpoint_ptr: pointer to sps_free_endpoint function
+ * @sps_set_config_ptr: pointer to sps_set_config function
+ * @sps_get_config_ptr: pointer to sps_get_config function
+ * @sps_device_reset_ptr: pointer to sps_device_reset function
+ * @sps_register_event_ptr: pointer to sps_register_event function
+ * @sps_transfer_one_ptr: pointer to sps_transfer_one function
+ * @sps_get_iovec_ptr: pointer to sps_get_iovec function
+ * @sps_get_unused_desc_num_ptr: pointer to sps_get_unused_desc_num function
+ * @dma_to: enum for the direction of dma operations to device
+ * @dma_from: enum for the direction of dma operations from device
+ *
+ * This struct contains the interface from bam_dmux to smsm and sps. The
+ * pointers can be swapped out at run time to provide different functionality.
+ */
 struct bam_ops_if {
-	
+	/* smsm */
 	int (*smsm_change_state_ptr)(uint32_t smsm_entry,
 		uint32_t clear_mask, uint32_t set_mask);
 
@@ -40,7 +67,7 @@ struct bam_ops_if {
 	int (*smsm_state_cb_deregister_ptr)(uint32_t smsm_entry, uint32_t mask,
 		void (*notify)(void *, uint32_t, uint32_t), void *data);
 
-	
+	/* sps */
 	int (*sps_connect_ptr)(struct sps_pipe *h, struct sps_connect *connect);
 
 	int (*sps_disconnect_ptr)(struct sps_pipe *h);
@@ -81,6 +108,16 @@ struct bam_ops_if {
 	enum dma_data_direction dma_from;
 };
 
+/**
+ * struct bam_mux_hdr - struct which contains bam dmux header info
+ * @magic_num: magic number placed at start to ensure that it is actually a
+ * valid bam dmux header
+ * @reserved: for later use
+ * @cmd: the command
+ * @pad_len: the length of padding
+ * @ch_id: the id of the bam dmux channel that this is sent on
+ * @pkt_len: the length of the packet that this is the header of
+ */
 struct bam_mux_hdr {
 	uint16_t magic_num;
 	uint8_t reserved;
@@ -90,6 +127,13 @@ struct bam_mux_hdr {
 	uint16_t pkt_len;
 };
 
+/**
+ * struct rx_pkt_info - struct describing an rx packet
+ * @skb: socket buffer containing the packet
+ * @dma_address: dma mapped address of the packet
+ * @work: work_struct for processing the packet
+ * @list_node: list_head for placing this on a list
+ */
 struct rx_pkt_info {
 	struct sk_buff *skb;
 	dma_addr_t dma_address;
@@ -97,6 +141,18 @@ struct rx_pkt_info {
 	struct list_head list_node;
 };
 
+/**
+ * struct tx_pkt_info - struct describing a tx packet
+ * @skb: socket buffer containing the packet
+ * @dma_address: dma mapped address of the packet
+ * @is_cmd: signifies whether this is a command or data packet
+ * @len: length og the packet
+ * @work: work_struct for processing this packet
+ * @list_node: list_head for placing this on a list
+ * @ts_sec: seconds portion of the timestamp
+ * @ts_nsec: nanoseconds portion of the timestamp
+ *
+ */
 struct tx_pkt_info {
 	struct sk_buff *skb;
 	dma_addr_t dma_address;
@@ -114,4 +170,4 @@ void msm_bam_dmux_deinit(void);
 
 void msm_bam_dmux_reinit(void);
 
-#endif 
+#endif /* _BAM_DMUX_PRIVATE_H */

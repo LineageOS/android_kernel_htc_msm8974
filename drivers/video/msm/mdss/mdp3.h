@@ -213,4 +213,4 @@ void mdp3_check_dsi_ctrl_status(struct work_struct *work,
 #define MDP3_REG_WRITE(addr, val) writel_relaxed(val, mdp3_res->mdp_base + addr)
 #define MDP3_REG_READ(addr) readl_relaxed(mdp3_res->mdp_base + addr)
 
-#endif 
+#endif /* MDP3_H */

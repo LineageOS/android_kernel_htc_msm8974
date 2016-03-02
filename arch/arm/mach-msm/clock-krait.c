@@ -430,6 +430,11 @@ static void kpss_cpu_post_set_rate(struct clk *c, unsigned long old_rate)
 	struct kpss_core_clk *cpu = to_kpss_core_clk(c);
 	u32 dscr = find_dscr(cpu->avs_tbl, c->rate);
 
+	/*
+	 * FIXME: If AVS enable/disable needs to be done in the
+	 * enable/disable op to correctly handle power collapse, then might
+	 * need to grab the spinlock here.
+	 */
 	if (dscr)
 		AVS_ENABLE(cpu->id, dscr);
 }

@@ -58,6 +58,7 @@ extern int get_partition_num_by_name(char *name);
 
 #endif
 
+//NFC++
 #if defined(CONFIG_MACH_EYE_UL)
 #define PN547_I2C_POWEROFF_SEQUENCE_FOR_EYE
 #elif defined(CONFIG_MACH_EYE_WHL)
@@ -74,6 +75,8 @@ extern int get_partition_num_by_name(char *name);
 #define PN547_I2C_POWEROFF_SEQUENCE_FOR_MEC
 #elif defined(CONFIG_MACH_MEC_DWG)
 #define PN547_I2C_POWEROFF_SEQUENCE_FOR_MEC
+#elif defined(CONFIG_MACH_B2_UL)
+#define PN547_I2C_POWEROFF_SEQUENCE_FOR_B2
 #else
 #endif
 
@@ -82,7 +85,23 @@ extern int get_partition_num_by_name(char *name);
 #define SR_I2C_SCL     11
 #define SR_I2C_SDA     10
 extern void force_disable_PM8941_VREG_ID_L22(void);
+//Disable LDO22
 #endif
+#if defined(PN547_I2C_POWEROFF_SEQUENCE_FOR_MEC)
+#define SR_I2C_SCL     11
+#define SR_I2C_SDA     10
+#define TP_RST         23
+#define SRIO_1V8_EN    95
+extern void force_disable_PMICGPIO34(void);
+#endif
+#if defined(PN547_I2C_POWEROFF_SEQUENCE_FOR_B2)
+#define SR_I2C_SCL     11
+#define SR_I2C_SDA     10
+#define TP_RST         23
+extern void force_disable_PMICGPIO34(void);
+extern void force_disable_PMICLVS1(void);
+#endif
+//NFC--
 
 #if defined(PN547_I2C_POWEROFF_SEQUENCE_FOR_MEC)
 #define SR_I2C_SCL     11
@@ -136,6 +155,7 @@ static void *dload_mode_addr;
 static bool dload_mode_enabled;
 static void *emergency_dload_mode_addr;
 
+/* Download mode master kill-switch */
 static int dload_set(const char *val, struct kernel_param *kp);
 static int download_mode = 1;
 module_param_call(download_mode, dload_set, param_get_int,
@@ -169,6 +189,8 @@ static void enable_emergency_dload_mode(void)
 				emergency_dload_mode_addr +
 				(2 * sizeof(unsigned int)));
 
+		/* Need disable the pmic wdt, then the emergency dload mode
+		 * will not auto reset. */
 		qpnp_pon_wd_config(0);
 		mb();
 	}
@@ -184,7 +206,7 @@ static int dload_set(const char *val, struct kernel_param *kp)
 	if (ret)
 		return ret;
 
-	
+	/* If download_mode is not zero or one, ignore. */
 	if (download_mode >> 1) {
 		download_mode = old_val;
 		return -EINVAL;
@@ -209,6 +231,7 @@ void msm_set_restart_mode(int mode)
 }
 EXPORT_SYMBOL(msm_set_restart_mode);
 
+/* HTC add start */
 static void msm_flush_console(void)
 {
 	unsigned long flags;
@@ -232,6 +255,7 @@ static void msm_flush_console(void)
 
 	local_irq_restore(flags);
 }
+/* HTC add end */
 
 #ifdef CONFIG_HTC_FEATURES_FINAL_EFS_SYNC
 static void set_ril_fatal(unsigned long oem_code)
@@ -321,7 +345,7 @@ static int notify_efs_sync_call
 				set_ril_fatal(oem_code);
 		}
 	case SYS_POWER_OFF:
-		
+		// do not try efs sync on offmode charging because modem is not loaded
 		pr_notice("%s: board_mfg_mode=%d\n", __func__, board_mfg_mode());
 		if ((board_mfg_mode() <= MFG_MODE_MINI) && (board_mfg_mode() != MFG_MODE_OFFMODE_CHARGING)) {
 			set_modem_efs_sync();
@@ -341,6 +365,12 @@ static struct notifier_block notify_efs_sync_notifier = {
 #endif
 
 static bool scm_pmic_arbiter_disable_supported;
+/*
+ * Force the SPMI PMIC arbiter to shutdown so that no more SPMI transactions
+ * are sent from the MSM to the PMIC.  This is required in order to avoid an
+ * SPMI lockup on certain PMIC chips if PS_HOLD is lowered in the middle of
+ * an SPMI transaction.
+ */
 static void halt_spmi_pmic_arbiter(void)
 {
 	if (scm_pmic_arbiter_disable_supported) {
@@ -353,19 +383,60 @@ static void __msm_power_off(int lower_pshold)
 {
 	printk(KERN_CRIT "[K] Powering off the SoC\n");
 
+//NFC++
 #if defined(PN547_I2C_POWEROFF_SEQUENCE_FOR_EYE)
-	
-	
+	//NFC PN547 chip power off sequence:
+	//SR_I2C_CLK set O(L) --> SR_I2C_SDA set O(L) --> V_NFC_1V8 (off)
 	gpio_tlmm_config(GPIO_CFG(SR_I2C_SCL, 0, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_16MA), GPIO_CFG_ENABLE);
-	gpio_set_value(SR_I2C_SCL, 0); 
+	gpio_set_value(SR_I2C_SCL, 0); //SR_I2C_CLK set O(L)
 	mdelay(1);
 
 	gpio_tlmm_config(GPIO_CFG(SR_I2C_SDA, 0, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_16MA), GPIO_CFG_ENABLE);
-	gpio_set_value(SR_I2C_SDA, 0); 
+	gpio_set_value(SR_I2C_SDA, 0); //SR_I2C_SDA set O(L)
 	mdelay(1);
 
-	force_disable_PM8941_VREG_ID_L22(); 
+	force_disable_PM8941_VREG_ID_L22(); // turn off V_NFC_1V8
+
+#elif defined(PN547_I2C_POWEROFF_SEQUENCE_FOR_MEC)
+	gpio_tlmm_config(GPIO_CFG(SR_I2C_SCL, 0, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_16MA), GPIO_CFG_ENABLE);
+	gpio_set_value(SR_I2C_SCL, 0);
+	msleep(1);
+
+	gpio_tlmm_config(GPIO_CFG(SR_I2C_SDA, 0, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_16MA), GPIO_CFG_ENABLE);
+	gpio_set_value(SR_I2C_SDA, 0);
+	msleep(1);
+
+	gpio_tlmm_config(GPIO_CFG(TP_RST, 0, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_16MA), GPIO_CFG_ENABLE);
+	gpio_set_value(TP_RST, 0);
+	msleep(10);
+
+	force_disable_PMICGPIO34();
+	msleep(10);
+
+	gpio_tlmm_config(GPIO_CFG(SRIO_1V8_EN, 0, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+	gpio_set_value(SRIO_1V8_EN, 0);
+	msleep(100);
+#elif defined(PN547_I2C_POWEROFF_SEQUENCE_FOR_B2)
+	gpio_tlmm_config(GPIO_CFG(SR_I2C_SCL, 0, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_16MA), GPIO_CFG_ENABLE);
+	gpio_set_value(SR_I2C_SCL, 0);
+	msleep(1);
+
+	gpio_tlmm_config(GPIO_CFG(SR_I2C_SDA, 0, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_16MA), GPIO_CFG_ENABLE);
+	gpio_set_value(SR_I2C_SDA, 0);
+	msleep(20);
+
+	gpio_tlmm_config(GPIO_CFG(TP_RST, 0, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_16MA), GPIO_CFG_ENABLE);
+	gpio_set_value(TP_RST, 0);
+	msleep(10);
+
+	force_disable_PMICGPIO34();
+	msleep(10);
+
+	force_disable_PMICLVS1();
+	msleep(100);
+#else
 #endif
+//NFC--
 
 #if defined(PN547_I2C_POWEROFF_SEQUENCE_FOR_MEC)
 	gpio_tlmm_config(GPIO_CFG(SR_I2C_SCL, 0, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_16MA), GPIO_CFG_ENABLE);
@@ -410,7 +481,7 @@ static void __msm_power_off(int lower_pshold)
 
 static void msm_power_off(void)
 {
-	
+	/* MSM initiated power off, lower ps_hold */
 	__msm_power_off(1);
 }
 
@@ -421,11 +492,15 @@ static void cpu_power_off(void *data)
 	pr_err("PMIC Initiated shutdown %s cpu=%d\n", __func__,
 						smp_processor_id());
 	if (smp_processor_id() == 0) {
+		/*
+		 * PMIC initiated power off, do not lower ps_hold, pmic will
+		 * shut msm down
+		 */
 		__msm_power_off(0);
 
 		pet_watchdog();
 		pr_err("Calling scm to disable arbiter\n");
-		
+		/* call secure manager to disable arbiter and never return */
 		rc = scm_call_atomic1(SCM_SVC_PWR,
 						SCM_IO_DISABLE_PMIC_ARBITER, 1);
 
@@ -455,17 +530,17 @@ static void msm_restart_prepare(char mode, const char *cmd)
 {
 #ifdef CONFIG_MSM_DLOAD_MODE
 
-	
+	/* This looks like a normal reboot at this point. */
 	set_dload_mode(0);
 
-	
+	/* Write download mode flags if we're panic'ing */
 	set_dload_mode(in_panic);
 
-	
+	/* Write download mode flags if restart_mode says so */
 	if (restart_mode == RESTART_DLOAD)
 		set_dload_mode(1);
 
-	
+	/* Kill download mode if master-kill switch is set */
 	if (!download_mode)
 		set_dload_mode(0);
 #endif
@@ -476,7 +551,7 @@ static void msm_restart_prepare(char mode, const char *cmd)
 	pr_info("%s: restart by command: [%s]\r\n", __func__, (cmd) ? cmd : "");
 
 	if (in_panic) {
-		
+		/* KP, do not overwrite the restart reason */
 	} else if (!cmd) {
 		set_restart_action(RESTART_REASON_REBOOT, NULL);
 	} else if (!strncmp(cmd, "bootloader", 10)) {
@@ -500,7 +575,7 @@ static void msm_restart_prepare(char mode, const char *cmd)
 		set_restart_to_ramdump("force-dog-bark");
 	} else if (!strncmp(cmd, "force-hard", 10) ||
 			(RESTART_MODE_LEGACY < mode && mode < RESTART_MODE_MAX)) {
-		
+		/* The only situation modem user triggers reset is NV restore after erasing EFS. */
 		if (mode == RESTART_MODE_MODEM_USER_INVOKED)
 			set_restart_action(RESTART_REASON_REBOOT, NULL);
 		else if (mode == RESTART_MODE_ERASE_EFS)
@@ -537,7 +612,7 @@ void msm_restart(char mode, const char *cmd)
 		if (!(machine_is_msm8x60_fusion() ||
 		      machine_is_msm8x60_fusn_ffa())) {
 			mb();
-			 
+			 /* Actually reset the chip */
 			__raw_writel(0, PSHOLD_CTL_SU);
 			mdelay(5000);
 			pr_notice("PS_HOLD didn't work, falling back to watchdog\n");
@@ -548,7 +623,7 @@ void msm_restart(char mode, const char *cmd)
 		__raw_writel(0x31F3, msm_tmr0_base + WDT0_BITE_TIME);
 		__raw_writel(1, msm_tmr0_base + WDT0_EN);
 	} else {
-		
+		/* Needed to bypass debug image on some chips */
 		msm_disable_wdog_debug();
 		halt_spmi_pmic_arbiter();
 		__raw_writel(0, MSM_MPM2_PSHOLD_BASE);

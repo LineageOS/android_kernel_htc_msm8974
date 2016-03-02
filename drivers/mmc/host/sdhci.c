@@ -44,6 +44,9 @@
 
 #define MAX_TUNING_LOOP 40
 
+#define CORE_VENDOR_SPEC_FUNC2	    0x110
+#define HC_SW_RST_WAIT_IDLE_DIS	    (1 << 20)
+
 static unsigned int debug_quirks = 0;
 static unsigned int debug_quirks2;
 
@@ -79,9 +82,9 @@ static void sdhci_dump_state(struct sdhci_host *host)
 {
 	struct mmc_host *mmc = host->mmc;
 
-	pr_info("%s: clk: %d clk-gated: %d claimer: %s pwr: %d\n",
+	pr_info("%s: clk: %d clk-gated: %d claimer: %s pwr: %d reset_wa_cnt %d\n",
 		mmc_hostname(mmc), host->clock, mmc->clk_gated,
-		mmc->claimer->comm, host->pwr);
+		mmc->claimer->comm, host->pwr, host->reset_wa_cnt);
 	pr_info("%s: rpmstatus[pltfm](runtime-suspend:usage_count:disable_depth)(%d:%d:%d)\n",
 		mmc_hostname(mmc), mmc->parent->power.runtime_status,
 		atomic_read(&mmc->parent->power.usage_count),
@@ -243,6 +246,7 @@ static void sdhci_reset(struct sdhci_host *host, u8 mask)
 	if (host->ops->platform_reset_enter)
 		host->ops->platform_reset_enter(host, mask);
 
+retry_reset:
 	sdhci_writeb(host, mask, SDHCI_SOFTWARE_RESET);
 
 	if (mask & SDHCI_RESET_ALL)
@@ -259,7 +263,22 @@ static void sdhci_reset(struct sdhci_host *host, u8 mask)
 	while (sdhci_readb(host, SDHCI_SOFTWARE_RESET) & mask) {
 		if (timeout == 0) {
 			pr_err("%s: Reset 0x%x never completed.\n",
-				mmc_hostname(host->mmc), (int)mask);
+					mmc_hostname(host->mmc), (int)mask);
+			if (!host->reset_wa_applied) {
+				sdhci_writel(host,
+						(sdhci_readl(host, CORE_VENDOR_SPEC_FUNC2) |
+						 HC_SW_RST_WAIT_IDLE_DIS), CORE_VENDOR_SPEC_FUNC2);
+				host->reset_wa_applied = 1;
+				host->reset_wa_cnt++;
+				goto retry_reset;
+			} else {
+				pr_err("%s: Reset 0x%x failed even with wa\n",
+						mmc_hostname(host->mmc), (int)mask);
+				sdhci_writel(host,
+						(sdhci_readl(host, CORE_VENDOR_SPEC_FUNC2) &
+						 ~HC_SW_RST_WAIT_IDLE_DIS), CORE_VENDOR_SPEC_FUNC2);
+				host->reset_wa_applied = 0;
+			}
 			sdhci_dumpregs(host);
 			return;
 		}
@@ -524,6 +543,11 @@ static int sdhci_pre_dma_transfer(struct sdhci_host *host,
 		data->host_cookie = 0;
 	}
 
+	if (data->sg->page_link == 0) {
+		pr_info("%s: %s-- invalid page_link\n", mmc_hostname(host->mmc), __func__);
+		return -EINVAL;
+	}
+	
 	/* Check if next job is already prepared */
 	if (next ||
 	    (!next && data->host_cookie != host->next_data.cookie)) {
@@ -1513,6 +1537,14 @@ static void sdhci_request(struct mmc_host *mmc, struct mmc_request *mrq)
 		mmc_request_done(host->mmc, mrq);
 		sdhci_runtime_pm_put(host);
 		return;
+	}
+
+	if (host->reset_wa_cnt > 0 && mrq->data) {
+		if (host->cmd_cnt++ > 50) {
+			pr_err("%s: intentional bug on after reset recovery\n",
+					mmc_hostname(host->mmc));
+			BUG_ON(1);
+		}
 	}
 
 	spin_lock_irqsave(&host->lock, flags);

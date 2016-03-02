@@ -108,7 +108,7 @@ EXPORT_SYMBOL(no_llseek);
 
 loff_t default_llseek(struct file *file, loff_t offset, int origin)
 {
-	struct inode *inode = file->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(file);
 	loff_t retval;
 
 	mutex_lock(&inode->i_mutex);
@@ -229,7 +229,7 @@ int rw_verify_area(int read_write, struct file *file, loff_t *ppos, size_t count
 	loff_t pos;
 	int retval = -EINVAL;
 
-	inode = file->f_path.dentry->d_inode;
+	inode = file_inode(file);
 	if (unlikely((ssize_t) count < 0))
 		return retval;
 	pos = *ppos;
@@ -268,9 +268,9 @@ static void wait_on_retry_sync_kiocb(struct kiocb *iocb)
 }
 
 static struct fs_dbg_threshold dbg_threshold[] = {
-	{ 52428800, "read"}, 
-	{ 31457280, "write"}, 
-	{ 104857600, "erase"}, 
+	{ 10485760, "read"}, 
+	{ 10485760, "write"}, 
+	{ 10485760, "erase"}, 
 };
 static void check_dbg_threshold(struct task_io_accounting *acc,
 	struct fs_dbg_threshold *thresh, int type)
@@ -924,8 +924,8 @@ static ssize_t do_sendfile(int out_fd, int in_fd, loff_t *ppos,
 	if (!(out_file->f_mode & FMODE_WRITE))
 		goto fput_out;
 	retval = -EINVAL;
-	in_inode = in_file->f_path.dentry->d_inode;
-	out_inode = out_file->f_path.dentry->d_inode;
+	in_inode = file_inode(in_file);
+	out_inode = file_inode(out_file);
 	retval = rw_verify_area(WRITE, out_file, &out_file->f_pos, count);
 	if (retval < 0)
 		goto fput_out;

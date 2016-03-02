@@ -59,7 +59,6 @@ struct lm3697_data {
 	u8 pwm_cfg;
 	u8 boost_ctl;
 	u8 ctl_bank_en;
-	u16 *brt_code_table;
 };
 
 static inline int platform_write_i2c_block(struct i2c_adapter *i2c_bus
@@ -118,20 +117,9 @@ void lm3697_set_brightness(struct lm3697_data *drvdata, int brt_val)
 
 	u8 brt_LSB = 0;
 	u8 brt_MSB = 0;
-	int index = 0, remainder;
-	int code, code1, code2;
 
-	index = brt_val / 10;
-	remainder = brt_val % 10;
-
-	code1 = drvdata->brt_code_table[index];
-	code2 = drvdata->brt_code_table[index+1];
-
-	
-	code = (code2 - code1) * remainder / 10 + code1;
-
-	brt_LSB = code % 0x7;
-	brt_MSB = (code >> 3) & 0xFF;
+	brt_LSB = brt_val % 0x7;
+	brt_MSB = (brt_val >> 3) & 0xFF;
 
 	
 	if (drvdata->bank_B) {
@@ -147,7 +135,7 @@ void lm3697_set_brightness(struct lm3697_data *drvdata, int brt_val)
 	if (drvdata->brightness == 0)
 		drvdata->enable = false;
 
-	PR_DISP_INFO("%s: brt_val=%d code=%d\n",__func__, brt_val, code);
+	pr_debug("%s: brt_val=%d\n",__func__, brt_val);
 }
 static void __lm3697_work(struct lm3697_data *led,
 				enum led_brightness value)
@@ -183,10 +171,6 @@ static int lm3697_get_dt_data(struct device *dev, struct lm3697_data *drvdata)
 	int rc;
 	u32 tmp;
 	struct device_node *of_node = NULL;
-	int len;
-	const char *data;
-	u32 *buf;
-	int i = 0;
 
 	of_node = dev->of_node;
 
@@ -227,43 +211,14 @@ static int lm3697_get_dt_data(struct device *dev, struct lm3697_data *drvdata)
 	pr_debug("%s : bank_A=%d bank_B=%d\n",__func__, drvdata->bank_A, drvdata->bank_B);
 
 	
-	data = of_get_property(of_node, "brt-code-table", &len);
-	if (!data) {
-		pr_err("%s: read brt-code-table failed\n", __func__);
-		return -ENOMEM;
-	}
-
-	len /= sizeof(u32);
-
-	
-	drvdata->led_dev.max_brightness = 10 * (len - 1);
-	pr_debug("%s : max_brightness=%d\n",__func__, drvdata->led_dev.max_brightness);
-
-	
-	buf = kzalloc(len * sizeof(u32), GFP_KERNEL);
-	if (!buf)
-		return -ENOMEM;
-
-	rc = of_property_read_u32_array(of_node, "brt-code-table", buf, len);
+	rc = of_property_read_u32(of_node, "max-level", &tmp);
 	if (rc) {
-		pr_err("%s:%d, dt not specified\n",__func__, __LINE__);
-		rc = -EINVAL;
-		goto end;
+		pr_err("%s:%d, dt not specified\n",
+						__func__, __LINE__);
+		return -EINVAL;
 	}
+	drvdata->led_dev.max_brightness = (!rc ? tmp : 0);
 
-	drvdata->brt_code_table = kzalloc(len * sizeof(u16), GFP_KERNEL);
-	if (!drvdata->brt_code_table) {
-		pr_err("%s:%d, allocate memory failed\n",__func__, __LINE__);
-		rc = -ENOMEM;
-		goto end;
-	}
-
-	for (i=0; i < len; i++) {
-		drvdata->brt_code_table[i] = (u16) buf[i];
-		pr_debug("%s : buf=%d i=%d\n",__func__, buf[i], i);
-	}
-end:
-	kfree(buf);
 	return rc;
 }
 

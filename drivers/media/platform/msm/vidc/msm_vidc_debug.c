@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -16,13 +16,13 @@
 #include "htc_msm_smem.h"
 
 #define MAX_DBG_BUF_SIZE 4096
-int msm_vidc_debug = VIDC_ERR | VIDC_WARN |VIDC_FW ;
+int msm_vidc_debug = VIDC_ERR ;
 int msm_vidc_debug_out = VIDC_OUT_PRINTK;
 int msm_fw_debug = 0x18;
 int msm_fw_debug_mode = 0x1;
 int msm_fw_low_power_mode = 0x1;
-int msm_vp8_low_tier = 0x1;
 int msm_vidc_hw_rsp_timeout = 1000;
+u32 msm_vidc_firmware_unload_delay = 15000;
 
 struct debug_buffer {
 	char ptr[MAX_DBG_BUF_SIZE];
@@ -64,7 +64,9 @@ static ssize_t core_info_read(struct file *file, char __user *buf,
 {
 	struct msm_vidc_core *core = file->private_data;
 	struct hfi_device *hdev;
-	int i = 0;
+	struct hal_fw_info fw_info;
+	int i = 0, rc = 0;
+
 	if (!core || !core->device) {
 		dprintk(VIDC_ERR, "Invalid params, core: %p\n", core);
 		return 0;
@@ -74,19 +76,19 @@ static ssize_t core_info_read(struct file *file, char __user *buf,
 	write_str(&dbg_buf, "===============================\n");
 	write_str(&dbg_buf, "CORE %d: 0x%p\n", core->id, core);
 	write_str(&dbg_buf, "===============================\n");
-	write_str(&dbg_buf, "state: %d\n", core->state);
-	write_str(&dbg_buf, "base addr: 0x%x\n",
-		call_hfi_op(hdev, get_fw_info, hdev->hfi_device_data,
-					FW_BASE_ADDRESS));
-	write_str(&dbg_buf, "register_base: 0x%x\n",
-		call_hfi_op(hdev, get_fw_info, hdev->hfi_device_data,
-					FW_REGISTER_BASE));
-	write_str(&dbg_buf, "register_size: %u\n",
-		call_hfi_op(hdev, get_fw_info, hdev->hfi_device_data,
-					FW_REGISTER_SIZE));
-	write_str(&dbg_buf, "irq: %u\n",
-		call_hfi_op(hdev, get_fw_info, hdev->hfi_device_data,
-					FW_IRQ));
+	write_str(&dbg_buf, "Core state: %d\n", core->state);
+	rc = call_hfi_op(hdev, get_fw_info, hdev->hfi_device_data, &fw_info);
+        if (rc) {
+                dprintk(VIDC_WARN, "Failed to read FW info\n");
+                goto err_fw_info;
+        }
+
+        write_str(&dbg_buf, "FW version : %s\n", &fw_info.version);
+        write_str(&dbg_buf, "base addr: 0x%x\n", fw_info.base_addr);
+        write_str(&dbg_buf, "register_base: 0x%x\n", fw_info.register_base);
+        write_str(&dbg_buf, "register_size: %u\n", fw_info.register_size);
+        write_str(&dbg_buf, "irq: %u\n", fw_info.irq);
+
 	write_str(&dbg_buf, "clock count: %d\n",
 		call_hfi_op(hdev, get_info, hdev->hfi_device_data,
 					DEV_CLOCK_COUNT));
@@ -99,6 +101,7 @@ static ssize_t core_info_read(struct file *file, char __user *buf,
 	write_str(&dbg_buf, "power enabled: %u\n",
 		call_hfi_op(hdev, get_info, hdev->hfi_device_data,
 					DEV_PWR_ENABLED));
+err_fw_info:
 	for (i = SYS_MSG_START; i < SYS_MSG_END; i++) {
 		write_str(&dbg_buf, "completions[%d]: %s\n", i,
 			completion_done(&core->completions[SYS_MSG_INDEX(i)]) ?
@@ -185,11 +188,6 @@ struct dentry *msm_vidc_debugfs_init_core(struct msm_vidc_core *core,
 		dprintk(VIDC_ERR, "debugfs_create_file: fail\n");
 		goto failed_create_dir;
 	}
-	if (!debugfs_create_u32("vp8_low_tier", S_IRUGO | S_IWUSR,
-			parent, &msm_vp8_low_tier)) {
-		dprintk(VIDC_ERR, "debugfs_create_file: fail\n");
-		goto failed_create_dir;
-	}
 	if (!debugfs_create_u32("debug_output", S_IRUGO | S_IWUSR,
 			parent, &msm_vidc_debug_out)) {
 		dprintk(VIDC_ERR, "debugfs_create_file: fail\n");
@@ -198,6 +196,12 @@ struct dentry *msm_vidc_debugfs_init_core(struct msm_vidc_core *core,
 	if (!debugfs_create_u32("hw_rsp_timeout", S_IRUGO | S_IWUSR,
 			parent, &msm_vidc_hw_rsp_timeout)) {
 		dprintk(VIDC_ERR, "debugfs_create_file: fail\n");
+		goto failed_create_dir;
+	}
+	if (!debugfs_create_u32("firmware_unload_delay", S_IRUGO | S_IWUSR,
+			parent, &msm_vidc_firmware_unload_delay)) {
+		dprintk(VIDC_ERR,
+			"debugfs_create_file: firmware_unload_delay fail\n");
 		goto failed_create_dir;
 	}
 failed_create_dir:
@@ -266,8 +270,8 @@ static ssize_t inst_info_read(struct file *file, char __user *buf,
 		inst->session_type == MSM_VIDC_ENCODER ? "Encoder" : "Decoder");
 	write_str(&dbg_buf, "===============================\n");
 	write_str(&dbg_buf, "core: 0x%p\n", inst->core);
-	write_str(&dbg_buf, "height: %d\n", inst->prop.height);
-	write_str(&dbg_buf, "width: %d\n", inst->prop.width);
+	write_str(&dbg_buf, "height: %d\n", inst->prop.height[CAPTURE_PORT]);
+	write_str(&dbg_buf, "width: %d\n", inst->prop.width[CAPTURE_PORT]);
 	write_str(&dbg_buf, "fps: %d\n", inst->prop.fps);
 	write_str(&dbg_buf, "state: %d\n", inst->state);
 	write_str(&dbg_buf, "Calling Process id: %d, name: %s\n", inst->call_pid, inst->process_name);

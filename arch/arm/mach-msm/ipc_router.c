@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2014, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -299,7 +299,7 @@ struct rr_packet *clone_pkt(struct rr_packet *pkt)
 		return NULL;
 	}
 	memcpy(&(cloned_pkt->hdr), &(pkt->hdr), sizeof(struct rr_header_v1));
-	
+	/* TODO: Copy optional headers, if available */
 
 	pkt_fragment_q = kmalloc(sizeof(struct sk_buff_head), GFP_KERNEL);
 	if (!pkt_fragment_q) {
@@ -325,7 +325,7 @@ fail_clone:
 		kfree_skb(temp_skb);
 	}
 	kfree(pkt_fragment_q);
-	
+	/* TODO: Free optional headers, if present */
 	kfree(cloned_pkt);
 	return NULL;
 }
@@ -364,7 +364,7 @@ void release_pkt(struct rr_packet *pkt)
 		kfree_skb(temp_skb);
 	}
 	kfree(pkt->pkt_fragment_q);
-	
+	/* TODO: Free Optional headers, if present */
 	kfree(pkt);
 	return;
 }
@@ -551,7 +551,7 @@ static int extract_header(struct rr_packet *pkt)
 		ret = extract_header_v1(pkt, temp_skb);
 	} else if (temp_skb->data[0] == IPC_ROUTER_V2) {
 		ret = extract_header_v2(pkt, temp_skb);
-		
+		/* TODO: Extract optional headers if present */
 	} else {
 		pr_err("%s: Invalid Header version %02x\n",
 			__func__, temp_skb->data[0]);
@@ -606,7 +606,7 @@ static int calc_tx_header_size(struct rr_packet *pkt,
 	} else if (xprt_version == IPC_ROUTER_V2) {
 		pkt->hdr.version = IPC_ROUTER_V2;
 		hdr_size = sizeof(struct rr_header_v2);
-		
+		/* TODO: Calculate optional header length, if present */
 	} else {
 		pr_err("%s: Invalid xprt_version %d\n",
 			__func__, xprt_version);
@@ -697,7 +697,7 @@ static int prepend_header_v2(struct rr_packet *pkt, int hdr_size)
 	hdr->src_port_id = (uint16_t)pkt->hdr.src_port_id;
 	hdr->dst_node_id = (uint16_t)pkt->hdr.dst_node_id;
 	hdr->dst_port_id = (uint16_t)pkt->hdr.dst_port_id;
-	
+	/* TODO: Add optional headers, if present */
 	if (temp_skb != skb_peek(pkt->pkt_fragment_q))
 		skb_queue_head(pkt->pkt_fragment_q, temp_skb);
 	pkt->length += hdr_size;
@@ -814,10 +814,10 @@ static int post_pkt_to_port(struct msm_ipc_port *port_ptr,
 	}
 
 	mutex_lock(&port_ptr->port_rx_q_lock_lhb3);
-    
-	
+    //+HTC, workaround to avoid long wake lock hold when quicboot power off
+	//wake_lock(&port_ptr->port_rx_wake_lock);
     wake_lock_timeout(&port_ptr->port_rx_wake_lock, 10 * HZ);
-    
+    //HTC-
 	list_add_tail(&temp_pkt->list, &port_ptr->port_rx_q);
 	wake_up(&port_ptr->port_rx_wait_q);
 	notify = port_ptr->notify;
@@ -2877,7 +2877,7 @@ int msm_ipc_router_lookup_server_name(struct msm_ipc_port_name *srv_name,
 {
 	struct msm_ipc_server *server;
 	struct msm_ipc_server_port *server_port;
-	int key, i = 0; 
+	int key, i = 0; /*num_entries_found*/
 
 	if (!srv_name) {
 		pr_err("%s: Invalid srv_name\n", __func__);
@@ -3333,7 +3333,7 @@ static int __init msm_ipc_router_init(void)
 
 	msm_ipc_router_debug_mask |= SMEM_LOG;
 	ipc_rtr_log_ctxt = ipc_log_context_create(IPC_RTR_LOG_PAGES,
-						  "ipc_router");
+						  "ipc_router", 0);
 	if (!ipc_rtr_log_ctxt)
 		pr_err("%s: Unable to create IPC logging for IPC RTR",
 			__func__);

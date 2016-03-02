@@ -1,3 +1,4 @@
+/* arch/arm/mach-msm/htc_awb_cal.c */
 /* Code to extract Camera AWB calibration information from ATAG
 set up by the bootloader.
 
@@ -20,16 +21,21 @@ GNU General Public License for more details.
 #include <linux/proc_fs.h>
 #include <asm/setup.h>
 
+/* for outputing file to filesystem : /data/awb_calibration_data_hboot.txt */
 #include <linux/fs.h>
 #include <linux/syscalls.h>
 
 #include <linux/of.h>
 
+//#define CAM_AWB_CAL_DEBUG
 
+/* configuration tags specific to msm */
+//#define ATAG_MSM_AWB_CAL	0x59504550 /* MSM CAMERA AWB Calibration */
 
-#define AWB_CAL_MAX_SIZE	0x4000U     
+#define AWB_CAL_MAX_SIZE	0x4000U     /* 0x1000 = 4096 bytes  0x2000 = 8192 bytes  0x3000 = 12288 bytes 0x4000 = 16384 bytes */
 #define DUAL_CAL_SIZE 4095
 
+/* HTC_START, use dt for calibration data */
 #define CALIBRATION_DATA_PATH "/calibration_data"
 #define CAM_AWB_CAL_DATA "cam_awb"
 
@@ -41,26 +47,32 @@ struct qct_lsc_struct{
 };
 
 struct qct_awb_lsc_struct{
-	unsigned long int caBuff[8];
-	struct qct_lsc_struct qct_lsc_data;
-	
-	unsigned long int flashcaBuff[8];  
-	
-	unsigned long int aec_caBuff[9]; 
-	unsigned long int alight_caBuff[8]; 
-	unsigned long int dualflashcaBuff[12];  
+	unsigned long int caBuff[8];/* AWB Calibartion */
+	struct qct_lsc_struct qct_lsc_data;/* LSC Calibration */
+	/* Andrew_Cheng 20120223 For Flash_Camera MB */
+	unsigned long int flashcaBuff[8];  //flash_camera
+	/* Andrew_Cheng 20120223 For Flash_Camera ME */
+	unsigned long int aec_caBuff[9]; // AEC calibration data
+	unsigned long int alight_caBuff[8]; // A-light AWB calibration data
+	unsigned long int dualflashcaBuff[12];  //dual flash calibration
+// HTC_START, For new AWB check
 	unsigned long int awb_verify;
+// HTC_END, For new AWB check
 };
 
 static unsigned char cam_awb_ram[AWB_CAL_MAX_SIZE];
 
 int gCAM_AWB_CAL_LEN;
 
+/* HTC_START */
+/* klocwork */
 unsigned char *dummy(unsigned char *p)
 {
     return p;
 }
+/* HTC_END */
 
+/* HTC_START, use dt for calibration data */
 unsigned char *get_cam_awb_cal( void )
 {
      struct device_node *offset = of_find_node_by_path(CALIBRATION_DATA_PATH);
@@ -73,7 +85,7 @@ unsigned char *get_cam_awb_cal( void )
      p_size = 0;
      p_data = NULL;
      if (offset) {
-          
+          /* of_get_property will return address of property, and fill the length to *p_size */
           p_data = (unsigned char*) of_get_property(offset, CAM_AWB_CAL_DATA, &p_size);
 #ifdef CAM_AWB_CAL_DEBUG
           if (p_data) {
@@ -91,6 +103,7 @@ unsigned char *get_cam_awb_cal( void )
 	return( cam_awb_ram );
 }
 EXPORT_SYMBOL(get_cam_awb_cal);
+/* HTC_END */
 
 static ssize_t awb_calibration_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -99,9 +112,9 @@ static ssize_t awb_calibration_show(struct device *dev,
 	unsigned char *ptr;
 
 	ptr = get_cam_awb_cal();
-	
+	/* fixed : workaround because of defined 8 parameters now */
 
-	ret = sizeof(struct qct_awb_lsc_struct);
+	ret = sizeof(struct qct_awb_lsc_struct);/* 8*4; */
 	printk(KERN_INFO "[CAM]awb_calibration_show(%d)\n", ret);
 	memcpy(buf, ptr, ret);
 
@@ -126,9 +139,9 @@ static ssize_t awb_calibration_front_show(struct device *dev,
 	unsigned char *ptr;
 
 	ptr = get_cam_awb_cal();
-	
+	/* fixed : workaround because of defined 8 parameters now */
 
-	ret = sizeof(struct qct_awb_lsc_struct);
+	ret = sizeof(struct qct_awb_lsc_struct);/* 8*4; */
 	printk(KERN_INFO "[CAM]awb_calibration_front_show(%d)\n", ret);
 	memcpy(buf, ptr + 0x1000U, ret);
 
@@ -154,9 +167,9 @@ static ssize_t awb_calibration_sub_show(struct device *dev,
 	unsigned char *ptr;
 
 	ptr = get_cam_awb_cal();
-	
+	/* fixed : workaround because of defined 8 parameters now */
 
-	ret = sizeof(struct qct_awb_lsc_struct);
+	ret = sizeof(struct qct_awb_lsc_struct);/* 8*4; */
 	printk(KERN_INFO "[CAM]awb_calibration_sub_show(%d)\n", ret);
 	memcpy(buf, ptr + 0x2000U, ret);
 
@@ -183,7 +196,7 @@ static ssize_t awb_calibration_3D_show(struct device *dev,
 	unsigned char *ptr;
 
 	ptr = get_cam_awb_cal();
-	
+	/* fixed : workaround because of defined 8 parameters now */
 
 	printk(KERN_INFO "[CAM]awb_calibration_3D_show(%d)\n", ret);
 	memcpy(buf, ptr + 0x3000U, ret);
@@ -215,7 +228,7 @@ static int cam_get_awb_cal(void)
 {
 	int ret ;
 
-	
+	/* Create /sys/android_camera_awb_cal/awb_cal */
 	cam_awb_cal = kobject_create_and_add("android_camera_awb_cal", NULL);
 	if (cam_awb_cal == NULL) {
 		pr_info("[CAM]cam_get_awb_cal: subsystem_register failed\n");
@@ -223,6 +236,8 @@ static int cam_get_awb_cal(void)
 		return ret ;
 	}
 
+   /* dev_attr_[register_name]<== DEVICE_ATTR(awb_cal, 0444,
+   awb_calibration_show, NULL); */
 	ret = sysfs_create_file(cam_awb_cal, &dev_attr_awb_cal.attr);
 	if (ret) {
 		pr_info("[CAM]cam_get_awb_cal:: sysfs_create_file failed\n");

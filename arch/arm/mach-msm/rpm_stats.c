@@ -250,6 +250,9 @@ static inline int msm_rpmstats_copy_stats_v3(
 	return length;
 }
 
+/* HTC_WIFI_START
+ * 20140519 Cooper, monitor the stick time of aCPU and wlanFW.
+ */
 #ifdef CONFIG_HTC_MONITOR_SUBSYS_SLEEP_TIME
 
 struct trackStick {
@@ -280,6 +283,12 @@ void rpm_resetSubsysStickTime(int n)
 }
 EXPORT_SYMBOL(rpm_resetSubsysStickTime);
 
+/**
+ * HTC_WIFI_START20140519 Cooper
+ * When CONFIG_HTC_POWER_DEBUG=n, monitor aCPU/wlanFW by WLAN driver itself.
+ * @i: Subsystem number
+ * Returns: sleep time of sub-system, -1 on failure
+ */
 int rpm_getSubsysStickTime(int n, struct timeval *cur_t)
 {
 	void __iomem *reg;
@@ -336,7 +345,8 @@ int rpm_getSubsysStickTime(int n, struct timeval *cur_t)
 	return ret;
 }
 EXPORT_SYMBOL(rpm_getSubsysStickTime);
-#endif 
+#endif //END of CONFIG_HTC_MONITOR_SUBSYS_SLEEP_TIME
+/* HTC_WIFI_END */
 
 void msm_rpm_dump_stat(void)
 {
@@ -677,10 +687,12 @@ static int __init msm_rpmstats_init(void)
 	memset(rpm_stats_dev, 0, sizeof(struct msm_rpm_stats_data)*DEV_MAX);
 #endif
 
+/* HTC_WIFI_START 20140519 Cooper */
 #ifdef CONFIG_HTC_MONITOR_SUBSYS_SLEEP_TIME
 	memset(&aCPU, 0, sizeof(struct trackStick));
 	memset(&wlanFW, 0, sizeof(struct trackStick));
 #endif
+/* HTC_WIFI_END */
 
 	return platform_driver_register(&msm_rpmstats_driver);
 }

@@ -227,7 +227,7 @@ static int imx214_read_fuseid(struct sensorb_cfg_data *cdata,
     int valid_layer = -1;
     
     static int read_otp = true;
-    uint8_t *path= "/data/OTPData.dat";
+    uint8_t *path= "/data/misc/camera/OTPData.dat";
     struct file* f;
     
 

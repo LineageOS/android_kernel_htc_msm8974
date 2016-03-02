@@ -10,6 +10,19 @@
  * GNU General Public License for more details.
  */
 
+/**
+ * SPMI Debug-fs support.
+ *
+ * Hierarchy schema:
+ * /sys/kernel/debug/spmi
+ *        /help			-- static help text
+ *        /spmi-0
+ *        /spmi-0/address	-- Starting register address for reads or writes
+ *        /spmi-0/count		-- number of registers to read (only on read)
+ *        /spmi-0/data		-- Triggers the SPMI formatted read.
+ *        /spmi-0/data_raw	-- Triggers the SPMI raw read or write
+ *        /spmi-#
+ */
 
 #define pr_fmt(fmt) "%s:%d: " fmt, __func__, __LINE__
 
@@ -30,22 +43,24 @@
 #include <mach/devices_cmdline.h>
 
 
-#define ADDR_LEN	 6	
-#define CHARS_PER_ITEM   3	
-#define ITEMS_PER_LINE	16	
+#define ADDR_LEN	 6	/* 5 byte address + 1 space character */
+#define CHARS_PER_ITEM   3	/* Format is 'XX ' */
+#define ITEMS_PER_LINE	16	/* 16 data items per line */
 #define MAX_LINE_LENGTH  (ADDR_LEN + (ITEMS_PER_LINE * CHARS_PER_ITEM) + 1)
 #define MAX_REG_PER_TRANSACTION	(8)
 
 static const char *DFS_ROOT_NAME	= "spmi";
 static const mode_t DFS_MODE = S_IRUSR | S_IWUSR;
 
+/* Log buffer */
 struct spmi_log_buffer {
-	size_t rpos;	
-	size_t wpos;	
-	size_t len;	
-	char data[0];	
+	size_t rpos;	/* Current 'read' position in buffer */
+	size_t wpos;	/* Current 'write' position in buffer */
+	size_t len;	/* Length of the buffer */
+	char data[0];	/* Log buffer */
 };
 
+/* SPMI controller specific data */
 struct spmi_ctrl_data {
 	u32 cnt;
 	u32 addr;
@@ -54,19 +69,20 @@ struct spmi_ctrl_data {
 	struct spmi_controller *ctrl;
 };
 
+/* SPMI transaction parameters */
 struct spmi_trans {
-	u32 cnt;	
-	u32 addr;	
-	u32 offset;	
-	bool raw_data;	
+	u32 cnt;	/* Number of bytes to read */
+	u32 addr;	/* 20-bit address: SID + PID + Register offset */
+	u32 offset;	/* Offset of last read data */
+	bool raw_data;	/* Set to true for raw data dump */
 	struct spmi_controller *ctrl;
-	struct spmi_log_buffer *log; 
+	struct spmi_log_buffer *log; /* log buffer */
 };
 
 struct spmi_dbgfs {
 	struct dentry *root;
 	struct mutex  lock;
-	struct list_head ctrl; 
+	struct list_head ctrl; /* List of spmi_ctrl_data nodes */
 	struct debugfs_blob_wrapper help_msg;
 };
 
@@ -132,7 +148,7 @@ static int spmi_dfs_open(struct spmi_ctrl_data *ctrl_data, struct file *file)
 		return -EINVAL;
 	}
 
-	
+	/* Per file "transaction" data */
 	trans = kzalloc(sizeof(*trans), GFP_KERNEL);
 
 	if (!trans) {
@@ -140,7 +156,7 @@ static int spmi_dfs_open(struct spmi_ctrl_data *ctrl_data, struct file *file)
 		return -ENOMEM;
 	}
 
-	
+	/* Allocate log buffer */
 	log = kzalloc(logbufsize, GFP_KERNEL);
 
 	if (!log) {
@@ -194,6 +210,15 @@ static int spmi_dfs_close(struct inode *inode, struct file *file)
 	return 0;
 }
 
+/**
+ * spmi_read_data: reads data across the SPMI bus
+ * @ctrl: The SPMI controller
+ * @buf: buffer to store the data read.
+ * @offset: SPMI address offset to start reading from.
+ * @cnt: The number of bytes to read.
+ *
+ * Returns 0 on success, otherwise returns error code from SPMI driver.
+ */
 static int
 spmi_read_data(struct spmi_controller *ctrl, uint8_t *buf, int offset, int cnt)
 {
@@ -283,6 +308,19 @@ static int print_to_log(struct spmi_log_buffer *log, const char *fmt, ...)
 	return cnt;
 }
 
+/**
+ * write_next_line_to_log: Writes a single "line" of data into the log buffer
+ * @trans: Pointer to SPMI transaction data.
+ * @offset: SPMI address offset to start reading from.
+ * @pcnt: Pointer to 'cnt' variable.  Indicates the number of bytes to read.
+ *
+ * The 'offset' is a 20-bits SPMI address which includes a 4-bit slave id (SID),
+ * an 8-bit peripheral id (PID), and an 8-bit peripheral register address.
+ *
+ * On a successful read, the pcnt is decremented by the number of data
+ * bytes read across the SPMI bus.  When the cnt reaches 0, all requested
+ * bytes have been read.
+ */
 static int
 write_next_line_to_log(struct spmi_trans *trans, int offset, size_t *pcnt)
 {
@@ -295,36 +333,36 @@ write_next_line_to_log(struct spmi_trans *trans, int offset, size_t *pcnt)
 	int items_to_read = min(ARRAY_SIZE(data) - padding, *pcnt);
 	int items_to_log = min(ITEMS_PER_LINE, padding + items_to_read);
 
-	
+	/* Buffer needs enough space for an entire line */
 	if ((log->len - log->wpos) < MAX_LINE_LENGTH)
 		goto done;
 
-	
+	/* Read the desired number of "items" */
 	if (spmi_read_data(trans->ctrl, data, offset, items_to_read))
 		goto done;
 
 	*pcnt -= items_to_read;
 
-	
+	/* Each line starts with the aligned offset (20-bit address) */
 	cnt = print_to_log(log, "%5.5X ", offset & 0xffff0);
 	if (cnt == 0)
 		goto done;
 
-	
+	/* If the offset is unaligned, add padding to right justify items */
 	for (i = 0; i < padding; ++i) {
 		cnt = print_to_log(log, "-- ");
 		if (cnt == 0)
 			goto done;
 	}
 
-	
+	/* Log the data items */
 	for (j = 0; i < items_to_log; ++i, ++j) {
 		cnt = print_to_log(log, "%2.2X ", data[j]);
 		if (cnt == 0)
 			goto done;
 	}
 
-	
+	/* If the last character was a space, then replace it with a newline */
 	if (log->wpos > 0 && log->data[log->wpos - 1] == ' ')
 		log->data[log->wpos - 1] = '\n';
 
@@ -332,6 +370,19 @@ done:
 	return cnt;
 }
 
+/**
+ * write_raw_data_to_log: Writes a single "line" of data into the log buffer
+ * @trans: Pointer to SPMI transaction data.
+ * @offset: SPMI address offset to start reading from.
+ * @pcnt: Pointer to 'cnt' variable.  Indicates the number of bytes to read.
+ *
+ * The 'offset' is a 20-bits SPMI address which includes a 4-bit slave id (SID),
+ * an 8-bit peripheral id (PID), and an 8-bit peripheral register address.
+ *
+ * On a successful read, the pcnt is decremented by the number of data
+ * bytes read across the SPMI bus.  When the cnt reaches 0, all requested
+ * bytes have been read.
+ */
 static int
 write_raw_data_to_log(struct spmi_trans *trans, int offset, size_t *pcnt)
 {
@@ -342,24 +393,24 @@ write_raw_data_to_log(struct spmi_trans *trans, int offset, size_t *pcnt)
 	int cnt = 0;
 	int items_to_read = min(ARRAY_SIZE(data), *pcnt);
 
-	
+	/* Buffer needs enough space for an entire line */
 	if ((log->len - log->wpos) < 80)
 		goto done;
 
-	
+	/* Read the desired number of "items" */
 	if (spmi_read_data(trans->ctrl, data, offset, items_to_read))
 		goto done;
 
 	*pcnt -= items_to_read;
 
-	
+	/* Log the data items */
 	for (i = 0; i < items_to_read; ++i) {
 		cnt = print_to_log(log, "0x%2.2X ", data[i]);
 		if (cnt == 0)
 			goto done;
 	}
 
-	
+	/* If the last character was a space, then replace it with a newline */
 	if (log->wpos > 0 && log->data[log->wpos - 1] == ' ')
 		log->data[log->wpos - 1] = '\n';
 
@@ -367,6 +418,12 @@ done:
 	return cnt;
 }
 
+/**
+ * get_log_data - reads data across the SPMI bus and saves to the log buffer
+ * @trans: Pointer to SPMI transaction data.
+ *
+ * Returns the number of "items" read or SPMI error code for read failures.
+ */
 static int get_log_data(struct spmi_trans *trans)
 {
 	int cnt;
@@ -386,10 +443,10 @@ static int get_log_data(struct spmi_trans *trans)
 	else
 		write_to_log = write_next_line_to_log;
 
-	
+	/* Reset the log buffer 'pointers' */
 	log->wpos = log->rpos = 0;
 
-	
+	/* Keep reading data until the log is full */
 	do {
 		last_cnt = item_cnt;
 		cnt = write_to_log(trans, offset, &item_cnt);
@@ -398,7 +455,7 @@ static int get_log_data(struct spmi_trans *trans)
 		total_items_read += items_read;
 	} while (cnt && item_cnt > 0);
 
-	
+	/* Adjust the transaction offset and count */
 	trans->cnt = item_cnt;
 	trans->offset += total_items_read;
 
@@ -426,7 +483,7 @@ static ssize_t spmi_dfs_reg_write(struct file *file, const char __user *buf,
 	struct spmi_trans *trans = file->private_data;
 	u32 offset = trans->offset;
 
-	
+	/* Make a copy of the user data */
 	char *kbuf = kmalloc(count + 1, GFP_KERNEL);
 	if (!kbuf)
 		return -ENOMEM;
@@ -442,10 +499,10 @@ static ssize_t spmi_dfs_reg_write(struct file *file, const char __user *buf,
 	*ppos += count;
 	kbuf[count] = '\0';
 
-	
+	/* Override the text buffer with the raw data */
 	values = kbuf;
 
-	
+	/* Parse the data in the buffer.  It should be a string of numbers */
 	while (sscanf(kbuf + pos, "%i%n", &data, &bytes_read) == 1) {
 		pos += bytes_read;
 		values[cnt++] = data & 0xff;
@@ -454,7 +511,7 @@ static ssize_t spmi_dfs_reg_write(struct file *file, const char __user *buf,
 	if (!cnt)
 		goto free_buf;
 
-	
+	/* Perform the SPMI write(s) */
 	ret = spmi_write_data(trans->ctrl, values, offset, cnt);
 
 	if (ret) {
@@ -469,6 +526,15 @@ free_buf:
 	return ret;
 }
 
+/**
+ * spmi_dfs_reg_read: reads value(s) over SPMI and fill user's buffer a
+ *  byte array (coded as string)
+ * @file: file pointer
+ * @buf: where to put the result
+ * @count: maximum space available in @buf
+ * @ppos: starting position
+ * @return number of user bytes read, or negative error value
+ */
 static ssize_t spmi_dfs_reg_read(struct file *file, char __user *buf,
 	size_t count, loff_t *ppos)
 {
@@ -477,7 +543,7 @@ static ssize_t spmi_dfs_reg_read(struct file *file, char __user *buf,
 	size_t ret;
 	size_t len;
 
-	
+	/* Is the the log buffer empty */
 	if (log->rpos >= log->wpos) {
 		if (get_log_data(trans) <= 0)
 			return 0;
@@ -491,7 +557,7 @@ static ssize_t spmi_dfs_reg_read(struct file *file, char __user *buf,
 		return -EFAULT;
 	}
 
-	
+	/* 'ret' is the number of bytes not copied */
 	len -= ret;
 
 	*ppos += len;
@@ -513,6 +579,10 @@ static const struct file_operations spmi_dfs_raw_data_fops = {
 	.write		= spmi_dfs_reg_write,
 };
 
+/**
+ * spmi_dfs_create_fs: create debugfs file system.
+ * @return pointer to root directory or NULL if failed to create fs
+ */
 static struct dentry *spmi_dfs_create_fs(void)
 {
 	struct dentry *root, *file;
@@ -541,6 +611,13 @@ err_remove_fs:
 	return NULL;
 }
 
+/**
+ * spmi_dfs_get_root: return a pointer to SPMI debugfs root directory.
+ * @brief return a pointer to the existing directory, or if no root
+ * directory exists then create one. Directory is created with file that
+ * configures SPMI transaction, namely: sid, address, and count.
+ * @returns valid pointer on success or NULL
+ */
 struct dentry *spmi_dfs_get_root(void)
 {
 	if (dbgfs_data.root)
@@ -548,8 +625,8 @@ struct dentry *spmi_dfs_get_root(void)
 
 	if (mutex_lock_interruptible(&dbgfs_data.lock) < 0)
 		return NULL;
-	
-	if (!dbgfs_data.root) { 
+	/* critical section */
+	if (!dbgfs_data.root) { /* double checking idiom */
 		dbgfs_data.root = spmi_dfs_create_fs();
 	}
 	mutex_unlock(&dbgfs_data.lock);
@@ -629,6 +706,12 @@ static struct qpnp_voltage_range nldo1_ranges[] = {
 	VOLTAGE_RANGE(2,  750000,  750000, 1537500, 12500),
 };
 
+/*
+static struct qpnp_voltage_range nldo2_ranges[] = {
+	VOLTAGE_RANGE(1,  375000,  375000,  768750,  6250),
+	VOLTAGE_RANGE(2,  750000,  775000, 1537500, 12500),
+};
+*/
 
 static struct qpnp_voltage_range nldo3_ranges[] = {
 	VOLTAGE_RANGE(0,  375000,  375000, 1537500, 12500),
@@ -651,6 +734,10 @@ static struct qpnp_voltage_range boost_ranges[] = {
 struct _qpnp_vregs qpnp_vregs;
 #endif
 
+/*
+ * spmi_dfs_add_controller: adds new spmi controller entry
+ * @return zero on success
+ */
 int spmi_dfs_add_controller(struct spmi_controller *ctrl)
 {
 	struct dentry *dir;
@@ -663,7 +750,7 @@ int spmi_dfs_add_controller(struct spmi_controller *ctrl)
 	if (!root)
 		return -ENOENT;
 
-	
+	/* Allocate transaction data for the controller */
 	ctrl_data = kzalloc(sizeof(*ctrl_data), GFP_KERNEL);
 	if (!ctrl_data)
 		return -ENOMEM;
@@ -719,6 +806,10 @@ err_create_dir_failed:
 	return -ENOMEM;
 }
 
+/*
+ * spmi_dfs_del_controller: deletes spmi controller entry
+ * @return zero on success
+ */
 int spmi_dfs_del_controller(struct spmi_controller *ctrl)
 {
 	int rc;
@@ -750,6 +841,10 @@ done:
 	return rc;
 }
 
+/*
+ * spmi_dfs_create_file: creates a new file in the SPMI debugfs
+ * @returns valid dentry pointer on success or NULL
+ */
 struct dentry *spmi_dfs_create_file(struct spmi_controller *ctrl,
 					const char *name, void *data,
 					const struct file_operations *fops)
@@ -804,9 +899,9 @@ static int htc_vreg_is_enabled(struct _qpnp_vregs *qpnp_vregs, struct _vreg *vre
         }
 
         if (val & (1 << qpnp_vregs->en_bit))
-                rc = 1; 
+                rc = 1; /* Enable */
         else
-                rc = 0; 
+                rc = 0; /* Disable */
 
         return rc;
 }
@@ -823,9 +918,9 @@ static int htc_vreg_is_pulldown(struct _qpnp_vregs *qpnp_vregs, struct _vreg *vr
         }
 
         if (val & (1 << qpnp_vregs->pd_bit))
-                rc = 1; 
+                rc = 1; /* Pull down */
         else
-                rc = 0; 
+                rc = 0; /* Doesn't pull down */
 
         return rc;
 }
@@ -852,6 +947,10 @@ static int htc_vreg_ldo_get_voltage(struct _qpnp_vregs *qpnp_vregs, struct _vreg
         u32 vmin = 0;
         int ret = 0;
 
+        /*
+         * Select range, step & vmin based on input voltage & type of LDO
+         * LDO can operate in low, mid, high power mode
+         */
         ret= spmi_read_data(qpnp_vregs->ctrl, &range, vreg->base_addr + qpnp_vregs->range_ctl_offset, 1);
         if (ret < 0) {
                 pr_err("SPMI read failed, err = %d\n", ret);
@@ -882,7 +981,7 @@ static int htc_vreg_ldo_get_voltage(struct _qpnp_vregs *qpnp_vregs, struct _vreg
                 }
         } else {
                 pr_err("%s: vreg type = %d, range = %d, not support\n", __func__, range, vreg->type);
-                
+                // FIXME: Remove hard code
                 if (range == 0) {
                         step = 120000;
                         vmin = 1380000;
@@ -960,10 +1059,10 @@ static int htc_vreg_ldo_set_voltage(struct _qpnp_vregs *qpnp_vregs, struct _vreg
 	uint8_t range_sel, voltage_sel;
 	int range_sel_flag, range_id = 0;
 
-	
+	/* Set the range select as default */
 	range_sel_flag = -1;
 
-	
+	/* Determine "Range Value" based different LDO type */
 	if (vreg->type == VREG_TYPE_PLDO) {
 		for (i = 0; i < ARRAY_SIZE(pldo_ranges); i++) {
 			if ((pldo_ranges[i].min_uV < val)
@@ -985,16 +1084,16 @@ static int htc_vreg_ldo_set_voltage(struct _qpnp_vregs *qpnp_vregs, struct _vreg
 			}
 		}
 	} else {
-		
+		// TODO
 	}
 
-	
+	/* if range_sel is negative, means that not valid range be selected */
 	if (range_sel_flag<0) {
 		pr_err("Can't set voltage due to not range can be seleted\n");
 		return -1;
 	}
 
-	
+	/* Caculate Vstep, Voltage = Vmin + VSET*(Vstep) */
 	if (vreg->type == VREG_TYPE_PLDO) {
 		voltage_sel = (val - pldo_ranges[range_id].min_uV)
 			/ pldo_ranges[range_id].step_uV;
@@ -1002,10 +1101,10 @@ static int htc_vreg_ldo_set_voltage(struct _qpnp_vregs *qpnp_vregs, struct _vreg
 		voltage_sel = (val - nldo1_ranges[range_id].min_uV)
 			/ nldo1_ranges[range_id].step_uV;
 	} else {
-		
+		// TODO
 	}
 
-	
+	/* Perform the SPMI write(s) to VOLTAGE_CTL1 for range select */
 	ret = spmi_write_data(qpnp_vregs->ctrl, &range_sel,
 		vreg->base_addr + qpnp_vregs->range_ctl_offset, 1);
 
@@ -1014,7 +1113,7 @@ static int htc_vreg_ldo_set_voltage(struct _qpnp_vregs *qpnp_vregs, struct _vreg
 		return ret;
 	}
 
-	
+	/* Perform the SPMI write(s) to VOLTAGE_CTL2 for step choice */
 	ret = spmi_write_data(qpnp_vregs->ctrl, &voltage_sel,
 		vreg->base_addr + qpnp_vregs->step_ctl_offset, 1);
 
@@ -1032,7 +1131,7 @@ static int htc_vreg_smps_set_voltage(struct _qpnp_vregs *qpnp_vregs, struct _vre
 	uint8_t range_sel, voltage_sel;
 	int range_sel_flag, range_id = 0;
 
-	
+	/* Set the range select as default */
 	range_sel_flag = -1;
 
 	if (vreg->type == VREG_TYPE_HF_SMPS) {
@@ -1056,13 +1155,13 @@ static int htc_vreg_smps_set_voltage(struct _qpnp_vregs *qpnp_vregs, struct _vre
 			}
 		}
 #else
-		
+		/* To avoid voltage drop, always read MV_RANGE first by default and keep to use it to change voltage */
 		ret = spmi_read_data(qpnp_vregs->ctrl, &range_sel, vreg->base_addr + qpnp_vregs->range_ctl_offset, 1);
 		if (ret) {
 			pr_err("SPMI read failed, err = %zu\n", ret);
 			return ret;
 		}
-		
+		/* Find the range id for array index */
 		for (i = 0; i < ARRAY_SIZE(ftsmps_ranges); i++) {
 			if (ftsmps_ranges[i].range_sel == range_sel) {
 				range_id = i;
@@ -1072,16 +1171,16 @@ static int htc_vreg_smps_set_voltage(struct _qpnp_vregs *qpnp_vregs, struct _vre
 		}
 #endif
 	} else {
-		
+		//TODO
 	}
 
-	
+	/* if range_sel is negative, means that not valid range be selected */
 	if (range_sel_flag<0) {
 		pr_err("Can't set voltage due to not range can be seleted\n");
 		return -1;
 	}
 
-	
+	/* Caculate Vstep, Voltage = Vmin + VSET*(Vstep) */
 	if (vreg->type == VREG_TYPE_HF_SMPS) {
 		voltage_sel = (val - smps_ranges[range_id].min_uV)
 			/ smps_ranges[range_id].step_uV;
@@ -1089,10 +1188,10 @@ static int htc_vreg_smps_set_voltage(struct _qpnp_vregs *qpnp_vregs, struct _vre
 		voltage_sel = (val - ftsmps_ranges[range_id].min_uV)
 			/ ftsmps_ranges[range_id].step_uV;
 	} else {
-		
+		// TODO
 	}
 
-	
+	/* Perform the SPMI write(s) to VOLTAGE_CTL1 for range select */
 	ret = spmi_write_data(qpnp_vregs->ctrl, &range_sel,
 		vreg->base_addr + qpnp_vregs->range_ctl_offset, 1);
 
@@ -1101,7 +1200,7 @@ static int htc_vreg_smps_set_voltage(struct _qpnp_vregs *qpnp_vregs, struct _vre
 		return ret;
 	}
 
-	
+	/* Perform the SPMI write(s) to VOLTAGE_CTL2 for step choice */
 	ret = spmi_write_data(qpnp_vregs->ctrl, &voltage_sel,
 		vreg->base_addr + qpnp_vregs->step_ctl_offset, 1);
 
@@ -1159,7 +1258,7 @@ int htc_vreg_dump(int vreg_id, struct seq_file *m, char *vreg_buffer, int curr_l
 
 	vreg = &qpnp_vregs.vregs[vreg_id];
 
-        
+        /* Get vreg name */
         memset(name_buf, 0, VREG_NAME_VOL_LEN);
         len = strlen(vreg->name);
         if (len >= VREG_NAME_VOL_LEN)
@@ -1167,7 +1266,7 @@ int htc_vreg_dump(int vreg_id, struct seq_file *m, char *vreg_buffer, int curr_l
         memcpy(name_buf, vreg->name, len);
         name_buf[len] = '\0';
 
-        
+        /* Does vreg enable? */
         memset(en_buf, 0, VREG_EN_PD_MODE_LEN);
         enable = htc_vreg_is_enabled(&qpnp_vregs, vreg);
         if (enable < 0)
@@ -1177,9 +1276,16 @@ int htc_vreg_dump(int vreg_id, struct seq_file *m, char *vreg_buffer, int curr_l
         else
                 sprintf(en_buf, "NO  ");
 
-        
+        /* Get vreg mode*/
         memset(mode_buf, 0, VREG_EN_PD_MODE_LEN);
         mode = htc_vreg_get_mode(&qpnp_vregs, vreg);
+        /*
+             *  H: Force NPM/ Force PWM
+             *  A: Auto Mode
+             *  B: Bypass Mode
+             *  W: PMIC Awake (Sleep_B)
+             *  U: Unused
+            */
         if (vreg->type < 2) {
                 mode_buf[0] = mode & 0x80 ? 'H' : '_';
                 mode_buf[1] = mode & 0x40 ? 'A' : '_';
@@ -1207,7 +1313,7 @@ int htc_vreg_dump(int vreg_id, struct seq_file *m, char *vreg_buffer, int curr_l
                 mode_buf[3] = 'U';
         }
 
-        
+        /* Does vreg pull down? */
         memset(pd_buf, 0, VREG_EN_PD_MODE_LEN);
         pd = htc_vreg_is_pulldown(&qpnp_vregs, vreg);
         if (pd < 0)
@@ -1217,7 +1323,7 @@ int htc_vreg_dump(int vreg_id, struct seq_file *m, char *vreg_buffer, int curr_l
         else
                 sprintf(pd_buf, "NO  ");
 
-        
+        /* Get vreg voltage */
         memset(vol_buf, 0, VREG_NAME_VOL_LEN);
         vol = htc_vreg_get_voltage(&qpnp_vregs, vreg);
         if (vol < 0)
@@ -1238,6 +1344,7 @@ int htc_vreg_dump(int vreg_id, struct seq_file *m, char *vreg_buffer, int curr_l
 
         return curr_len;
 }
+//NFC++
 #if defined(CONFIG_MACH_EYE_UL)
 #define PN547_I2C_POWEROFF_SEQUENCE_FOR_EYE
 #elif defined(CONFIG_MACH_EYE_WL)
@@ -1254,20 +1361,52 @@ int htc_vreg_dump(int vreg_id, struct seq_file *m, char *vreg_buffer, int curr_l
 #define PN547_I2C_POWEROFF_SEQUENCE_FOR_MEC
 #elif defined(CONFIG_MACH_MEC_DWG)
 #define PN547_I2C_POWEROFF_SEQUENCE_FOR_MEC
+#elif defined(CONFIG_MACH_B2_UL)
+#define PN547_I2C_POWEROFF_SEQUENCE_FOR_B2
+#else
 #endif
+//NFC PN547 chip power off sequence
 #if defined(PN547_I2C_POWEROFF_SEQUENCE_FOR_EYE)
 void force_disable_PM8941_VREG_ID_L22(void)
 {
 	int ret;
 	uint8_t voltage_sel = 0x00;
-	
-	
+	//Disable LDO22.
+	//0x15546 LDO22_EN_CTL
 	ret = spmi_write_data(qpnp_vregs.ctrl, &voltage_sel, 0x15546, 1);
 	if (ret) {
                 pr_err("force_disable_PM8941_VREG_ID_L22, SPMI write failed, err = %zu\n", ret);
         }
 }
+#elif defined(PN547_I2C_POWEROFF_SEQUENCE_FOR_MEC)
+void force_disable_PMICGPIO34(void)
+{
+	int ret;
+	uint8_t voltage_sel = 0x10;
+
+	ret = spmi_write_data(qpnp_vregs.ctrl, &voltage_sel, 0xE140, 1);
+
+}
+#elif defined(PN547_I2C_POWEROFF_SEQUENCE_FOR_B2)
+void force_disable_PMICGPIO34(void)
+{
+	int ret;
+	uint8_t voltage_sel = 0x10;
+
+	ret = spmi_write_data(qpnp_vregs.ctrl, &voltage_sel, 0xE140, 1);
+
+}
+void force_disable_PMICLVS1(void)
+{
+	int ret;
+	uint8_t voltage_sel = 0x0;
+
+	ret = spmi_write_data(qpnp_vregs.ctrl, &voltage_sel, 0x18046, 1);
+
+}
+#else
 #endif
+//NFC--
 
 #if defined(PN547_I2C_POWEROFF_SEQUENCE_FOR_MEC)
 void force_disable_PMICGPIO34(void)
@@ -1374,7 +1513,7 @@ static int htc_vreg_dump_debugfs_init(void)
 static int htc_regulator_enable(struct _qpnp_vregs *qpnp_vregs, struct _vreg *vreg)
 {
 	int ret =0;
-	u8 enabled = 0x80;
+	u8 enabled = 0x80;//bit 7 = 1
 
 	ret = spmi_write_data(qpnp_vregs->ctrl, &enabled, vreg->base_addr + qpnp_vregs->en_ctl_offset, 1);
 	if (ret < 0) {
@@ -1388,7 +1527,7 @@ static int htc_regulator_enable(struct _qpnp_vregs *qpnp_vregs, struct _vreg *vr
 static int htc_regulator_disable(struct _qpnp_vregs *qpnp_vregs, struct _vreg *vreg)
 {
 	int ret =0;
-	u8 disabled = 0x00;
+	u8 disabled = 0x00;//bit 7 = 0
 
 	ret = spmi_write_data(qpnp_vregs->ctrl, &disabled, vreg->base_addr + qpnp_vregs->en_ctl_offset, 1);
 	if (ret < 0) {
@@ -1549,7 +1688,7 @@ static int __devinit htc_vreg_dump_probe(struct platform_device *pdev)
 		pr_err("%s: Fail to get pull down bit offset\n", __func__);
 
 	htc_vreg_dump_debugfs_init();
-	
+	/* If device is S-OFF and is SuperCID, create htc_voltage and htc_reg_switchs file node. */
 	if (get_tamper_sf() == 0 && board_is_super_cid())
 	{
 		htc_voltage_debugfs_init();

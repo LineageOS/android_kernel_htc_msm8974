@@ -490,7 +490,7 @@ int32_t HtcActOisBinder_mappingTbl_i2c_write(int startup_mode, struct sensor_act
 
 	if (cur_cam_mode == CAM_MODE_CAMERA_PREVIEW) {
 
-		cur_cmp_angle = 600;
+		
 		if (cur_exp_time >= (1000/24)) {
 			cur_ois_level = 5;
 		} else if (cur_exp_time >= (1000/48)) {
@@ -629,10 +629,16 @@ static ssize_t ois_debug_enable_store(struct device *dev,
 	int input;
 	pr_info("[OIS]  %s called\n", __func__);
 
-	sscanf(buf, "%d ",&input);
-	pr_info("%s  input: %d\n",__func__,input);
-	g_ois_debug_enable = input;
-	return size;
+       if(buf){
+	    sscanf(buf, "%d ",&input);
+	    pr_info("%s  input: %d\n",__func__,input);
+	    g_ois_debug_enable = input;
+	    return size;
+       }
+       else{
+           printk("%s: buf is NULL \n", __func__);
+           return -1;
+       }
 }
 static ssize_t ois_debug_enable_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -640,9 +646,14 @@ static ssize_t ois_debug_enable_show(struct device *dev,
 	ssize_t ret = 0;
 	pr_info("[OIS]  %s called\n", __func__);
 
-	sprintf(buf, "%d\n", g_ois_debug_enable);
-	ret = strlen(buf) + 1;
-	return ret;
+	if(buf) {
+          sprintf(buf, "%d\n", g_ois_debug_enable);
+          ret = strlen(buf) + 1;
+          return ret;
+      }else{
+          printk("%s: buf is NULL \n", __func__);
+          return -1;
+      }
 }
 static DEVICE_ATTR(ois_debug_enable, S_IRUGO | S_IWUSR, ois_debug_enable_show, ois_debug_enable_store);
 
@@ -657,10 +668,16 @@ static ssize_t ois_level_store(struct device *dev,
 	int input;
 	pr_info("[OIS]  %s called\n", __func__);
 
-	sscanf(buf, "%d ",&input);
-	pr_info("%s  input: %d\n",__func__,input);
-	g_ois_level = input;
-	return size;
+       if(buf) {
+	    sscanf(buf, "%d ",&input);
+	    pr_info("%s  input: %d\n",__func__,input);
+	    g_ois_level = input;
+	    return size;
+       }
+       else{
+           printk("%s: buf is NULL \n", __func__);
+           return -1;
+       }
 }
 static ssize_t ois_level_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -668,9 +685,14 @@ static ssize_t ois_level_show(struct device *dev,
 	ssize_t ret = 0;
 	pr_info("[OIS]  %s called\n", __func__);
 
-	sprintf(buf, "%d\n", g_ois_level);
-	ret = strlen(buf) + 1;
-	return ret;
+	if(buf) {
+	    sprintf(buf, "%d\n", g_ois_level);
+	    ret = strlen(buf) + 1;
+	    return ret;
+      }else{
+          printk("%s: buf is NULL \n", __func__);
+          return -1;
+      }
 }
 static DEVICE_ATTR(ois_level, S_IRUGO | S_IWUSR, ois_level_show, ois_level_store);
 
@@ -685,10 +707,16 @@ static ssize_t compensation_angle_store(struct device *dev,
 	int input;
 	pr_info("[OIS]  %s called\n", __func__);
 
-	sscanf(buf, "%d ",&input);
-	pr_info("%s  input: %d\n",__func__,input);
-	g_compensation_angle = input;
-	return size;
+       if(buf) {
+	    sscanf(buf, "%d ",&input);
+	    pr_info("%s  input: %d\n",__func__,input);
+	    g_compensation_angle = input;
+	    return size;
+       }
+       else{
+           printk("%s: buf is NULL \n", __func__);
+           return -1;
+       }
 }
 static ssize_t compensation_angle_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -696,9 +724,14 @@ static ssize_t compensation_angle_show(struct device *dev,
 	ssize_t ret = 0;
 	pr_info("[OIS]  %s called\n", __func__);
 
-	sprintf(buf, "%d\n", g_compensation_angle);
-	ret = strlen(buf) + 1;
-	return ret;
+	if(buf) {
+          sprintf(buf, "%d\n", g_compensation_angle);
+          ret = strlen(buf) + 1;
+          return ret;
+      }else{
+          printk("%s: buf is NULL \n", __func__);
+          return -1;
+      }
 }
 static DEVICE_ATTR(compensation_angle, S_IRUGO | S_IWUSR, compensation_angle_show, compensation_angle_store);
 

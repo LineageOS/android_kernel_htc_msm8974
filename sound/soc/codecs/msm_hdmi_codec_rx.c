@@ -17,12 +17,16 @@
 #include <sound/core.h>
 #include <sound/pcm.h>
 #include <sound/soc.h>
+/* HTC_AUD_START */
 #include <linux/wakelock.h>
+/* HTC_AUD_END */
 #include <mach/msm_hdmi_audio_codec.h>
 
 #define MSM_HDMI_PCM_RATES	SNDRV_PCM_RATE_48000
 
+/* HTC_AUD_START */
 static struct wake_lock hdmi_active_wakelock;
+/* HTC_AUD_END */
 
 struct msm_hdmi_audio_codec_rx_data {
 	struct platform_device *hdmi_core_pdev;
@@ -90,26 +94,28 @@ static int msm_hdmi_audio_codec_rx_dai_startup(
 	int rv = 0;
 	struct msm_hdmi_audio_codec_rx_data *codec_data =
 			dev_get_drvdata(dai->codec->dev);
-	
+	/* HTC_AUD_START */
 	wake_lock(&hdmi_active_wakelock);
-	
+	/* HTC_AUD_END */
 	rv = codec_data->hdmi_ops.hdmi_cable_status(
 		codec_data->hdmi_core_pdev, 1);
 	if (IS_ERR_VALUE(rv)) {
 		dev_err(dai->dev,
 			"%s() HDMI core is not ready (rv = %d)\n",
 			__func__, rv);
-		
+
+		/* HTC_AUD_START */
 		wake_unlock(&hdmi_active_wakelock);
-		
+		/* HTC_AUD_END */
 	} else if (!rv) {
 		dev_err(dai->dev,
 			"%s() HDMI cable is not connected (ret val = %d)\n",
 			__func__, rv);
-		rv = -EAGAIN;
-		
+		rv = -EINVAL;
+
+		/* HTC_AUD_START */
 		wake_unlock(&hdmi_active_wakelock);
-		
+		/* HTC_AUD_END */
 	}
 
 	return rv;
@@ -121,7 +127,7 @@ static int msm_hdmi_audio_codec_rx_dai_hw_params(
 		struct snd_soc_dai *dai)
 {
 	u32 channel_allocation = 0;
-	u32 level_shift  = 0; 
+	u32 level_shift  = 0; /* 0dB */
 	bool down_mix = 0;
 	u32 num_channels = params_channels(params);
 	int rv = 0;
@@ -140,7 +146,7 @@ static int msm_hdmi_audio_codec_rx_dai_hw_params(
 		dev_err(dai->dev,
 			"%s() HDMI cable is not connected (rv = %d)\n",
 			__func__, rv);
-		return -EAGAIN;
+		return -EINVAL;
 	}
 
 	switch (num_channels) {
@@ -148,19 +154,19 @@ static int msm_hdmi_audio_codec_rx_dai_hw_params(
 		channel_allocation  = 0;
 		break;
 	case 3:
-		channel_allocation  = 0x02;
+		channel_allocation  = 0x02;//default to FL/FR/FC
 		break;
 	case 4:
-		channel_allocation  = 0x06;
+		channel_allocation  = 0x06;//default to FL/FR/FC/RC
 		break;
 	case 5:
-		channel_allocation  = 0x0A;
+		channel_allocation  = 0x0A;//default to FL/FR/FC/RR/RL
 		break;
 	case 6:
 		channel_allocation  = 0x0B;
 		break;
 	case 7:
-		channel_allocation  = 0x12;
+		channel_allocation  = 0x12;//default to FL/FR/FC/RL/RR/RRC/RLC
 		break;
 	case 8:
 		channel_allocation  = 0x13;
@@ -204,9 +210,9 @@ static void msm_hdmi_audio_codec_rx_dai_shutdown(
 			"%s() HDMI core had problems releasing HDMI audio flag\n",
 			__func__);
 	}
-	
+	/* HTC_AUD_START */
 	wake_unlock(&hdmi_active_wakelock);
-	
+	/* HTC_AUD_END */
 	return;
 }
 
@@ -317,9 +323,9 @@ static int __devinit msm_hdmi_audio_codec_rx_plat_probe(
 	dev_dbg(&pdev->dev, "%s(): new dev name %s\n", __func__,
 		dev_name(&pdev->dev));
 
-	
+	/* HTC_AUD_START */
 	wake_lock_init(&hdmi_active_wakelock, WAKE_LOCK_SUSPEND, "hdmi_active");
-	
+	/* HTC_AUD_END */
 
 	return snd_soc_register_codec(&pdev->dev,
 		&msm_hdmi_audio_codec_rx_soc_driver,

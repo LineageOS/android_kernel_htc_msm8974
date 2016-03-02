@@ -234,6 +234,7 @@ static int msm_v4l2_enum_framesizes(struct file *file, void *fh,
 	return msm_vidc_enum_framesizes((void *)vidc_inst, fsize);
 }
 
+/* HTC_START: Pass calling process id and name in kernel space */
 int msm_v4l2_htc_set_callingpid_name(struct file *file, void *fh,
                                 struct htc_callingpid_data *b)
 {
@@ -256,6 +257,7 @@ int msm_v4l2_htc_set_callingpid_name(struct file *file, void *fh,
 	vidc_inst->process_name[sizeof(vidc_inst->process_name)-1] = '\0';
 	return 0;
 }
+/* HTC_END */
 
 static const struct v4l2_ioctl_ops msm_v4l2_ioctl_ops = {
 	.vidioc_querycap = msm_v4l2_querycap,
@@ -281,9 +283,9 @@ static const struct v4l2_ioctl_ops msm_v4l2_ioctl_ops = {
 	.vidioc_s_parm = msm_v4l2_s_parm,
 	.vidioc_g_parm = msm_v4l2_g_parm,
 	.vidioc_enum_framesizes = msm_v4l2_enum_framesizes,
-	
+	/* HTC_START: Pass calling process id and name in kernel space */
 	.vidioc_htc_set_callingpid_name = msm_v4l2_htc_set_callingpid_name,
-	
+	/* HTC_END */
 };
 
 static const struct v4l2_ioctl_ops msm_v4l2_enc_ioctl_ops = {
@@ -324,10 +326,10 @@ static int read_platform_resources(struct msm_vidc_core *core,
 
 	core->resources.pdev = pdev;
 	if (pdev->dev.of_node) {
-		
+		/* Target supports DT, parse from it */
 		return read_platform_resources_from_dt(&core->resources);
 	} else {
-		
+		/* Legacy board file usage */
 		return read_platform_resources_from_board(
 				&core->resources);
 	}

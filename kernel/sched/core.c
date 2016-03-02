@@ -4940,6 +4940,9 @@ void sched_show_task(struct task_struct *p)
 	if (state == TASK_UNINTERRUPTIBLE) {
 		struct task_struct* blocker = p->blocked_by;
 		if (blocker) {
+			/* The content of `blocker' here might be invalid if
+			 * the previous locker exits imediately after unlock.
+			 */
 			printk(KERN_CONT "  blocked by %.32s (%d:%d) for %u ms\n",
 				blocker->comm, blocker->tgid, blocker->pid,
 				jiffies_to_msecs(jiffies - p->blocked_since));

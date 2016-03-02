@@ -322,13 +322,6 @@ struct mdss_dsi_ctrl_pdata {
 	struct dsi_panel_cmds cabc_video_cmds;
 	struct dsi_panel_cmds dimming_on_cmds;
 	struct dsi_panel_cmds frame_suffix_cmds;
-
-	int brt_dim;
-	int brt_min;
-	int brt_def;
-	int brt_high;
-	int brt_extra;
-	int brt_max;
 };
 
 struct dsi_status_data {
@@ -372,7 +365,7 @@ struct mdss_dsi_ctrl_pdata *mdss_dsi_ctrl_slave(
 irqreturn_t mdss_dsi_isr(int irq, void *ptr);
 void mdss_dsi_irq_handler_config(struct mdss_dsi_ctrl_pdata *ctrl_pdata);
 
-void mipi_set_tx_power_mode(int mode, struct mdss_panel_data *pdata);
+void mdss_dsi_set_tx_power_mode(int mode, struct mdss_panel_data *pdata);
 int mdss_dsi_clk_div_config(struct mdss_panel_info *panel_info,
 			    int frame_rate);
 int mdss_dsi_clk_init(struct platform_device *pdev,

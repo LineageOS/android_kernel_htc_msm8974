@@ -211,6 +211,10 @@ static int32_t ov13850_platform_probe(struct platform_device *pdev)
 	int32_t rc = 0;
 	const struct of_device_id *match;
 	match = of_match_device(ov13850_dt_match, &pdev->dev);
+	
+	if(!match)
+		return -ENODEV;
+	
 	rc = msm_sensor_platform_probe(pdev, match->data);
 	return rc;
 }

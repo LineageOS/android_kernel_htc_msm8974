@@ -26,7 +26,7 @@ static struct msm_sensor_power_setting imx219_power_setting[] = {
 	{
 		.seq_type = SENSOR_GPIO,
 		.seq_val = SENSOR_GPIO_VCM_PWD,
-		.config_val = GPIO_OUT_HIGH,
+		.config_val = GPIO_OUT_HIGH,//GPIO_OUT_LOW,
 		.delay = 1,
 	},
 	{
@@ -50,7 +50,7 @@ static struct msm_sensor_power_setting imx219_power_setting[] = {
 	{
 		.seq_type = SENSOR_GPIO,
 		.seq_val = SENSOR_GPIO_RESET,
-		.config_val = GPIO_OUT_HIGH,
+		.config_val = GPIO_OUT_HIGH,//GPIO_OUT_LOW,
 		.delay = 1,
 	},
 	{
@@ -160,6 +160,7 @@ static int imx219_sysfs_init(void)
 	return 0 ;
 }
 
+/*HTC_START 20131021 - Porting read OTP*/
 static int imx219_read_fuseid(struct sensorb_cfg_data *cdata,
 	struct msm_sensor_ctrl_t *s_ctrl)
 {
@@ -228,13 +229,13 @@ static int imx219_read_fuseid(struct sensorb_cfg_data *cdata,
 	}
 	pr_info("%s: OTP valid layer = %d\n", __func__,  valid_layer);
 
-	
+	// fuseid
 	cdata->cfg.fuse.fuse_id_word1 = 0;
 	cdata->cfg.fuse.fuse_id_word2 = otp[0xA];
 	cdata->cfg.fuse.fuse_id_word3 = otp[0xB];
 	cdata->cfg.fuse.fuse_id_word4 = otp[0xC];
 
-	
+	//vcm
 	cdata->af_value.VCM_VENDOR_ID_VERSION = otp[8];
 	cdata->af_value.AF_INF_MSB = otp[0];
 	cdata->af_value.AF_INF_LSB = otp[1];
@@ -266,6 +267,7 @@ static int imx219_read_fuseid(struct sensorb_cfg_data *cdata,
 	return 0;
 
 }
+/*HTC_END*/
 
 static int32_t imx219_platform_probe(struct platform_device *pdev)
 {
@@ -301,6 +303,7 @@ static void __exit imx219_exit_module(void)
 	return;
 }
 
+/*HTC_START 20131021 - Porting read OTP*/
 static struct msm_sensor_fn_t imx219_sensor_func_tbl = {
 	.sensor_config = msm_sensor_config,
 	.sensor_power_up = msm_sensor_power_up,
@@ -308,6 +311,7 @@ static struct msm_sensor_fn_t imx219_sensor_func_tbl = {
 	.sensor_match_id = msm_sensor_match_id,
 	.sensor_i2c_read_fuseid = imx219_read_fuseid,
 };
+/*HTC_END*/
 
 static struct msm_sensor_ctrl_t imx219_s_ctrl = {
 	.sensor_i2c_client = &imx219_sensor_i2c_client,
@@ -316,7 +320,9 @@ static struct msm_sensor_ctrl_t imx219_s_ctrl = {
 	.msm_sensor_mutex = &imx219_mut,
 	.sensor_v4l2_subdev_info = imx219_subdev_info,
 	.sensor_v4l2_subdev_info_size = ARRAY_SIZE(imx219_subdev_info),
+/*HTC_START 20131021 - Porting read OTP*/
 	.func_tbl = &imx219_sensor_func_tbl,
+/*HTC_END*/
 };
 
 module_init(imx219_init_module);
