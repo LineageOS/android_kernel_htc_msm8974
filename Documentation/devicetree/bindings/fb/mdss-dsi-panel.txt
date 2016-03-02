@@ -173,6 +173,8 @@ Optional properties:
 					horizontal back porch (HBP) blanking period.
 - qcom,mdss-dsi-hsa-power-mode:		Boolean to determine DSI lane state during
 					horizontal sync active (HSA) mode.
+- qcom,mdss-dsi-last-line-interleave	Boolean to determine if last line
+					interleave flag needs to be enabled.
 - qcom,mdss-dsi-bllp-eof-power-mode:	Boolean to determine DSI lane state during
 					blanking low power period (BLLP) EOF mode.
 - qcom,mdss-dsi-bllp-power-mode:	Boolean to determine DSI lane state during
@@ -258,40 +260,42 @@ Optional properties:
 - qcom,mdss-dsi-rx-eot-ignore:		Boolean used to enable ignoring end of transmission packets.
 - qcom,mdss-dsi-tx-eot-append:		Boolean used to enable appending end of transmission packets.
 
-- qcom,display-on-cmds:			A byte stream formed by multiple dcs packets base on
-					qcom dsi controller protocol.
-- qcom,display-on-wait:			Specifies the delay time before display command.
-- qcom,mdss-dsi-default-command-state:	String that specifies the ctrl state for sending commands.
-- qcom,mdss-shrink-pwm:			A array that specifies the pwm_min, pwm_default, pwm_max for
-					brightness shrink function
-- qcom,mdss-pwm-ctl-type:		Specifies pwm ctl type(0:none 1:PMIC(wled with cabc_en)
-					2:external IC(with CABC PWM by DCS))
 
-- htc,mdss-max-brt-level:		Specifies the actual max brightness supported by the panel.
+- qcom,display-on-cmds:                 A byte stream formed by multiple dcs packets base on
+                                        qcom dsi controller protocol.
+- qcom,display-on-wait:                 Specifies the delay time before display command.
+- qcom,mdss-dsi-default-command-state:  String that specifies the ctrl state for sending commands.
+- qcom,mdss-pwm-ctl-type:               Specifies pwm ctl type(0:none 1:PMIC(wled with cabc_en)
+                                        2:external IC(with CABC PWM by DCS))
 
-- htc,mdss-camera-blk:			Specifies the brightness of camera
+- htc,mdss-camera-blk:                  Specifies the brightness of camera
 
-- htc,mdss-camera-dua-blk:		Specifies the brightness of dua camera
+- htc,mdss-camera-dua-blk:              Specifies the brightness of dua camera
 
-- htc,cabc-ui-cmds: 			A byte stream formed by multiple dcs packets base on
-					qcom dsi controller protocol.
+- htc,cabc-ui-cmds:                     A byte stream formed by multiple dcs packets base on
+                                        qcom dsi controller protocol.
 
-- htc,cabc-video-cmds: 			A byte stream formed by multiple dcs packets base on
-					qcom dsi controller protocol.
+- htc,cabc-video-cmds:                  A byte stream formed by multiple dcs packets base on
+                                        qcom dsi controller protocol.
 
-- htc,cabc-off-cmds: 			A byte stream formed by multiple dcs packets base on
-					qcom dsi controller protocol.
+- htc,cabc-off-cmds:                    A byte stream formed by multiple dcs packets base on
+                                        qcom dsi controller protocol.
 
-- htc,dimming-on-cmds: 			A byte stream formed by multiple dcs packets base on
-					qcom dsi controller protocol.
+- htc,dimming-on-cmds:                  A byte stream formed by multiple dcs packets base on
+                                        qcom dsi controller protocol.
 
-- htc,mdss-pp-hue:			Specifies pp hue adjustment for panel
+- htc,mdss-pp-hue:                      Specifies pp hue adjustment for panel
 
-- htc,mdss-bl-brt:			A array that specifies the brt_dim, brt_min, brt_def, brt_high, brt_max for
-					brightness mapping function
+- htc,frame-suffix-cmds:                A byte stream formed by multiple dcs packets base on
+                                        qcom dsi controller protocol.
 
-- htc,frame-suffix-cmds: 		A byte stream formed by multiple dcs packets base on
-					qcom dsi controller protocol.
+- htc,brt-bl-table:                     An array that specifies the backlight 2.0 bl and brightness
+                                        transform table.
+                                        Each set will have the format defined as below:
+                                        --> brightness level
+                                        --> bl level
+- htc,nits-bl-table:                    An array that specifies the backlight 2.0 nits and bl
+                                        transform table.
 
 Note, if a given optional qcom,* binding is not present, then the driver will configure
 the default values specified.
@@ -351,6 +355,7 @@ Example:
 		qcom,mdss-dsi-hsa-power-mode;
 		qcom,mdss-dsi-bllp-eof-power-mode;
 		qcom,mdss-dsi-bllp-power-mode;
+		qcom,mdss-dsi-last-line-interleave;
 		qcom,mdss-dsi-traffic-mode = <0>;
 		qcom,mdss-dsi-virtual-channel-id = <0>;
 		qcom,mdss-dsi-color-order = <0>;

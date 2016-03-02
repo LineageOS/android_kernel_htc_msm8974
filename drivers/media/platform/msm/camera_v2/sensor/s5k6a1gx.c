@@ -21,7 +21,7 @@ static struct msm_sensor_power_setting s5k6a1gx_power_setting[] = {
 	{
 		.seq_type = SENSOR_GPIO,
 		.seq_val = SENSOR_GPIO_RESET,
-		.config_val = GPIO_OUT_LOW,
+		.config_val = GPIO_OUT_LOW,//GPIO_OUT_HIGH,
 		.delay = 20,
 	},
 	{
@@ -51,7 +51,7 @@ static struct msm_sensor_power_setting s5k6a1gx_power_setting[] = {
 	{
 		.seq_type = SENSOR_GPIO,
 		.seq_val = SENSOR_GPIO_RESET,
-		.config_val = GPIO_OUT_HIGH,
+		.config_val = GPIO_OUT_HIGH,//GPIO_OUT_LOW,
 		.delay = 80,
 	},
 	{

@@ -36,10 +36,8 @@
 #include <mach/scm.h>
 #include <mach/memory.h>
 
-/* bitmap of the page sizes currently supported */
 #define MSM_IOMMU_PGSIZES	(SZ_4K | SZ_64K | SZ_1M | SZ_16M)
 
-/* commands for SCM_SVC_MP */
 #define IOMMU_SECURE_CFG	2
 #define IOMMU_SECURE_PTBL_SIZE  3
 #define IOMMU_SECURE_PTBL_INIT  4
@@ -50,7 +48,6 @@
 #define IOMMU_SECURE_UNMAP2 0x0C
 #define IOMMU_TLBINVAL_FLAG 0x00000001
 
-/* commands for SCM_SVC_UTIL */
 #define IOMMU_DUMP_SMMU_FAULT_REGS 0X0C
 #define MAXIMUM_VIRT_SIZE	(300*SZ_1M)
 
@@ -97,12 +94,7 @@ struct msm_cp_pool_size {
 };
 
 #define NUM_DUMP_REGS 14
-/*
- * some space to allow the number of registers returned by the secure
- * environment to grow
- */
 #define WIGGLE_ROOM (NUM_DUMP_REGS * 2)
-/* Each entry is a (reg_addr, reg_val) pair, hence the * 2 */
 #define SEC_DUMP_SIZE ((NUM_DUMP_REGS * 2) + WIGGLE_ROOM)
 
 struct msm_scm_fault_regs_dump {
@@ -232,11 +224,6 @@ irqreturn_t msm_iommu_secure_fault_handler_v2(int irq, void *dev_id)
 		pr_err("Unexpected IOMMU page fault from secure context bank!\n");
 		pr_err("name = %s\n", drvdata->name);
 		pr_err("Power is OFF. Unable to read page fault information\n");
-		/*
-		 * We cannot determine which context bank caused the issue so
-		 * we just return handled here to ensure IRQ handler code is
-		 * happy
-		 */
 		goto free_regs;
 	}
 
@@ -268,7 +255,7 @@ irqreturn_t msm_iommu_secure_fault_handler_v2(int irq, void *dev_id)
 					0);
 			}
 
-			/* if the fault wasn't handled by someone else: */
+			
 			if (tmp == -ENOSYS) {
 				pr_err("Unexpected IOMMU page fault from secure context bank!\n");
 				pr_err("name = %s\n", drvdata->name);
@@ -377,10 +364,11 @@ fail:
 
 int msm_iommu_sec_program_iommu(int sec_id)
 {
+	static unsigned long prev_fail = 0;
 	struct msm_scm_sec_cfg {
 		unsigned int id;
 		unsigned int spare;
-	} cfg;
+	} cfg = {0};
 	int ret, scm_ret = 0;
 
 	cfg.id = sec_id;
@@ -389,6 +377,10 @@ int msm_iommu_sec_program_iommu(int sec_id)
 			&scm_ret, sizeof(scm_ret));
 	if (ret || scm_ret) {
 		pr_err("scm call IOMMU_SECURE_CFG failed\n");
+		if (prev_fail && time_before(jiffies, prev_fail + HZ)) {
+			panic("TZ/scm_call fatal");
+		}
+		prev_fail = jiffies;
 		return ret ? ret : -EINVAL;
 	}
 
@@ -415,9 +407,6 @@ static int msm_iommu_sec_ptbl_map(struct msm_iommu_drvdata *iommu_drvdata,
 	flush_va = &pa;
 	flush_pa = virt_to_phys(&pa);
 
-	/*
-	 * Ensure that the buffer is in RAM by the time it gets to TZ
-	 */
 	clean_caches((unsigned long) flush_va, len, flush_pa);
 
 	if (scm_call(SCM_SVC_MP, IOMMU_SECURE_MAP2, &map, sizeof(map), &ret,
@@ -426,7 +415,7 @@ static int msm_iommu_sec_ptbl_map(struct msm_iommu_drvdata *iommu_drvdata,
 	if (ret)
 		return -EINVAL;
 
-	/* Invalidate cache since TZ touched this address range */
+	
 	invalidate_caches((unsigned long) flush_va, len, flush_pa);
 
 	return 0;
@@ -434,11 +423,6 @@ static int msm_iommu_sec_ptbl_map(struct msm_iommu_drvdata *iommu_drvdata,
 
 static unsigned int get_phys_addr(struct scatterlist *sg)
 {
-	/*
-	 * Try sg_dma_address first so that we can
-	 * map carveout regions that do not have a
-	 * struct page associated with them.
-	 */
 	unsigned int pa = sg_dma_address(sg);
 	if (pa == 0)
 		pa = sg_phys(sg);
@@ -502,9 +486,6 @@ static int msm_iommu_sec_ptbl_map_range(struct msm_iommu_drvdata *iommu_drvdata,
 		flush_va = pa_list;
 	}
 
-	/*
-	 * Ensure that the buffer is in RAM by the time it gets to TZ
-	 */
 	clean_caches((unsigned long) flush_va,
 		sizeof(unsigned long) * map.plist.list_size,
 		virt_to_phys(flush_va));
@@ -596,7 +577,7 @@ static int msm_iommu_attach_dev(struct iommu_domain *domain, struct device *dev)
 	if (ret)
 		goto fail;
 
-	/* We can only do this once */
+	
 	if (!iommu_drvdata->ctx_attach_count) {
 		ret = iommu_access_ops->iommu_clk_on(iommu_drvdata);
 		if (ret) {
@@ -606,7 +587,7 @@ static int msm_iommu_attach_dev(struct iommu_domain *domain, struct device *dev)
 
 		ret = msm_iommu_sec_program_iommu(iommu_drvdata->sec_id);
 
-		/* bfb settings are always programmed by HLOS */
+		
 		program_iommu_bfb_settings(iommu_drvdata->base,
 					   iommu_drvdata->bfb_settings);
 
@@ -722,7 +703,7 @@ static size_t msm_iommu_unmap(struct iommu_domain *domain, unsigned long va,
 fail:
 	iommu_access_ops->iommu_lock_release(0);
 
-	/* the IOMMU API requires us to return how many bytes were unmapped */
+	
 	len = ret ? 0 : len;
 	return len;
 }

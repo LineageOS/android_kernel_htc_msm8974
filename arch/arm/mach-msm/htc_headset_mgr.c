@@ -24,6 +24,9 @@
 #include <linux/rtc.h>
 #include <linux/slab.h>
 #include <mach/htc_headset_mgr.h>
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+#include <mach/rt5506.h>
+#endif
 #ifdef CONFIG_OF
 #include <linux/of_gpio.h>
 #include <linux/async.h>
@@ -39,6 +42,12 @@
 
 #define HSMGR_DT_DELAYINIT 	msecs_to_jiffies(2000)
 #define HSMGR_DT_DELAYTIMEOUT 	msecs_to_jiffies(4000)
+
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+#define HS_JIFFIES_DEBOUNCE_DETECT msecs_to_jiffies(DEBOUNCE_TIMER)
+extern int query_imp_over_threshold(void);
+#endif
+
 struct htc_hs_mgr_data {
 	struct device *dev;
 	struct workqueue_struct *wq_raw;
@@ -56,6 +65,12 @@ static void remove_detect_work_func(struct work_struct *work);
 static DECLARE_DELAYED_WORK(remove_detect_work, remove_detect_work_func);
 static void mic_detect_work_func(struct work_struct *work);
 static DECLARE_DELAYED_WORK(mic_detect_work, mic_detect_work_func);
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+static void disable_detecing_debounce_work_func(struct work_struct *work);
+static DECLARE_DELAYED_WORK(disable_detecing_debounce_work, disable_detecing_debounce_work_func);
+static void water_detect_high_work_func(struct work_struct *work);
+static DECLARE_DELAYED_WORK(water_detect_high_work, water_detect_high_work_func);
+#endif
 
 static struct workqueue_struct *button_wq;
 static void button_35mm_work_func(struct work_struct *work);
@@ -89,7 +104,6 @@ static int	hpin_report = 0,
 		hpin_bounce = 0,
 		key_report = 0,
 		key_bounce = 0;
-
 #ifndef CONFIG_OF
 static void init_next_driver(void)
 {
@@ -170,6 +184,17 @@ static void update_mic_status(int count)
 				   HS_JIFFIES_MIC_DETECT);
 	}
 }
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+void set_keep_mic_flag(int flag)
+{
+	hi->keep_mic_on = flag;
+}
+
+int get_debounce_state(void)
+{
+	return hi->debounce_status;
+}
+#endif
 
 static void headset_notifier_update(int id)
 {
@@ -290,6 +315,24 @@ int headset_notifier_register(struct headset_notifier *notifier)
 		HS_LOG("Register HS_INSERT notifier");
 		hs_mgr_notifier.hs_insert = notifier->func;
 		break;
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+	case HEADSET_REG_HS_DISABLE_INT:
+		HS_LOG("Register HS_DISABLE_INTERRUPT notifier");
+		hs_mgr_notifier.hs_disable_int = notifier->func;
+		break;
+	case HEADSET_REG_HS_ENABLE_INT:
+		HS_LOG("Register HS_ENABLE_INTERRUPT notifier");
+		hs_mgr_notifier.hs_enable_int = notifier->func;
+		break;
+	case HEADSET_REG_WATER_DETECT_RISING:
+		HS_LOG("Register HS_WATER_DETECT_HIGH notifier");
+		hs_mgr_notifier.hs_det_rising = notifier->func;
+		break;
+	case HEADSET_REG_WATER_DETECT_FALLING:
+		HS_LOG("Register HS_WATER_DETECT_LOW notifier");
+		hs_mgr_notifier.hs_det_falling = notifier->func;
+		break;
+#endif
 	default:
 		HS_LOG("Unknown register ID");
 		return 0;
@@ -567,7 +610,11 @@ static void remove_h2w_35mm(void)
 {
 	HS_LOG_TIME("Remove H2W 3.5mm headset");
 
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+	set_35mm_hw_state(hi->keep_mic_on); 
+#else
 	set_35mm_hw_state(0);
+#endif
 
 	if (atomic_read(&hi->btn_state))
 		button_released(atomic_read(&hi->btn_state));
@@ -595,6 +642,43 @@ static void enable_metrico_headset(int enable)
 		HS_LOG("Disable metrico headset");
 	}
 }
+
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+static void disable_detecing_debounce_work_func(struct work_struct *work)
+{
+	if(hi->remove_count >= DEBOUNCE_COUNT)
+	{
+		hi->keep_mic_on = ENABLE;
+		hi->debounce_status = DEBOUNCE_ON;
+	}
+
+	set_35mm_hw_state(hi->keep_mic_on);
+
+	HS_LOG("Disable detecting debounce WQ");
+}
+static void water_detect_high_work_func(struct work_struct *work)
+{
+	int det_after_mic_ms = 0;
+
+	if(hi->det_test)
+		hi->det_test = 0;
+	else
+		hi->det_rising = hs_mgr_notifier.hs_det_rising();
+	if(hi->det_rising )
+	{
+		HS_LOG("hi->mic_rising = %d, hi->det_rising = %d\n", hi->mic_rising, hi->det_rising);
+		det_after_mic_ms = hi->det_rising - hi->mic_rising - HS_DELAY_REMOVE;
+
+		if((0 < det_after_mic_ms) && (det_after_mic_ms < HS_DET_FLLOW_MIC_TIME))
+			hi->remove_count++;
+
+		HS_LOG("remove count = %d\n", hi->remove_count);
+		HS_LOG("Det rising signal is after Mic_Bias rising %d mSec\n", det_after_mic_ms);
+	}
+	else
+		HS_LOG("hi->mic_rising = %d, hi->det_rising = %d\n", hi->mic_rising, hi->det_rising);
+}
+#endif 
 
 static void mic_detect_work_func(struct work_struct *work)
 {
@@ -707,7 +791,11 @@ static void mic_detect_work_func(struct work_struct *work)
 			hi->plugout_redetect = 0;
 #else
 			mutex_unlock(&hi->mutex_lock);
-			set_35mm_hw_state(0);			
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+			set_35mm_hw_state(hi->keep_mic_on);		
+#else
+			set_35mm_hw_state(0);	
+#endif 
 			return;
 #endif
 		}
@@ -743,7 +831,11 @@ static void mic_detect_work_func(struct work_struct *work)
 		new_state |= BIT_HEADSET_NO_MIC;
 		HS_LOG("HEADSET_NO_MIC");
 #ifndef CONFIG_HTC_HEADSET_INT_REDETECT
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+		set_35mm_hw_state(hi->keep_mic_on);
+#else
 		set_35mm_hw_state(0);
+#endif 
 #endif
 		break;
 	case HEADSET_MIC:
@@ -836,6 +928,17 @@ static void button_35mm_work_func(struct work_struct *work)
 
 	if (hi->key_level_flag) {
 		switch (hi->key_level_flag) {
+#ifdef CONFIG_HTC_HEADSET_L_RMT_KEY_DESIGN
+		case 1:
+			key = HS_MGR_KEYCODE_MEDIA;
+			break;
+		case 2:
+			key = HS_MGR_KEYCODE_VOLUP;
+			break;
+		case 3:
+			key = HS_MGR_KEYCODE_VOLDOWN;
+			break;
+#else
 		case 1:
 			key = HS_MGR_KEYCODE_MEDIA;
 			break;
@@ -845,6 +948,7 @@ static void button_35mm_work_func(struct work_struct *work)
 		case 3:
 			key = HS_MGR_KEYCODE_FORWARD;
 			break;
+#endif
 		default:
 			HS_LOG("3.5mm RC: WRONG Button Pressed");
 			kfree(works);
@@ -908,7 +1012,21 @@ static void remove_detect_work_func(struct work_struct *work)
 		hs_mgr_notifier.hs_insert(0);
 #endif
 
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+	queue_delayed_work(detect_wq, &water_detect_high_work, msecs_to_jiffies(20));
+	if(hi->remove_count  >= DEBOUNCE_COUNT)
+	{
+		cancel_delayed_work_sync(&disable_detecing_debounce_work);
+		queue_delayed_work(detect_wq, &disable_detecing_debounce_work,
+					   HS_JIFFIES_DEBOUNCE_DETECT);
+		HS_LOG("Detecting debounce initialized! %d", hi->keep_mic_on);
+	}
+	else
+		set_35mm_hw_state(0);
+#else
 	set_35mm_hw_state(0);
+#endif
+
 #if defined(CONFIG_FB_MSM_TVOUT) && defined(CONFIG_ARCH_MSM8X60)
 	if (hi->hs_35mm_type == HEADSET_TV_OUT && hi->pdata.hptv_sel_gpio) {
 		HS_LOG_TIME("Remove 3.5mm TVOUT cable");
@@ -974,6 +1092,19 @@ static void insert_detect_work_func(struct work_struct *work)
 	int mic = HEADSET_NO_MIC;
 	int adc = 0;
 
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+	int loopcnt = 0;
+	int imp_state = 0;
+
+	if(hi->debounce_status == DEBOUNCE_INIT)
+	{
+		cancel_delayed_work_sync(&disable_detecing_debounce_work);
+		queue_delayed_work(detect_wq, &disable_detecing_debounce_work,
+					   HS_JIFFIES_DEBOUNCE_DETECT);
+		HS_LOG("Detecting debounce initialized! %d", hi->keep_mic_on);
+	}
+#endif
+
 	wake_lock_timeout(&hi->hs_wake_lock, HS_WAKE_LOCK_TIMEOUT);
 
 	HS_DBG();
@@ -989,7 +1120,7 @@ static void insert_detect_work_func(struct work_struct *work)
 	set_35mm_hw_state(1);
 	msleep(250); 
 
-	#ifdef CONFIG_HTC_INSERT_NOTIFY_DELAY
+#ifdef CONFIG_HTC_INSERT_NOTIFY_DELAY
 	if (hs_mgr_notifier.hs_insert)
 		hs_mgr_notifier.hs_insert(1);
 #endif
@@ -1060,7 +1191,11 @@ static void insert_detect_work_func(struct work_struct *work)
 				hs_mgr_notifier.key_int_enable(1);
 #else
 			
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+			set_35mm_hw_state(hi->keep_mic_on); 
+#else
 			set_35mm_hw_state(0);
+#endif 
 #endif
 			return;
 		}
@@ -1084,12 +1219,40 @@ static void insert_detect_work_func(struct work_struct *work)
 		new_state |= BIT_HEADSET_NO_MIC;
 		HS_LOG_TIME("HEADSET_NO_MIC");
 #ifndef CONFIG_HTC_HEADSET_INT_REDETECT
+
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+		set_35mm_hw_state(hi->keep_mic_on);
+#else
 		set_35mm_hw_state(0);
+#endif 
+
 #endif
 		break;
 	case HEADSET_MIC:
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+		imp_state = query_imp_over_threshold();
+		HS_LOG_TIME("!!!!!!!!!!!!!!!! IMP STATE %d", imp_state);
+		for(loopcnt = 0; loopcnt < 5; loopcnt++)
+		{
+			if(query_imp_over_threshold() >= 1)
+			{
+				new_state |= BIT_HEADSET_NO_MIC;
+				HS_LOG_TIME("HEADSET_NO_MIC(Trans)");
+#ifndef CONFIG_HTC_HEADSET_INT_REDETECT
+				set_35mm_hw_state(hi->keep_mic_on);
+#endif
+				break;
+			}
+			else
+			{
+				new_state |= BIT_HEADSET;
+				HS_LOG_TIME("HEADSET_MIC");
+			}
+		}
+#else 
 		new_state |= BIT_HEADSET;
 		HS_LOG_TIME("HEADSET_MIC");
+#endif 
 		break;
 	case HEADSET_METRICO:
 		mic = HEADSET_UNSTABLE;
@@ -1600,6 +1763,46 @@ static ssize_t headset_simulate_show(struct device *dev,
 	return snprintf(buf, PAGE_SIZE, "Command is not supported\n");
 }
 
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+static ssize_t det_debounce_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE,"keep-mic-status: %d\n", hi->keep_mic_on);
+}
+
+static ssize_t det_debounce_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	if(!strncmp(buf, "down", count - 1))
+	{
+		HS_LOG("----------------down--------------\n");
+		hi->det_test = 1;
+		set_35mm_hw_state(0);
+	}
+	else if(!strncmp(buf, "up", count - 1))
+	{
+		HS_LOG("----------------up--------------\n");
+		hi->det_test = 1;
+		set_35mm_hw_state(1);
+		hi->det_rising = hi->mic_rising + msecs_to_jiffies(16);
+		queue_delayed_work(detect_wq, &remove_detect_work, msecs_to_jiffies(100));
+	}
+	else if(!strncmp(buf, "clr", count - 1))
+	{
+		hi->det_test = 1;
+		hi->remove_count = 0;
+		hi->insert_count = 0;
+		set_35mm_hw_state(0);
+	}
+	
+	
+	
+	return count;
+}
+
+static DEVICE_HEADSET_ATTR(det_debounce, 0644, det_debounce_show, det_debounce_store);
+#endif
+
 static ssize_t headset_simulate_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count)
 {
@@ -1984,7 +2187,11 @@ static int register_attributes(void)
 	ret = device_create_file(hi->headset_dev, &dev_attr_headset_1wire_state);
 	if (ret)
 		goto err_create_headset_state_device_file;
-
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+	ret = device_create_file(hi->headset_dev, &dev_attr_headset_det_debounce);
+	if (ret)
+		goto err_create_headset_state_device_file;
+#endif
 	
 	hi->tty_dev = device_create(hi->htc_accessory_class,
 				    NULL, 0, "%s", "tty");
@@ -2157,6 +2364,11 @@ static void headset_power(int enable)
 {
 	HS_LOG("%s_set MIC bias:%s", __func__, enable ? "ON" : "OFF");
 	gpio_set_value(htc_headset_mgr_data.bias_gpio, enable);
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+	hi->keep_mic_on = enable;
+	if(enable)
+		hi->mic_rising = jiffies;
+#endif
 }
 
 static void headset_init(void)
@@ -2431,6 +2643,13 @@ static int htc_headset_mgr_probe(struct platform_device *pdev)
 	hi->sdev_h2w.name       = "h2w";
 	hi->sdev_h2w.print_name = h2w_print_name;
 
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+	hi->insert_count                = 0;
+	hi->remove_count            = 0;
+	hi->debounce_status        = DEBOUNCE_INIT;
+	hi->det_test                       = 0;
+#endif
+
 	ret = switch_dev_register(&hi->sdev_h2w);
 	if (ret < 0)
 		goto err_h2w_switch_dev_register;
@@ -2550,7 +2769,6 @@ static int htc_headset_mgr_remove(struct platform_device *pdev)
 	if ((switch_get_state(&hi->sdev_h2w) & MASK_HEADSET) != 0)
 		remove_headset();
 #endif
-
 	unregister_attributes();
 	input_unregister_device(hi->input);
 	destroy_workqueue(button_wq);

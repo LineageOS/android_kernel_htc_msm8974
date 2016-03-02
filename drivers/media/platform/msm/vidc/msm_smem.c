@@ -170,7 +170,6 @@ static int ion_user_to_kernel(struct smem_client *client, int fd, u32 offset,
 		"%s: ion_handle = 0x%p, fd = %d, device_addr = 0x%x, size = %d, kvaddr = 0x%p, buffer_type = %d\n",
 		__func__, mem->smem_priv, fd, (u32)mem->device_addr,
 		mem->size, mem->kvaddr, mem->buffer_type);
-
 	return rc;
 fail_device_address:
 	ion_free(client->clnt, hndl);
@@ -244,7 +243,6 @@ static int alloc_ion_mem(struct smem_client *client, size_t size, u32 align,
 		"%s: ion_handle = 0x%p, device_addr = 0x%x, size = %d, kvaddr = 0x%p, buffer_type = %d\n",
 		__func__, mem->smem_priv, (u32)mem->device_addr,
 		mem->size, mem->kvaddr, mem->buffer_type);
-
 	return rc;
 fail_device_address:
 	ion_unmap_kernel(client->clnt, hndl);
@@ -479,7 +477,7 @@ void msm_smem_free(void *clt, struct msm_smem *mem)
 	}
 	switch (client->mem_type) {
 	case SMEM_ION:
-		
+		/* HTC_START: Switch ion_client for releasing scratch buffer */
 		if ((mem->buffer_type == HAL_BUFFER_INTERNAL_SCRATCH) ||
 			(mem->buffer_type == HAL_BUFFER_INTERNAL_SCRATCH_1) ||
 			(mem->buffer_type == HAL_BUFFER_INTERNAL_SCRATCH_2)) {
@@ -491,7 +489,7 @@ void msm_smem_free(void *clt, struct msm_smem *mem)
 			(mem->buffer_type == HAL_BUFFER_INTERNAL_SCRATCH_2)) {
 			client->clnt = client->clnt_import;
 		}
-		
+		/* HTC_END */
 		break;
 	default:
 		dprintk(VIDC_ERR, "Mem type not supported\n");

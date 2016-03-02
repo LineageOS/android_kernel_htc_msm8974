@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -28,6 +28,8 @@
 
 #define DT_CMD_HDR 6
 #define WLED_MAX_LEVEL	4095
+#define MDSS_BL_SETTING_DEF 142
+
 
 DEFINE_LED_TRIGGER(bl_led_trigger);
 DEFINE_LED_TRIGGER(bl_led_i2c_trigger);
@@ -130,69 +132,6 @@ static void mdss_dsi_panel_cmds_send(struct mdss_dsi_ctrl_pdata *ctrl,
 	mdss_dsi_cmdlist_put(ctrl, &cmdreq);
 }
 
-#define BRI_SETTING_MIN                 30
-#define BRI_SETTING_DEF                 142
-#define BRI_SETTING_HIGH		200
-#define BRI_SETTING_EXTRA		230
-#define BRI_SETTING_MAX                 255
-static unsigned char shrink_pwm(int val, int pwm_min, int pwm_default, int pwm_max)
-{
-        unsigned char shrink_br = BRI_SETTING_MAX;
-
-        if (val <= 0) {
-                shrink_br = 0;
-        } else if (val > 0 && (val < BRI_SETTING_MIN)) {
-                shrink_br = pwm_min;
-        } else if ((val >= BRI_SETTING_MIN) && (val <= BRI_SETTING_DEF)) {
-                shrink_br = (val - BRI_SETTING_MIN) * (pwm_default - pwm_min) /
-                (BRI_SETTING_DEF - BRI_SETTING_MIN) + pwm_min;
-        } else if (val > BRI_SETTING_DEF && val <= BRI_SETTING_MAX) {
-                shrink_br = (val - BRI_SETTING_DEF) * (pwm_max - pwm_default) /
-                (BRI_SETTING_MAX - BRI_SETTING_DEF) + pwm_default;
-        } else if (val > BRI_SETTING_MAX)
-                shrink_br = pwm_max;
-
-        // PR_DISP_INFO("brightness orig=%d, transformed=%d\n", val, shrink_br);
-
-        return shrink_br;
-}
-static unsigned char linear_pwm(int val, int max_brt, int bl_max)
-{
-	unsigned char bl_pwm  = BRI_SETTING_MAX;
-
-	bl_pwm = val * bl_max / max_brt;
-
-	PR_DISP_INFO("%s:brightness=%d, bl_pwm=%d\n", __func__,val, bl_pwm);
-	return bl_pwm;
-}
-
-static unsigned int bl_to_brightness(int val, int brt_dim, int brt_min, int brt_def, int brt_high, int brt_extra, int brt_max)
-{
-	unsigned int  brt_val;
-
-	if (val <= 0) {
-		brt_val = 0;
-	} else if (val > 0 && (val < BRI_SETTING_MIN)) {
-		brt_val = brt_dim;
-	} else if ((val >= BRI_SETTING_MIN) && (val <= BRI_SETTING_DEF)) {
-		brt_val = (val - BRI_SETTING_MIN) * (brt_def - brt_min) /
-		(BRI_SETTING_DEF - BRI_SETTING_MIN) + brt_min;
-	} else if (val > BRI_SETTING_DEF && val <= BRI_SETTING_HIGH) {
-		brt_val = (val - BRI_SETTING_DEF) * (brt_high - brt_def) /
-		(BRI_SETTING_HIGH - BRI_SETTING_DEF) + brt_def;
-	} else if (val > BRI_SETTING_HIGH && val <= BRI_SETTING_EXTRA) {
-		brt_val = (val - BRI_SETTING_HIGH) * (brt_extra - brt_high) /
-		(BRI_SETTING_EXTRA - BRI_SETTING_HIGH) + brt_high;
-	} else if (val > BRI_SETTING_EXTRA && val <= BRI_SETTING_MAX) {
-		brt_val = (val - BRI_SETTING_EXTRA) * (brt_max - brt_extra) /
-		(BRI_SETTING_MAX - BRI_SETTING_EXTRA) + brt_extra;
-	} else if (val > BRI_SETTING_MAX)
-		brt_val = brt_max;
-
-	PR_DISP_INFO("%s:level=%d, brightness=%d", __func__, val, brt_val);
-	return brt_val;
-}
-
 static char led_pwm1[3] = {0x51, 0x0, 0x0};	
 static struct dsi_cmd_desc backlight_cmd = {
 	{DTYPE_DCS_LWRITE, 1, 0, 0, 1, sizeof(led_pwm1)},
@@ -202,14 +141,10 @@ static struct dsi_cmd_desc backlight_cmd = {
 static void mdss_dsi_panel_bklt_dcs(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 {
 	struct dcs_cmd_req cmdreq;
-	struct mdss_panel_info *pinfo = &(ctrl->panel_data.panel_info);
 
 	pr_debug("%s: level=%d\n", __func__, level);
 
-	if (!pinfo->act_brt)
-		led_pwm1[1] = (unsigned char)shrink_pwm(level, ctrl->pwm_min, ctrl->pwm_default, ctrl->pwm_max);
-	else
-		led_pwm1[1] = (unsigned char)linear_pwm(level, pinfo->max_brt, pinfo->bl_max);
+	led_pwm1[1] = (unsigned char)level;
 
 	led_pwm1[2] = led_pwm1[1];
 	memset(&cmdreq, 0, sizeof(cmdreq));
@@ -451,13 +386,6 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 		}
 		break;
 	case BL_I2C:
-		if (!ctrl_pdata->panel_data.panel_info.act_brt)
-			bl_level = bl_to_brightness(bl_level, ctrl_pdata->brt_dim,
-								ctrl_pdata->brt_min,
-								ctrl_pdata->brt_def,
-								ctrl_pdata->brt_high,
-								ctrl_pdata->brt_extra,
-								ctrl_pdata->brt_max);
 		led_trigger_event(bl_led_i2c_trigger, bl_level);
 		break;
 
@@ -507,7 +435,7 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 	if (ctrl->pwm_ctl_type == PWM_PMIC)
 		led_trigger_event(bl_led_trigger, WLED_MAX_LEVEL);
 	else if (ctrl->pwm_ctl_type == PWM_EXT)
-		mdss_dsi_panel_bklt_dcs(ctrl, pdata->panel_info.max_brt);
+		mdss_dsi_panel_bklt_dcs(ctrl, MDSS_MAX_BL_BRIGHTNESS);
 
 	PR_DISP_INFO("%s:-\n", __func__);
 	return 0;
@@ -828,10 +756,88 @@ static int mdss_dsi_parse_reset_seq(struct device_node *np,
 extern int htc_mdss_dsi_parse_dcs_cmds(struct device_node *np,
 		struct dsi_panel_cmds *pcmds, char *cmd_key, char *link_key);
 
+static int htc_mdss_dsi_parse_brt_bl_table(struct device_node *np,
+		struct mdss_panel_info *panel_info,
+		const char *name)
+{
+	u32 *data;
+	int i, len = 0;
+	struct htc_backlight1_table *brt_bl_table = &panel_info->brt_bl_table;
+
+	data = (u32 *)of_get_property(np, name, &len);
+	len /= sizeof(u32);
+
+	if (!data || len % 2) {
+		pr_debug("%s: read %s failed\n", __func__, name);
+	} else {
+		
+		len /= 2;
+
+		if (brt_bl_table->size || brt_bl_table->brt_data || brt_bl_table->bl_data) {
+			brt_bl_table->size = 0;
+			kfree(brt_bl_table->brt_data);
+			kfree(brt_bl_table->bl_data);
+		}
+
+		brt_bl_table->brt_data = kzalloc(len * sizeof(u16), GFP_KERNEL);
+		brt_bl_table->bl_data = kzalloc(len * sizeof(u16), GFP_KERNEL);
+		if (!brt_bl_table->brt_data || !brt_bl_table->bl_data) {
+			pr_err("%s:%d, allocate memory failed for %s\n", __func__, __LINE__, name);
+			return 0;
+		}
+
+		for (i = 0; i < len; i++) {
+			brt_bl_table->brt_data[i] = (u16) be32_to_cpup( data + (i * 2));
+			brt_bl_table->bl_data[i] = (u16) be32_to_cpup( data + (i * 2) +1);
+			pr_debug("%s: bl=%d brt=%d i=%d\n", __func__, brt_bl_table->bl_data[i], brt_bl_table->brt_data[i], i);
+		}
+		brt_bl_table->size = len;
+		pr_info("%s: read %s success, brt_bl_table_size=%d\n", __func__, name, brt_bl_table->size);
+	}
+	return 0;
+}
+
+static int htc_mdss_dsi_parse_nits_table(struct device_node *np,
+	struct mdss_panel_info *panel_info,
+		const char *name,
+		const char *scale_name)
+{
+	u32 *data;
+	int rc, i, len = 0;
+	struct htc_backlight2_table *nits_bl_table = &panel_info->nits_bl_table;
+
+	data = (u32 *)of_get_property(np, name, &len);
+
+	if (!data) {
+		pr_debug("%s: read %s failed\n", __func__, name);
+	} else {
+		len /= sizeof(u32);
+		
+		nits_bl_table->data = kzalloc(len * sizeof(u16), GFP_KERNEL);
+		if (!nits_bl_table->data) {
+			pr_err("%s:%d, allocate memory failed %s\n", __func__, __LINE__, name);
+			return 0;
+		}
+
+		for (i = 0; i < len; i++) {
+			nits_bl_table->data[i] = be32_to_cpup(data + i);
+			pr_debug("%s: buf=%d i=%d\n", __func__, nits_bl_table->data[i], i);
+		}
+
+		rc = of_property_read_u32(np, scale_name, &i);
+		nits_bl_table->scale = (!rc ? i : 0);
+
+		nits_bl_table->size = (len - 1);
+		nits_bl_table->max_nits = nits_bl_table->scale * (len - 1);
+		pr_info("%s: read %s success, max_nits=%d, scale=%d\n", __func__, name, nits_bl_table->max_nits, nits_bl_table->scale);
+	}
+	return 0;
+}
+
 static int mdss_panel_parse_dt(struct device_node *np,
 			struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
-	u32 tmp, res[6];
+	u32 tmp;
 	int rc, i, len;
 	const char *data;
 	static const char *pdest;
@@ -1128,15 +1134,6 @@ static int mdss_panel_parse_dt(struct device_node *np,
 	rc = of_property_read_u32(np, "qcom,display-on-wait", &tmp);
 	ctrl_pdata->display_on_wait = (!rc ? tmp : 0);
 
-	rc = of_property_read_u32_array(np, "qcom,mdss-shrink-pwm", res, 3);
-	if (rc) {
-		pr_err("%s:%d, panel dimension not specified\n",
-						 __func__, __LINE__);
-	}
-	ctrl_pdata->pwm_min  = (!rc ? res[0] : BRI_SETTING_MIN);
-	ctrl_pdata->pwm_default = (!rc ? res[1] : BRI_SETTING_DEF);
-	ctrl_pdata->pwm_max = (!rc ? res[2] : BRI_SETTING_MAX);
-
 	rc = of_property_read_u32(np, "qcom,mdss-pwm-ctl-type", &tmp);
 	ctrl_pdata->pwm_ctl_type = (!rc ? tmp : 0);
 	if(ctrl_pdata->pwm_ctl_type == PWM_PMIC) {
@@ -1145,7 +1142,7 @@ static int mdss_panel_parse_dt(struct device_node *np,
 	}
 
 	rc = of_property_read_u32(np, "htc,mdss-camera-blk", &tmp);
-	pinfo->camera_blk = (!rc ? tmp : BRI_SETTING_DEF);
+	pinfo->camera_blk = (!rc ? tmp : MDSS_BL_SETTING_DEF);
 
 	rc = of_property_read_u32(np, "htc,mdss-camera-dua-blk", &tmp);
 	pinfo->camera_dua_blk = (!rc ? tmp : pinfo->camera_blk);
@@ -1195,33 +1192,18 @@ static int mdss_panel_parse_dt(struct device_node *np,
 
 	pinfo->skip_frame = of_property_read_bool(np, "htc,skip-frame");
 
-	rc = of_property_read_u32(np, "htc,mdss-max-brt-level", &tmp);
-	pinfo->act_max_brt = (!rc ? tmp : MDSS_MAX_BL_BRIGHTNESS);
-	pinfo->max_brt = MDSS_MAX_BL_BRIGHTNESS;
+	
+	pinfo->brt_bl_table.size = 0;
+	htc_mdss_dsi_parse_brt_bl_table(np, pinfo, "htc,brt-bl-table");
 
-	rc = of_property_read_u32_array(np, "htc,mdss-bl-brt", res, 6);
-	if (rc) {
-		pr_err("%s:%d, mdss-bl-brt not specified\n",
-						 __func__, __LINE__);
-	}
-	ctrl_pdata->brt_dim  = (!rc ? res[0] : BRI_SETTING_MIN);
-	ctrl_pdata->brt_min  = (!rc ? res[1] : BRI_SETTING_MIN);
-	ctrl_pdata->brt_def = (!rc ? res[2] : BRI_SETTING_DEF);
-	ctrl_pdata->brt_high = (!rc ? res[3] : BRI_SETTING_HIGH);
-	ctrl_pdata->brt_extra = (!rc ? res[4] : BRI_SETTING_EXTRA);
-	ctrl_pdata->brt_max = (!rc ? res[5] : BRI_SETTING_MAX);
-
+	
+	pinfo->nits_bl_table.size = 0;
+	pinfo->nits_bl_table.scale = 0;
+	pinfo->nits_bl_table.max_nits = 0;
+	htc_mdss_dsi_parse_nits_table(np, pinfo, "htc,nits-bl-table", "htc,nits-bl-table-scale");
 
 #ifdef CONFIG_HTC_POWER_HACK
-	rc = of_property_read_u32_array(np, "qcom,mdss-shrink-pwm-power-hack", res, 3);
-	if (rc) {
-		pr_err("%s:%d, qcom,mdss-shrink-pwm-cmcc not specified\n",
-						 __func__, __LINE__);
-	} else {
-		ctrl_pdata->pwm_min  = res[0];
-		ctrl_pdata->pwm_default = res[1];
-		ctrl_pdata->pwm_max = res[2];
-	}
+	htc_mdss_dsi_parse_brt_bl_table(np, pinfo, "htc,brt-bl-table-power-hack")
 
 	rc = of_property_read_u32(np, "htc,mdss-camera-blk-power-hack", &tmp);
 	if (rc) {

@@ -280,8 +280,12 @@ static int scm_call_common(u32 svc_id, u32 cmd_id, const void *cmd_buf,
 	mutex_lock(&scm_lock);
 	ret = __scm_call(scm_buf);
 	mutex_unlock(&scm_lock);
-	if (ret)
+	if (ret) {
+		pr_err("%s(%d, %d, [%p, %d], [%p, %d], [%p, %d])\n",
+			 __func__, svc_id, cmd_id, cmd_buf, cmd_len, resp_buf, resp_len, scm_buf, scm_buf_length);
+		print_hex_dump(KERN_ERR, "scm_buf: ", DUMP_PREFIX_ADDRESS, 16, 4, scm_buf, scm_buf_length, false);
 		return ret;
+	}
 
 	rsp = scm_command_to_response(scm_buf);
 	start = (unsigned long)rsp;

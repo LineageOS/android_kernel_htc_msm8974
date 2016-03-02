@@ -355,7 +355,7 @@ static int local_pll_clk_set_rate(struct clk *c, unsigned long rate)
 	}
 
 #ifdef CONFIG_ARCH_MSM8226
-	
+	/* HTC: Prevent a7sspll from disabling and enabling no matter count number */
 	if (!strcmp(c->dbg_name, "a7sspll") && pming)
 		pr_info("[PP2] %s: Prevent from performing a7sspll clock disable, pll count = %d\n", __func__, c->count);
 	else if ((strcmp(c->dbg_name, "a7sspll") && c->count) || (!strcmp(c->dbg_name, "a7sspll") && c->count && !pming))
@@ -372,7 +372,7 @@ static int local_pll_clk_set_rate(struct clk *c, unsigned long rate)
 	__pll_config_reg(PLL_CONFIG_REG(pll), nf, &pll->masks);
 
 #ifdef CONFIG_ARCH_MSM8226
-	
+	/* HTC: Prevent a7sspll from disabling and enabling no matter count number */
 	if (!strcmp(c->dbg_name, "a7sspll") && pming)
 		pr_info("[PP2] %s: Prevent from performing a7sspll enable, pll count = %d\n", __func__, c->count);
 	else if ((strcmp(c->dbg_name, "a7sspll") && c->count) || (!strcmp(c->dbg_name, "a7sspll") && c->count && !pming))

@@ -44,4 +44,4 @@ void hdmi_hdcp_off(void *hdcp_ctrl);
 
 int hdmi_hdcp_authentication_from_mhl(void);
 int hdmi_hdcp_set_state(enum hdmi_hdcp_state);
-#endif 
+#endif /* __MDSS_HDMI_HDCP_H__ */

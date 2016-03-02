@@ -286,7 +286,7 @@ static bool is_in_zygote_pgrp(struct task_struct *tsk){
         struct task_struct *p;
 
         for_each_process(p){
-                if(!strncmp("zygote",p->comm,6)){
+                if(!strncmp("main",p->comm,4) && p->parent->pid == 1){
                         if(pgrp == task_pgrp(p))
                                 return 1;
                         else

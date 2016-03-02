@@ -68,7 +68,7 @@ static int get_offmode_alarm_setting(void)
 
 		for_each_property_of_node(offalarm, pp) {
 			if (pp) {
-				
+				/*Get data from note.*/
 				if(strcmp(pp->name, "rtc_alarm") ==0)
 				{
 					memcpy(&htc_offalarm, pp->value, sizeof(struct htc_off_alarm));
@@ -127,7 +127,7 @@ static int config_data_init(void)
 		has_config_data = true;
 	} else {
 		pr_err("!!! COULDN'T FIND CONFIG DATA node !!!\n");
-		
+		/* we may need kernel log to debug */
 		cfg_flag_index[KERNEL_FLAG_INDEX] = 0x2;
 	}
 

@@ -686,6 +686,7 @@ static int mdss_mdp_video_display(struct mdss_mdp_ctl *ctl, void *arg)
 		if (pdata->panel_info.cont_splash_enabled) {
 			rc = wait_for_completion_timeout(&ctx->vsync_comp,
 					usecs_to_jiffies(VSYNC_TIMEOUT_US));
+			WARN(rc == 0, "timeout (%d) waiting for vsync\n", rc);
 		}
 
 		rc = mdss_iommu_ctrl(1);

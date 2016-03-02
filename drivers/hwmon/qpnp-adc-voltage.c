@@ -31,6 +31,7 @@
 #include <linux/qpnp/qpnp-adc.h>
 #include <linux/platform_device.h>
 
+/* QPNP VADC register definition */
 #define QPNP_VADC_REVISION1				0x0
 #define QPNP_VADC_REVISION2				0x1
 #define QPNP_VADC_REVISION3				0x2
@@ -282,7 +283,7 @@ static int32_t qpnp_vadc_configure(struct qpnp_vadc_chip *vadc,
 	u8 mode_ctrl = 0;
 	int rc = 0;
 
-	
+	/* Mode selection */
 	mode_ctrl |= ((chan_prop->mode_sel << QPNP_VADC_OP_MODE_SHIFT) |
 			(QPNP_VADC_ADC_TRIM_EN | QPNP_VADC_AMUX_TRIM_EN));
 	rc = qpnp_vadc_write_reg(vadc, QPNP_VADC_MODE_CTL, mode_ctrl);
@@ -292,7 +293,7 @@ static int32_t qpnp_vadc_configure(struct qpnp_vadc_chip *vadc,
 	}
 
 
-	
+	/* Channel selection */
 	rc = qpnp_vadc_write_reg(vadc, QPNP_VADC_ADC_CH_SEL_CTL,
 						chan_prop->amux_channel);
 	if (rc < 0) {
@@ -300,7 +301,7 @@ static int32_t qpnp_vadc_configure(struct qpnp_vadc_chip *vadc,
 		return rc;
 	}
 
-	
+	/* Digital parameter setup */
 	decimation = chan_prop->decimation <<
 				QPNP_VADC_ADC_DIG_DEC_RATIO_SEL_SHIFT;
 	rc = qpnp_vadc_write_reg(vadc, QPNP_VADC_ADC_DIG_PARAM, decimation);
@@ -309,7 +310,7 @@ static int32_t qpnp_vadc_configure(struct qpnp_vadc_chip *vadc,
 		return rc;
 	}
 
-	
+	/* HW settling time delay */
 	rc = qpnp_vadc_write_reg(vadc, QPNP_VADC_HW_SETTLE_DELAY,
 						chan_prop->hw_settle_time);
 	if (rc < 0) {
@@ -319,7 +320,7 @@ static int32_t qpnp_vadc_configure(struct qpnp_vadc_chip *vadc,
 
 	if (chan_prop->mode_sel == (ADC_OP_NORMAL_MODE <<
 					QPNP_VADC_OP_MODE_SHIFT)) {
-		
+		/* Normal measurement mode */
 		rc = qpnp_vadc_write_reg(vadc, QPNP_VADC_FAST_AVG_CTL,
 						chan_prop->fast_avg_setup);
 		if (rc < 0) {
@@ -328,7 +329,7 @@ static int32_t qpnp_vadc_configure(struct qpnp_vadc_chip *vadc,
 		}
 	} else if (chan_prop->mode_sel == (ADC_OP_CONVERSION_SEQUENCER <<
 					QPNP_VADC_OP_MODE_SHIFT)) {
-		
+		/* Conversion sequence mode */
 		conv_sequence = ((ADC_SEQ_HOLD_100US <<
 				QPNP_VADC_CONV_SEQ_HOLDOFF_SHIFT) |
 				ADC_CONV_SEQ_TIMEOUT_5MS);
@@ -358,7 +359,7 @@ static int32_t qpnp_vadc_configure(struct qpnp_vadc_chip *vadc,
 		return rc;
 
 	if (!vadc->vadc_iadc_sync_lock) {
-		
+		/* Request conversion */
 		rc = qpnp_vadc_write_reg(vadc, QPNP_VADC_CONV_REQ,
 					QPNP_VADC_CONV_REQ_SET);
 		if (rc < 0) {
@@ -650,7 +651,7 @@ static int32_t qpnp_vbat_sns_comp(int64_t *result,
 		return 0;
 
 	if (version != QPNP_REV_ID_8941_3_1) {
-		
+		/* min(die_temp_c, 60_degC) */
 		if (die_temp > 60000)
 			die_temp = 60000;
 	}
@@ -664,7 +665,7 @@ static int32_t qpnp_vbat_sns_comp(int64_t *result,
 			break;
 		default:
 		case COMP_ID_GF:
-			
+			/* min(die_temp_c, 60_degC) */
 			if (die_temp > 60000)
 				die_temp = 60000;
 			temp_var = ((die_temp - 25000) *
@@ -781,7 +782,7 @@ static void qpnp_vadc_625mv_channel_sel(struct qpnp_vadc_chip *vadc,
 {
 	uint32_t dt_index = 0;
 
-	
+	/* Check if the buffered 625mV channel exists */
 	while ((vadc->adc->adc_channels[dt_index].channel_num
 		!= SPARE1) && (dt_index < vadc->max_channels_available))
 		dt_index++;
@@ -887,7 +888,7 @@ static int32_t qpnp_vadc_calib_device(struct qpnp_vadc_chip *vadc)
 					calib_read_1;
 	vadc->adc->amux_prop->chan_prop->adc_graph[CALIB_ABSOLUTE].adc_gnd =
 					calib_read_2;
-	
+	/* Ratiometric Calibration */
 	conv.amux_channel = VDD_VADC;
 	conv.decimation = DECIMATION_TYPE2;
 	conv.mode_sel = ADC_OP_NORMAL_MODE << QPNP_VADC_OP_MODE_SHIFT;
@@ -1047,11 +1048,6 @@ int32_t qpnp_vadc_conv_seq_request(struct qpnp_vadc_chip *vadc,
 
 	mutex_lock(&vadc->adc->adc_lock);
 
-	if (vadc->vadc_poll_eoc) {
-		pr_debug("requesting vadc eoc stay awake\n");
-		pm_stay_awake(vadc->dev);
-	}
-
 	if (!vadc->vadc_init_calib) {
 		rc = qpnp_vadc_version_check(vadc);
 		if (rc)
@@ -1187,11 +1183,6 @@ int32_t qpnp_vadc_conv_seq_request(struct qpnp_vadc_chip *vadc,
 		vadc->adc->adc_prop, vadc->adc->amux_prop->chan_prop, result);
 
 fail_unlock:
-	if (vadc->vadc_poll_eoc) {
-		pr_debug("requesting vadc eoc stay awake\n");
-		pm_relax(vadc->dev);
-	}
-
 	mutex_unlock(&vadc->adc->adc_lock);
 
 	return rc;
@@ -1583,8 +1574,6 @@ static int __devexit qpnp_vadc_remove(struct spmi_device *spmi)
 	}
 	hwmon_device_unregister(vadc->vadc_hwmon);
 	list_del(&vadc->list);
-	if (vadc->vadc_poll_eoc)
-		pm_relax(vadc->dev);
 	dev_set_drvdata(&spmi->dev, NULL);
 
 	return 0;
@@ -1596,10 +1585,33 @@ static const struct of_device_id qpnp_vadc_match_table[] = {
 	{}
 };
 
+static int qpnp_vadc_suspend_noirq(struct device *dev)
+{
+	struct qpnp_vadc_chip *vadc = dev_get_drvdata(dev);
+	u8 status = 0;
+
+	if (vadc->vadc_poll_eoc) {
+		qpnp_vadc_read_reg(vadc, QPNP_VADC_STATUS1, &status);
+		status &= QPNP_VADC_STATUS1_REQ_STS_EOC_MASK;
+		pr_debug("vadc conversion status=%d\n", status);
+		if (status != QPNP_VADC_STATUS1_EOC) {
+			pr_err(
+				"Aborting suspend, adc conversion requested while suspending\n");
+			return -EBUSY;
+		}
+	}
+	return 0;
+}
+
+static const struct dev_pm_ops qpnp_vadc_pm_ops = {
+	.suspend_noirq	= qpnp_vadc_suspend_noirq,
+};
+
 static struct spmi_driver qpnp_vadc_driver = {
 	.driver		= {
 		.name	= "qcom,qpnp-vadc",
 		.of_match_table = qpnp_vadc_match_table,
+		.pm		= &qpnp_vadc_pm_ops,
 	},
 	.probe		= qpnp_vadc_probe,
 	.remove		= qpnp_vadc_remove,

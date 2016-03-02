@@ -105,19 +105,19 @@ static int ncp6924_i2c_write(struct device *dev, u8 reg_addr, u8 data)
 		},
 	};
 
-	
+	//mutex_lock(&ncp6924_mutex);
 	orig_state = ncp6924_is_enable(reg);
 	if (orig_state == false)
 		ncp6924_enable(reg, true);
 	res = i2c_transfer(client->adapter, msg, 1);
-	
-	
-	
+	/* Set back to original gpio state */
+	/* If original enable and doesn't request enable -> Back to enable */
+	/* If original enable and request disable -> Set to disable */
 	if ((orig_state == false && !(reg_addr == NCP6924_ENABLE && data != 0x00)) ||
 	    (reg_addr == NCP6924_ENABLE && data == 0x00)) {
 		ncp6924_enable(reg, false);
 	}
-	
+	//mutex_unlock(&ncp6924_mutex);
 	if (res > 0)
 		res = 0;
 
@@ -146,15 +146,15 @@ static int ncp6924_i2c_read(struct device *dev, u8 reg_addr, u8 *data)
 		},
 	};
 
-	
+	//mutex_lock(&ncp6924_mutex);
 	curr_state = ncp6924_is_enable(reg);
 	if (curr_state == 0)
 		ncp6924_enable(reg, true);
 	res = i2c_transfer(client->adapter, msg, 2);
-	
+	/* Set back to original gpio state */
 	if (curr_state == 0)
 		ncp6924_enable(reg, false);
-	
+	//mutex_unlock(&ncp6924_mutex);
 	if (res >= 0)
 		res = 0;
 
@@ -315,7 +315,7 @@ static int __devinit ncp6924_probe(struct i2c_client *client, const struct i2c_d
 		goto fail_free_regulator;
 	}
 
-	
+	/* Calculate number of regulators */
 	for_each_child_of_node(node, child)
 		num_vregs++;
 	reg->total_vregs = num_vregs;
@@ -326,7 +326,7 @@ static int __devinit ncp6924_probe(struct i2c_client *client, const struct i2c_d
 		return -ENOMEM;
 	}
 
-	
+	/* Get device tree properties */
 	for_each_child_of_node(node, child) {
 		ncp6924_vreg = &reg->ncp6924_vregs[vreg_idx++];
 		ret = of_property_read_string(child, "regulator-name",

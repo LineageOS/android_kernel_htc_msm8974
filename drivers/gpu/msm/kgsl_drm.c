@@ -10,6 +10,10 @@
  * GNU General Public License for more details.
  */
 
+/* Implements an interface between KGSL and the DRM subsystem.  For now this
+ * is pretty simple, but it will take on more of the workload as time goes
+ * on
+ */
 #include "drmP.h"
 #include "drm.h"
 
@@ -36,6 +40,7 @@
 #define DRM_KGSL_NOT_INITED -1
 #define DRM_KGSL_INITED   1
 
+/* Returns true if the memory type is in PMEM */
 
 #ifdef CONFIG_KERNEL_PMEM_SMI_REGION
 #define TYPE_IS_PMEM(_t) \
@@ -48,6 +53,7 @@
    ((_t) & (DRM_KGSL_GEM_TYPE_PMEM | DRM_KGSL_GEM_PMEM_EBI)))
 #endif
 
+/* Returns true if the memory type is regular */
 
 #define TYPE_IS_MEM(_t) \
   (((_t & DRM_KGSL_GEM_TYPE_MEM_MASK) == DRM_KGSL_GEM_TYPE_KMEM) || \
@@ -56,6 +62,7 @@
 
 #define TYPE_IS_FD(_t) ((_t) & DRM_KGSL_GEM_TYPE_FD_MASK)
 
+/* Returns true if KMEM region is uncached */
 
 #define IS_MEM_UNCACHED(_t) \
   ((_t == DRM_KGSL_GEM_TYPE_KMEM_NOCACHE) || \
@@ -90,6 +97,7 @@ static struct ion_client *kgsl_drm_ion_client;
 
 static int kgsl_drm_inited = DRM_KGSL_NOT_INITED;
 
+/* This is a global list of all the memory currently mapped in the MMU */
 static struct list_head kgsl_mem_list;
 
 struct kgsl_drm_device_priv {
@@ -114,12 +122,15 @@ kgsl_gem_alloc_memory(struct drm_gem_object *obj)
 	int index;
 	int result = 0;
 
-	
+	/* Return if the memory is already allocated */
 
 	if (kgsl_gem_memory_allocated(obj) || TYPE_IS_FD(priv->type))
 		return 0;
 
 	if (priv->pagetable == NULL) {
+		/* Hard coded to use A2X device for MSM7X27 and MSM8625
+		 * Others to use A3X device
+		 */
 #if defined(CONFIG_ARCH_MSM7X27) || defined(CONFIG_ARCH_MSM8625)
 		mmu = &kgsl_get_device(KGSL_DEVICE_2D0)->mmu;
 #else
@@ -225,7 +236,7 @@ kgsl_gem_alloc_memory(struct drm_gem_object *obj)
 
 		priv->memdesc.sg = sg_table->sgl;
 
-		
+		/* Calculate the size of the memdesc from the sglist */
 
 		priv->memdesc.sglen = 0;
 
@@ -284,7 +295,7 @@ kgsl_gem_free_memory(struct drm_gem_object *obj)
 		kgsl_mmu_put_gpuaddr(priv->memdesc.pagetable, &priv->memdesc);
 	}
 
-	
+	/* ION will take care of freeing the sg table. */
 	priv->memdesc.sg = NULL;
 	priv->memdesc.sglen = 0;
 
@@ -375,7 +386,7 @@ kgsl_gem_obj_addr(int drm_fd, int handle, unsigned long *start,
 	mutex_lock(&dev->struct_mutex);
 	priv = obj->driver_private;
 
-	
+	/* We can only use the MDP for PMEM regions */
 
 	if (TYPE_IS_PMEM(priv->type)) {
 		*start = priv->memdesc.physaddr +
@@ -430,7 +441,7 @@ kgsl_gem_create_ioctl(struct drm_device *dev, void *data,
 	struct drm_gem_object *obj;
 	int ret, handle;
 
-	
+	/* Page align the size so we can allocate multiple buffers */
 	create->size = ALIGN(create->size, 4096);
 
 	obj = drm_gem_object_alloc(dev, create->size);
@@ -472,7 +483,7 @@ kgsl_gem_create_fd_ioctl(struct drm_device *dev, void *data,
 
 	rdev = file->f_dentry->d_inode->i_rdev;
 
-	
+	/* Only framebuffer objects are supported ATM */
 
 	if (MAJOR(rdev) != FB_MAJOR) {
 		DRM_ERROR("File descriptor is not a framebuffer\n");
@@ -594,7 +605,7 @@ kgsl_gem_create_from_ion_ioctl(struct drm_device *dev, void *data,
 
 	priv->memdesc.sg = sg_table->sgl;
 
-	
+	/* Calculate the size of the memdesc from the sglist */
 
 	priv->memdesc.sglen = 0;
 
@@ -752,6 +763,7 @@ kgsl_gem_bind_gpu_ioctl(struct drm_device *dev, void *data,
 	return 0;
 }
 
+/* Allocate the memory and prepare it for CPU mapping */
 
 int
 kgsl_gem_alloc_ioctl(struct drm_device *dev, void *data,
@@ -790,10 +802,11 @@ int
 kgsl_gem_mmap_ioctl(struct drm_device *dev, void *data,
 			struct drm_file *file_priv)
 {
-	
+	/* Ion is used for mmap at this time */
 	return 0;
 }
 
+/* This function is deprecated */
 
 int
 kgsl_gem_prep_ioctl(struct drm_device *dev, void *data,
@@ -870,6 +883,8 @@ out:
 	return ret;
 }
 
+/* Get the genlock handles base off the GEM handle
+ */
 
 int
 kgsl_gem_get_glock_handles_ioctl(struct drm_device *dev, void *data,
@@ -952,6 +967,8 @@ kgsl_gem_set_bufcount_ioctl(struct drm_device *dev, void *data,
 	mutex_lock(&dev->struct_mutex);
 	priv = obj->driver_private;
 
+	/* It is too much math to worry about what happens if we are already
+	   allocated, so just bail if we are */
 
 	if (kgsl_gem_memory_allocated(obj)) {
 		DRM_ERROR("Memory already allocated - cannot change"
@@ -1141,7 +1158,7 @@ static struct drm_driver driver = {
 
 int kgsl_drm_init(struct platform_device *dev)
 {
-	
+	/* Only initialize once */
 	if (kgsl_drm_inited == DRM_KGSL_INITED)
 		return 0;
 
@@ -1151,7 +1168,7 @@ int kgsl_drm_init(struct platform_device *dev)
 
 	INIT_LIST_HEAD(&kgsl_mem_list);
 
-	
+	/* Create ION Client */
 	kgsl_drm_ion_client = msm_ion_client_create(
 			0xffffffff, "kgsl_drm");
 	if (!kgsl_drm_ion_client) {

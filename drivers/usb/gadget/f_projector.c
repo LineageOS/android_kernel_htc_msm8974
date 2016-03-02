@@ -413,12 +413,18 @@ static void projector_send_touch_event(struct projector_dev *dev,
 	iCal_LastY = iY;
 }
 
+/* key code: 4 -> home, 5-> menu, 6 -> back, 0 -> system wake */
 static void projector_send_Key_event(struct projector_dev *dev,
 	int iKeycode)
 {
 	struct input_dev *kdev = dev->keypad_input;
 	printk(KERN_INFO "%s keycode %d\n", __func__, iKeycode);
 
+	/* ics will use default Generic.kl to translate linux keycode WAKEUP
+	   to android keycode POWER. by this, device will suspend/resume as
+	   we press power key. Even in GB, default qwerty.kl will not do
+	   anything for linux keycode WAKEUP, i think we can just drop here.
+	*/
 	if (iKeycode <= 0 || iKeycode >= sizeof(keypad_code)/sizeof(keypad_code[0]))
 		return;
 
@@ -582,6 +588,8 @@ static void send_fb2(struct projector_dev *dev)
 	if (frame == NULL)
 		return;
 
+	/* HTC: same frame check might be removed
+	   since minifb_lockbuf() will inform this (?) */
 
 
 	if (frame == pre_frame && frame != (char *)test_frame) {
@@ -1196,6 +1204,7 @@ static int projector_keypad_init(struct projector_dev *dev)
 	return 0;
 }
 
+/* TODO: It's the way tools to enable projector */
 #if 0
 static ssize_t store_enable(struct device *dev, struct device_attribute *attr,
 		const char *buf, size_t count)

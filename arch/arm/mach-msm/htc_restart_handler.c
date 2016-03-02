@@ -30,6 +30,8 @@
 
 #define RESTART_REASON_ADDR	0x65C
 #define MSM_REBOOT_REASON_BASE	(MSM_IMEM_BASE + RESTART_REASON_ADDR)
+/* FIXME: to find a better way
+ * to unbind the restart msg address with restart reason address */
 #if defined(CONFIG_ARCH_MSM8974) || defined(CONFIG_ARCH_MSM8226)
 /* DO NOT MODIFY: tz log uses 0xFE805720 */
 #define SZ_DIAG_ERR_MSG 	0x7C /* msg: 0xFE8056A4-0xFE805720 */

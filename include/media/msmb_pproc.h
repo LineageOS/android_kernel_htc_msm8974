@@ -253,4 +253,4 @@ struct msm_camera_v4l2_ioctl_t {
 	void __user *ioctl_ptr;
 };
 
-#endif 
+#endif /* __MSMB_PPROC_H */

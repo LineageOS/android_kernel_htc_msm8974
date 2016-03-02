@@ -13,9 +13,14 @@
  */
 #ifndef _HTC_BATTERY_COMMON_H_
 #define _HTC_BATTERY_COMMON_H_
+/* Common battery terms are defined in this file. */
 
 
+/* enum definition */
 
+/* This order is the same as htc_power_supplies[]
+ * And it's also the same as htc_cable_status_update()
+ */
 enum charger_type_t {
 	CHARGER_UNKNOWN = -1,
 	CHARGER_BATTERY = 0,
@@ -46,6 +51,15 @@ enum charger_control_flag {
 	END_CHARGER
 };
 
+/*
+ * MFG ftm mode charger control
+ *
+ * FTM_ENABLE_CHARGER: default, ftm control disabled
+ * FTM_STOP_CHARGER: ftm control to disable charging
+ * FTM_FAST_CHARGE: ftm control to force fast charge
+ * FTM_SLOW_CHARGE: ftm control to force slow charge
+ * FTM_END_CHARGER: do nothing, value for flag out of bound check
+ */
 enum ftm_charger_control_flag {
 	FTM_ENABLE_CHARGER = 0,
 	FTM_STOP_CHARGER,
@@ -54,11 +68,13 @@ enum ftm_charger_control_flag {
 	FTM_END_CHARGER
 };
 
+/* limited charge reason */
 #define HTC_BATT_CHG_LIMIT_BIT_TALK				(1)
 #define HTC_BATT_CHG_LIMIT_BIT_NAVI				(1<<1)
 #define HTC_BATT_CHG_LIMIT_BIT_THRML				(1<<2)
 #define HTC_BATT_CHG_LIMIT_BIT_KDDI				(1<<3)
 
+/* context event */
 enum batt_context_event {
 	EVENT_TALK_START = 0,
 	EVENT_TALK_STOP,
@@ -70,6 +86,7 @@ enum batt_context_event {
 	EVENT_MUSIC_STOP
 };
 
+/* interface function declaration */
 
 int htc_battery_charger_disable(void);
 int htc_battery_pwrsrc_disable(void);

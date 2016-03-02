@@ -46,7 +46,7 @@ struct elan_epl_platform_data
 {
 	int intr_gpio;
 	int (*power)(int on);
-	
+	//int (*power)(int, uint8_t);
 };
 
 #endif

@@ -11,7 +11,7 @@
 
 static void htc_radio_smem_write(struct htc_smem_type *smem)
 {
-	
+	/* write RCMS NAME */
 	strncpy(smem->RCMS_Name, RCMS_NAME, sizeof(smem->RCMS_Name));
 
 	pr_info("[smem]%s: RCMS_NAME=%s, version=0x%x, size=%d, "
@@ -31,7 +31,7 @@ static int htc_radio_smem_probe(struct platform_device *pdev)
 
 	pr_info("[smem]%s: start.\n", __func__);
 
-	
+	/* get smem start address */
 	key = "smem-start-addr";
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, key);
 	if(!res){
@@ -50,7 +50,7 @@ static int htc_radio_smem_probe(struct platform_device *pdev)
 		goto ioremap_fail;
 	}
 
-	
+	/* write data to shared memory */
 	htc_radio_smem_write(htc_radio_smem);
 
 	iounmap(htc_radio_smem);

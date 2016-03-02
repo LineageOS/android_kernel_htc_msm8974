@@ -81,12 +81,10 @@ obj-$(CONFIG_TOUCHSCREEN_MSM_LEGACY)		+= msm_touch.o
 obj-$(CONFIG_TOUCHSCREEN_CY8C_TS)	+= cy8c_ts.o
 obj-$(CONFIG_TOUCHSCREEN_CYTTSP_I2C_QC)       += cyttsp-i2c-qc.o
 obj-$(CONFIG_TOUCHSCREEN_FT5X06)	+= ft5x06_ts.o
-obj-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI4)		+= synaptics_i2c_rmi4.o
 obj-$(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_DEV)	+= synaptics_rmi_dev.o
 obj-$(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE) 	+= synaptics_fw_update.o
-ifeq ($(CONFIG_TOUCHSCREEN_ONE_LAYER_HIMAX), y)
-obj-$(CONFIG_TOUCHSCREEN_ONE_LAYER_HIMAX) += himax_852xD_2T3R_layer.o
-else
-obj-$(CONFIG_TOUCHSCREEN_HIMAX)   	+= himax_852xD.o
-endif
+obj-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI4)		+= synaptics_i2c_rmi4.o
+obj-$(CONFIG_TOUCHSCREEN_ONE_LAYER_HIMAX)	+= himax_852xD_2T3R_layer.o
+obj-$(CONFIG_TOUCHSCREEN_HIMAX_ES)		+= himax_852xES.o himax_platform.o
+obj-$(CONFIG_TOUCHSCREEN_HIMAX)			+= himax_852xD.o
 obj-$(CONFIG_TOUCHSCREEN_GT9XX)		+= gt9xx/

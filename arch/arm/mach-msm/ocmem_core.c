@@ -51,6 +51,7 @@ struct ocmem_hw_region {
 static struct ocmem_hw_region *region_ctrl;
 static struct mutex region_ctrl_lock;
 static void *ocmem_base;
+static void *ocmem_vbase;
 
 #define OCMEM_V1_MACROS 8
 #define OCMEM_V1_MACRO_SZ (SZ_64K)
@@ -77,7 +78,6 @@ static void *ocmem_base;
 #define INTERLEAVING_MASK (0x1 << 17)
 #define INTERLEAVING_SHIFT (17)
 
-/* Power states of each memory macro */
 #define PASSTHROUGH (0x0)
 #define CORE_ON (0x2)
 #define PERI_ON (0x1)
@@ -92,7 +92,6 @@ static void *ocmem_base;
 #define PSCGC_CTL_IDX(x) ((x) * 0x4)
 #define PSCGC_CTL_n(x) (OC_PSGSC_CTL + (PSCGC_CTL_IDX(x)))
 
-/* Power states of each ocmem region */
 #define REGION_NORMAL_PASSTHROUGH 0x00000000
 #define REGION_FORCE_PERI_ON 0x00001111
 #define REGION_FORCE_CORE_ON 0x00002222
@@ -158,10 +157,6 @@ static inline unsigned rpm_macro_state(unsigned hw_macro_state)
 	return macro_state;
 }
 
-/* Generic wrapper that sets the region state either
-   by a direct write or through appropriate RPM call
-*/
-/* Must be called with region mutex held */
 static int commit_region_state(unsigned region_num)
 {
 	int rc = -1;
@@ -178,13 +173,11 @@ static int commit_region_state(unsigned region_num)
 	else
 		rc = ocmem_write(new_state,
 					ocmem_base + PSCGC_CTL_n(region_num));
-	/* Barrier to commit the region state */
+	
 	mb();
 	return 0;
 }
 
-/* Returns the current state of a OCMEM region */
-/* Must be called with region mutex held */
 static int read_region_state(unsigned region_num)
 {
 	int state;
@@ -229,7 +222,7 @@ static int commit_region_staging(unsigned region_num, unsigned start_m,
 			state = curr_state | REGION_STAGING_SET(start_m);
 			rc = ocmem_write(state,
 				ocmem_base + PSCGC_CTL_n(region_num));
-			/* Barrier to commit the region state */
+			
 			mb();
 			read_state = read_region_state(region_num);
 			if (new_state == REGION_DEFAULT_ON) {
@@ -237,7 +230,7 @@ static int commit_region_staging(unsigned region_num, unsigned start_m,
 				state = curr_state ^ REGION_ON_SET(start_m);
 				rc = ocmem_write(state,
 					ocmem_base + PSCGC_CTL_n(region_num));
-				/* Barrier to commit the region state */
+				
 				mb();
 				read_state = read_region_state(region_num);
 			}
@@ -246,7 +239,7 @@ static int commit_region_staging(unsigned region_num, unsigned start_m,
 			state = curr_state ^ REGION_STAGING_SET(start_m);
 			rc = ocmem_write(state,
 				ocmem_base + PSCGC_CTL_n(region_num));
-			/* Barrier to commit the region state */
+			
 			mb();
 			read_state = read_region_state(region_num);
 		}
@@ -255,7 +248,6 @@ static int commit_region_staging(unsigned region_num, unsigned start_m,
 }
 #endif
 
-/* Returns the current state of a OCMEM macro that belongs to a region */
 static int read_macro_state(unsigned region_num, unsigned macro_num)
 {
 	int state;
@@ -334,7 +326,7 @@ static int aggregate_macro_state(unsigned region_num, unsigned macro_num)
 	struct ocmem_hw_macro *m = NULL;
 	struct ocmem_hw_region *region = NULL;
 	int i = 0;
-	/* The default is for the macro to be OFF */
+	
 	unsigned m_state = MACRO_OFF;
 
 	if (region_num >= num_regions)
@@ -348,12 +340,12 @@ static int aggregate_macro_state(unsigned region_num, unsigned macro_num)
 
 	for (i = 0; i < OCMEM_CLIENT_MAX; i++) {
 		if (atomic_read(&m->m_on[i]) > 0) {
-			/* atleast one client voted for ON state */
+			
 			m_state = MACRO_ON;
 			goto done_aggregation;
 		} else if (atomic_read(&m->m_retain[i]) > 0) {
 			m_state = MACRO_SLEEP_RETENTION;
-			/* continue and examine votes of other clients */
+			
 		}
 	}
 done_aggregation:
@@ -375,7 +367,7 @@ static int aggregate_region_state(unsigned region_num)
 	region = &region_ctrl[region_num];
 	r_state = REGION_DEFAULT_OFF;
 
-	/* In wide mode all macros must have the same state */
+	
 	if (region->mode == WIDE_MODE) {
 		for (i = 0; i < region->num_macros; i++) {
 			if (region->macro[i].m_state == MACRO_ON) {
@@ -387,8 +379,8 @@ static int aggregate_region_state(unsigned region_num)
 			}
 		}
 	} else {
-	/* In narrow mode each macro is allowed to be in a different state */
-	/* The region mode is simply the collection of all macro states */
+	
+	
 		for (i = 0; i < region->num_macros; i++) {
 			pr_debug("aggregated region state %x\n", r_state);
 			pr_debug("macro %d\n state %x\n", i,
@@ -480,15 +472,15 @@ static int switch_region_mode(unsigned long offset, unsigned long len,
 	for (i = region_start; i <= region_end; i++) {
 		struct ocmem_hw_region *region = &region_ctrl[i];
 		if (region->mode == MODE_DEFAULT) {
-			/* No prior mode programming on this region */
-			/* Set the region to its new mode */
+			
+			
 			region->mode = new_mode;
 			atomic_inc(&region->mode_counter);
 			pr_debug("Region (%d) switching to mode %d\n",
 					i, new_mode);
 			continue;
 		} else if (region->mode != new_mode) {
-			/* The region is currently set to a different mode */
+			
 			if (new_mode == MODE_DEFAULT) {
 				if (atomic_dec_and_test
 						(&region->mode_counter)) {
@@ -496,14 +488,14 @@ static int switch_region_mode(unsigned long offset, unsigned long len,
 					pr_debug("Region (%d) restoring to default mode\n",
 								i);
 				} else {
-					/* More than 1 client in region */
-					/* Cannot move to default mode */
+					
+					
 					pr_debug("Region (%d) using current mode %d\n",
 							i, region->mode);
 					continue;
 				}
 			} else {
-				/* Do not switch modes */
+				
 				pr_err("Region (%d) requested mode %x conflicts with current\n",
 							i, new_mode);
 				goto mode_switch_fail;
@@ -532,7 +524,7 @@ static int commit_region_modes(void)
 	}
 	pr_debug("ocmem_region_mode_control %x\n", region_mode_ctrl);
 	ocmem_write(region_mode_ctrl, ocmem_base + OC_REGION_MODE_CTL);
-	/* Barrier to commit the region mode */
+	
 	mb();
 	return 0;
 }
@@ -545,7 +537,7 @@ static int ocmem_gfx_mpu_set(unsigned long offset, unsigned long len)
 	if (offset)
 		mpu_start = (offset >> GFX_MPU_SHIFT) - 1;
 	if (mpu_start < 0)
-		/* Avoid underflow */
+		
 		mpu_start = 0;
 	mpu_end = ((offset+len) >> GFX_MPU_SHIFT);
 	BUG_ON(mpu_end < 0);
@@ -560,6 +552,13 @@ static void ocmem_gfx_mpu_remove(void)
 {
 	ocmem_write(0x0, ocmem_base + OC_GFX_MPU_START);
 	ocmem_write(0x0, ocmem_base + OC_GFX_MPU_END);
+}
+
+int ocmem_clear(unsigned long start, unsigned long size)
+{
+	memset((ocmem_vbase + start), 0x4D4D434F, size);
+	mb();
+	return 0;
 }
 
 static int do_lock(enum ocmem_client id, unsigned long offset,
@@ -696,11 +695,12 @@ int ocmem_disable_dump(enum ocmem_client id, unsigned long offset,
 
 int ocmem_restore_sec_program(int sec_id)
 {
+	static unsigned long prev_fail = 0;
 	int rc, scm_ret = 0;
 	struct msm_scm_sec_cfg {
 		unsigned int id;
 		unsigned int spare;
-	} cfg;
+	} cfg = {0};
 
 	cfg.id = sec_id;
 
@@ -709,12 +709,16 @@ int ocmem_restore_sec_program(int sec_id)
 
 	if (rc || scm_ret) {
 		pr_err("ocmem: Failed to enable secure programming\n");
+		if (prev_fail && time_before(jiffies, prev_fail + HZ)) {
+			panic("TZ/scm_call fatal");
+		}
+		prev_fail = jiffies;
 		return rc ? rc : -EINVAL;
 	}
 
 	return rc;
 }
-#endif /* CONFIG_MSM_OCMEM_NONSECURE */
+#endif 
 
 int ocmem_lock(enum ocmem_client id, unsigned long offset, unsigned long len,
 					enum region_mode mode)
@@ -775,7 +779,7 @@ static int ocmem_core_set_default_state(void)
 {
 	int rc = 0;
 
-	/* The OCMEM core clock and branch clocks are always turned ON */
+	
 	rc = ocmem_enable_core_clock();
 	if (rc < 0)
 		return rc;
@@ -794,7 +798,6 @@ static int ocmem_core_set_default_state(void)
 #endif
 
 #if defined(CONFIG_MSM_OCMEM_POWER_DISABLE)
-/* Initializes a region to be turned ON in wide mode */
 static int ocmem_region_set_default_state(unsigned int r_num)
 {
 	unsigned m_num = 0;
@@ -843,7 +846,7 @@ int ocmem_region_toggle(unsigned int r_num)
 	unsigned m_num = 0;
 
 	mutex_lock(&region_ctrl_lock);
-	/* Turn on each macro at boot for quick hw sanity check */
+	
 	reboot_state = read_hw_region_state(r_num);
 
 	if (reboot_state != REGION_DEFAULT_OFF) {
@@ -868,7 +871,7 @@ int ocmem_region_toggle(unsigned int r_num)
 		goto toggle_fail;
 	}
 
-	/* Turn off all memory macros again */
+	
 
 	for (m_num = 0; m_num < num_banks; m_num++) {
 		apply_macro_vote(0, r_num, m_num, MACRO_OFF);
@@ -911,21 +914,10 @@ int memory_is_off(unsigned int num)
 {
 	return 0;
 }
-#endif /* CONFIG_MSM_OCMEM_POWER_DEBUG */
+#endif 
 
-/* Memory Macro Power Transition Sequences
- * Normal to Sleep With Retention:
-	REGION_DEFAULT_ON -> REGION_DEFAULT_RETENTION
- * Sleep With Retention to Normal:
-	REGION_DEFAULT_RETENTION -> REGION_FORCE_CORE_ON -> REGION_DEFAULT_ON
- * Normal to OFF:
-	REGION_DEFAULT_ON -> REGION_DEFAULT_OFF
- * OFF to Normal:
-	REGION_DEFAULT_OFF -> REGION_DEFAULT_ON
-**/
 
 #if defined(CONFIG_MSM_OCMEM_POWER_DISABLE)
-/* If power management is disabled leave the macro states as is */
 static int switch_power_state(int id, unsigned long offset, unsigned long len,
 			unsigned new_state)
 {
@@ -1008,7 +1000,7 @@ static int switch_power_state(int id, unsigned long offset, unsigned long len,
 			commit_region_state(i);
 		len -= region->region_size;
 
-		/* If we voted ON/retain the banks must never be OFF */
+		
 		if (new_state != REGION_DEFAULT_OFF) {
 			if (memory_is_off(i)) {
 				pr_err("ocmem: Accessing memory during sleep\n");
@@ -1030,7 +1022,6 @@ invalid_transition:
 }
 #endif
 
-/* Interfaces invoked from the scheduler */
 int ocmem_memory_off(int id, unsigned long offset, unsigned long len)
 {
 	return switch_power_state(id, offset, len, REGION_DEFAULT_OFF);
@@ -1146,7 +1137,7 @@ static const struct file_operations power_show_fops = {
 	.open = ocmem_power_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
-	.release = seq_release,
+	.release = single_release,
 };
 
 int ocmem_core_init(struct platform_device *pdev)
@@ -1162,6 +1153,7 @@ int ocmem_core_init(struct platform_device *pdev)
 
 	pdata = platform_get_drvdata(pdev);
 	ocmem_base = pdata->reg_base;
+	ocmem_vbase = pdata->vbase;
 
 	rc = ocmem_enable_core_clock();
 

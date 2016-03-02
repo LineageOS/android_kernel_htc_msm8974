@@ -34,7 +34,6 @@
 #include <media/msm_media_info.h>
 
 #include "vidc_hfi_api.h"
-#include "vidc_hfi_api.h"
 
 #define MSM_VIDC_DRV_NAME "msm_vidc_driver"
 #define MSM_VIDC_VERSION KERNEL_VERSION(0, 0, 1);
@@ -259,10 +258,10 @@ struct msm_vidc_inst {
 	struct list_head registered_bufs;
 	bool map_output_buffer;
 	struct v4l2_ctrl **ctrls;
-	
+	/* HTC_START: Pass calling process id and name in kernel space */
 	pid_t call_pid;
 	char process_name[50];
-	
+	/* HTC_END */
 };
 
 extern struct msm_vidc_drv *vidc_driver;

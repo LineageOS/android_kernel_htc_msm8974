@@ -384,7 +384,7 @@ int32_t vd6869_read_otp_memory(struct sensorb_cfg_data *cdata, struct msm_sensor
 	int i=0;
 	short OTP_addr=0x0;
 	static uint8_t otp[1024];
-	uint8_t *path= "/data/OTPData.dat";
+	uint8_t *path= "/data/misc/camera/OTPData.dat";
 	struct file* f;
 
 	if (first) {

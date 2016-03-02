@@ -66,9 +66,19 @@ struct msm_watchdog_data {
 	struct notifier_block panic_blk;
 };
 
+/*
+ * On the kernel command line specify
+ * msm_watchdog_v2.enable=1 to enable the watchdog
+ * By default watchdog is turned on
+ */
 static int enable = 1;
 module_param(enable, int, 0);
 
+/*
+ * On the kernel command line specify
+ * msm_watchdog_v2.WDT_HZ=<clock val in HZ> to set Watchdog
+ * ticks. By default it is set to 32765.
+ */
 static long WDT_HZ = 32765;
 module_param(WDT_HZ, long, 0);
 
@@ -153,12 +163,12 @@ static void wdog_disable(struct msm_watchdog_data *wdog_dd)
 	} else
 		devm_free_irq(wdog_dd->dev, wdog_dd->bark_irq, wdog_dd);
 	enable = 0;
-	
+	/*Ensure all cpus see update to enable*/
 	smp_mb();
 	atomic_notifier_chain_unregister(&panic_notifier_list,
 						&wdog_dd->panic_blk);
 	cancel_delayed_work_sync(&wdog_dd->dogwork_struct);
-	
+	/* may be suspended after the first write above */
 	__raw_writel(0, wdog_dd->base + WDT0_EN);
 	mb();
 	pr_info("MSM Apps Watchdog deactivated.\n");
@@ -269,6 +279,10 @@ static void keep_alive_response(void *info)
 	smp_mb();
 }
 
+/*
+ * If this function does not return, it implies one of the
+ * other cpu's is not responsive.
+ */
 static void ping_other_cpus(struct msm_watchdog_data *wdog_dd)
 {
 	int cpu;
@@ -291,10 +305,11 @@ static void pet_watchdog_work(struct work_struct *work)
 			ping_other_cpus(wdog_dd);
 		pet_watchdog(wdog_dd);
 	}
+	/* Check again before scheduling *
+	 * Could have been changed on other cpu */
 	if (enable)
 		queue_delayed_work_on(0, wdog_wq,
 				&wdog_dd->dogwork_struct, delay_time);
-
 }
 
 static int msm_watchdog_remove(struct platform_device *pdev)
@@ -341,7 +356,7 @@ static irqreturn_t wdog_bark_handler(int irq, void *dev_id)
 	mb();
 	__raw_writel(1, wdog_dd->base + WDT0_RST);
 	mb();
-	
+	/* Delay to make sure bite occurs */
 	mdelay(1);
 	pr_err("Wdog - STS: 0x%x, CTL: 0x%x, BARK TIME: 0x%x, BITE TIME: 0x%x",
 		__raw_readl(wdog_dd->base + WDT0_STS),
@@ -388,6 +403,11 @@ static void configure_bark_dump(struct msm_watchdog_data *wdog_dd)
 	} else {
 		pr_err("Allocating register save space failed\n"
 			       "Registers won't be dumped on a dog bite\n");
+		/*
+		 * No need to bail if allocation fails. Simply don't
+		 * send the command, and the secure side will reset
+		 * without saving registers.
+		 */
 	}
 }
 

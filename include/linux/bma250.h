@@ -687,6 +687,7 @@
 		((regvar & ~bitname##__MSK) | ((val<<bitname##__POS)&bitname##__MSK))
 
 #define BMA250_I2C_NAME "bma250"
+#define BMA250_I2C_NAME_REMOVE_ECOMPASS "bma250_no_ecmps"
 
 #define BMAIO			0xA1
 

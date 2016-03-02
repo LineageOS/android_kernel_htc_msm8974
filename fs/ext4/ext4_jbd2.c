@@ -1,3 +1,6 @@
+/*
+ * Interface between ext4 and JBD
+ */
 
 #include "ext4_jbd2.h"
 
@@ -17,6 +20,18 @@ int __ext4_journal_get_write_access(const char *where, unsigned int line,
 	return err;
 }
 
+/*
+ * The ext4 forget function must perform a revoke if we are freeing data
+ * which has been journaled.  Metadata (eg. indirect blocks) must be
+ * revoked in all cases.
+ *
+ * "bh" may be NULL: a metadata block may have been freed from memory
+ * but there may still be a record of it in the journal, and that record
+ * still needs to be revoked.
+ *
+ * If the handle isn't valid we're not journaling, but we still need to
+ * call into ext4_journal_revoke() to put the buffer head.
+ */
 int __ext4_forget(const char *where, unsigned int line, handle_t *handle,
 		  int is_metadata, struct inode *inode,
 		  struct buffer_head *bh, ext4_fsblk_t blocknr)
@@ -33,12 +48,16 @@ int __ext4_forget(const char *where, unsigned int line, handle_t *handle,
 		  bh, is_metadata, inode->i_mode,
 		  test_opt(inode->i_sb, DATA_FLAGS));
 
-	
+	/* In the no journal case, we can just do a bforget and return */
 	if (!ext4_handle_valid(handle)) {
 		bforget(bh);
 		return 0;
 	}
 
+	/* Never use the revoke function if we are doing full data
+	 * journaling: there is no need to, and a V1 superblock won't
+	 * support it.  Otherwise, only skip the revoke on un-journaled
+	 * data blocks. */
 
 	if (test_opt(inode->i_sb, DATA_FLAGS) == EXT4_MOUNT_JOURNAL_DATA ||
 	    (!is_metadata && !ext4_should_journal_data(inode))) {
@@ -53,6 +72,9 @@ int __ext4_forget(const char *where, unsigned int line, handle_t *handle,
 		return 0;
 	}
 
+	/*
+	 * data!=journal && (is_metadata || should_journal_data(inode))
+	 */
 	BUFFER_TRACE(bh, "call jbd2_journal_revoke");
 	err = jbd2_journal_revoke(handle, blocknr, bh);
 	if (err) {
@@ -87,7 +109,7 @@ int __ext4_handle_dirty_metadata(const char *where, unsigned int line,
 
 	if (ext4_handle_valid(handle)) {
 		err = jbd2_journal_dirty_metadata(handle, bh);
-		
+		/* Errors can only happen if there is a bug */
 		if (WARN_ON_ONCE(err)) {
 			ext4_journal_abort_handle(where, line, __func__, bh,
 						  handle, err);

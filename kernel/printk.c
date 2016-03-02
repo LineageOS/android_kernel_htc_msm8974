@@ -1016,7 +1016,7 @@ asmlinkage int vprintk(const char *fmt, va_list args)
 			}
 
 			if (printk_cpu_id) {
-				
+				/* Add the cpu id */
 				char tbuf[10], *tp;
 				unsigned tlen;
 
@@ -1028,7 +1028,7 @@ asmlinkage int vprintk(const char *fmt, va_list args)
 			}
 
 			if (printk_pid) {
-				
+				/* Add the current process id */
 				char tbuf[10], *tp;
 				unsigned tlen;
 
@@ -1209,6 +1209,11 @@ static int __init console_suspend_disable(char *str)
 }
 __setup("no_console_suspend", console_suspend_disable);
 
+/**
+ * suspend_console_deferred:
+ * Parameter to decide whether to defer suspension of console. If set as 1, suspend
+ * console is deferred to latter stages.
+ */
 int suspend_console_deferred;
 module_param_named(
 	suspend_console_deferred, suspend_console_deferred, int, S_IRUGO | S_IWUSR | S_IWGRP

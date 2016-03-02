@@ -32,6 +32,10 @@ struct sdhci_host {
 	/* Data set by hardware interface driver */
 	const char *hw_name;	/* Hardware bus name */
 
+	int reset_wa_applied;
+	int reset_wa_cnt;
+	int cmd_cnt;
+
 	unsigned int quirks;	/* Deviations from spec. */
 
 /* Controller doesn't honor resets unless we touch the clock register */

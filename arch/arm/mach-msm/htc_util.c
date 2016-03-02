@@ -27,6 +27,8 @@
 #define FORCE_CHARGE			(1<<2)
 #define Y_CABLE			(1<<26)
 
+#define MSM_HTC_UTIL_DELAY_TIME_S_ON            60000
+
 struct process_monitor_statistic {
        unsigned int pid;
        char *ppid_name;
@@ -42,6 +44,8 @@ static int pm_monitor_enabled = 0;
 
 static struct workqueue_struct *htc_pm_monitor_wq = NULL;
 static struct workqueue_struct *htc_kernel_top_monitor_wq = NULL;
+
+static unsigned int saved_kernel_flag = 0;
 
 #define MAX_PID 32768
 #define NUM_BUSY_THREAD_CHECK 5
@@ -557,6 +561,7 @@ static void htc_kernel_top_cal(struct _htc_kernel_top *ktop, int type)
 
 	spin_lock_irqsave(&ktop->lock, flags);
 
+	rcu_read_lock();
 	
 	for_each_process(process) {
 		thread_group_cputime(process, &cputime);
@@ -571,6 +576,7 @@ static void htc_kernel_top_cal(struct _htc_kernel_top *ktop, int type)
 			}
 		}
 	}
+	rcu_read_unlock();
 	sort_cputime_by_pid(ktop->curr_proc_delta, ktop->curr_proc_pid, pid_cnt, ktop->top_loading_pid);
 
 	
@@ -585,6 +591,7 @@ static void htc_kernel_top_cal(struct _htc_kernel_top *ktop, int type)
 #endif
 	}
 
+	rcu_read_lock();
 	
 	for_each_process(process) {
 		if (process->pid < MAX_PID) {
@@ -592,6 +599,7 @@ static void htc_kernel_top_cal(struct _htc_kernel_top *ktop, int type)
 			ktop->prev_proc_stat[process->pid] = cputime.stime + cputime.utime;
 		}
 	}
+	rcu_read_unlock();
 	memcpy(&ktop->prev_cpustat, &ktop->curr_cpustat, sizeof(struct kernel_cpustat));
 	spin_unlock_irqrestore(&ktop->lock, flags);
 }
@@ -615,9 +623,36 @@ static void htc_kernel_top_show(struct _htc_kernel_top *ktop, int type)
 	memset(ktop->curr_proc_pid, 0, sizeof(int) * MAX_PID);
 }
 
+static unsigned int  get_td_sf(void)
+{
+	char *p;
+	unsigned int td_sf = 0;
+	size_t cmdline_len, sf_len;
+
+	if (NULL == saved_command_line)
+	{
+		return 0;
+	}
+
+	cmdline_len = strlen(saved_command_line);
+	sf_len = strlen("td.sf=");
+
+	for (p = saved_command_line; p < saved_command_line + cmdline_len - sf_len; p++) {
+		if (!strncmp(p, "td.sf=", sf_len)) {
+			p += sf_len;
+			if (*p != '0')
+				td_sf = 1;
+			pr_debug("[K] S-ON found td_sf:%d\n", td_sf);
+			break;
+		}
+	}
+
+	return td_sf;
+}
+
 static void htc_pm_monitor_work_func(struct work_struct *work)
 {
-        struct _htc_kernel_top *ktop = container_of(work, struct _htc_kernel_top,
+	struct _htc_kernel_top *ktop = container_of(work, struct _htc_kernel_top,
 		                        dwork.work);
 	struct timespec ts;
 	struct rtc_time tm;
@@ -649,7 +684,14 @@ static void htc_pm_monitor_work_func(struct work_struct *work)
 	
 	htc_print_active_wakeup_sources();
 
-	queue_delayed_work(htc_pm_monitor_wq, &ktop->dwork, msecs_to_jiffies(msm_htc_util_delay_time));
+	if (saved_kernel_flag){
+			queue_delayed_work(htc_pm_monitor_wq, &ktop->dwork, msecs_to_jiffies(MSM_HTC_UTIL_DELAY_TIME_S_ON));
+	}
+	else{
+			queue_delayed_work(htc_pm_monitor_wq, &ktop->dwork, msecs_to_jiffies(msm_htc_util_delay_time));
+	}
+	
+
 	htc_kernel_top_cal(ktop, KERNEL_TOP);
 	htc_kernel_top_show(ktop, KERNEL_TOP);
 
@@ -722,6 +764,9 @@ void htc_monitor_init(void)
 	        get_all_cpustat(&htc_kernel_top->prev_cpustat);
 
 		INIT_DELAYED_WORK(&htc_kernel_top->dwork, htc_pm_monitor_work_func);
+
+		saved_kernel_flag = get_td_sf();
+
 		queue_delayed_work(htc_pm_monitor_wq, &htc_kernel_top->dwork,
 						msecs_to_jiffies(msm_htc_util_delay_time));
 	}
