@@ -48,7 +48,7 @@ struct mdss_debug_base {
 
 static int mdss_debug_base_open(struct inode *inode, struct file *file)
 {
-	
+	/* non-seekable */
 	file->f_mode &= ~(FMODE_LSEEK | FMODE_PREAD | FMODE_PWRITE);
 	file->private_data = inode->i_private;
 	return 0;
@@ -82,7 +82,7 @@ static ssize_t mdss_debug_base_offset_write(struct file *file,
 	if (copy_from_user(buf, user_buf, count))
 		return -EFAULT;
 
-	buf[count] = 0;	
+	buf[count] = 0;	/* end of string */
 
 	sscanf(buf, "%5x %x", &off, &cnt);
 
@@ -111,7 +111,7 @@ static ssize_t mdss_debug_base_offset_read(struct file *file,
 		return -ENODEV;
 
 	if (*ppos)
-		return 0;	
+		return 0;	/* the end */
 
 	len = snprintf(buf, sizeof(buf), "0x%08x %x\n", dbg->off, dbg->cnt);
 	if (len < 0)
@@ -120,7 +120,7 @@ static ssize_t mdss_debug_base_offset_read(struct file *file,
 	if (copy_to_user(buff, buf, len))
 		return -EFAULT;
 
-	*ppos += len;	
+	*ppos += len;	/* increase offset */
 
 	return len;
 }
@@ -143,7 +143,7 @@ static ssize_t mdss_debug_base_reg_write(struct file *file,
 	if (copy_from_user(buf, user_buf, count))
 		return -EFAULT;
 
-	buf[count] = 0;	
+	buf[count] = 0;	/* end of string */
 
 	cnt = sscanf(buf, "%x %x", &off, &data);
 
@@ -219,7 +219,7 @@ static ssize_t mdss_debug_base_reg_read(struct file *file,
 	}
 
 	if (*ppos >= dbg->buf_len)
-		return 0; 
+		return 0; /* done reading */
 
 	len = min(count, dbg->buf_len - (size_t) *ppos);
 	if (copy_to_user(user_buf, dbg->buf + *ppos, len)) {
@@ -227,7 +227,7 @@ static ssize_t mdss_debug_base_reg_read(struct file *file,
 		return -EFAULT;
 	}
 
-	*ppos += len; 
+	*ppos += len; /* increase offset */
 
 	return len;
 }
@@ -300,7 +300,7 @@ off_fail:
 
 static int mdss_debug_stat_open(struct inode *inode, struct file *file)
 {
-	
+	/* non-seekable */
 	file->f_mode &= ~(FMODE_LSEEK | FMODE_PREAD | FMODE_PWRITE);
 	file->private_data = inode->i_private;
 	return 0;
@@ -319,7 +319,7 @@ static ssize_t mdss_debug_stat_read(struct file *file, char __user *buff,
 	char bp[512];
 
 	if (*ppos)
-		return 0;	
+		return 0;	/* the end */
 
 	len = sizeof(bp);
 
@@ -335,7 +335,7 @@ static ssize_t mdss_debug_stat_read(struct file *file, char __user *buff,
 	if (copy_to_user(buff, bp, tot))
 		return -EFAULT;
 
-	*ppos += tot;	
+	*ppos += tot;	/* increase offset */
 
 	return tot;
 }
@@ -542,7 +542,7 @@ int mdss_misr_set(struct mdss_data_type *mdata,
 
 	writel_relaxed(MDSS_MDP_LP_MISR_CTRL_STATUS_CLEAR,
 			mdata->mdp_base + map->ctrl_reg);
-	
+	/* ensure clear is done */
 	wmb();
 
 	memset(map->crc_ping, 0, sizeof(map->crc_ping));
@@ -634,6 +634,7 @@ int mdss_misr_get(struct mdss_data_type *mdata,
 	return ret;
 }
 
+/* This function is expected to be called from interrupt context */
 void mdss_misr_crc_collect(struct mdss_data_type *mdata, int block_id)
 {
 	struct mdss_mdp_misr_map *map;

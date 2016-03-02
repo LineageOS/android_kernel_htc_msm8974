@@ -99,8 +99,9 @@ static void wcd9xxx_irq_enable(struct irq_data *data)
 	struct wcd9xxx_core_resource *wcd9xxx_res =
 			irq_data_get_irq_chip_data(data);
 	int wcd9xxx_irq = virq_to_phyirq(wcd9xxx_res, data->irq);
-	wcd9xxx_res->irq_masks_cur[BIT_BYTE(wcd9xxx_irq)] &=
-		~(BYTE_BIT_MASK(wcd9xxx_irq));
+	if ((BIT_BYTE(wcd9xxx_irq) < WCD9XXX_MAX_IRQ_REGS) && (BIT_BYTE(wcd9xxx_irq) >= 0))
+		wcd9xxx_res->irq_masks_cur[BIT_BYTE(wcd9xxx_irq)] &=
+			~(BYTE_BIT_MASK(wcd9xxx_irq));
 }
 
 static void wcd9xxx_irq_disable(struct irq_data *data)
@@ -108,8 +109,9 @@ static void wcd9xxx_irq_disable(struct irq_data *data)
 	struct wcd9xxx_core_resource *wcd9xxx_res =
 			irq_data_get_irq_chip_data(data);
 	int wcd9xxx_irq = virq_to_phyirq(wcd9xxx_res, data->irq);
-	wcd9xxx_res->irq_masks_cur[BIT_BYTE(wcd9xxx_irq)]
-		|= BYTE_BIT_MASK(wcd9xxx_irq);
+	if ((BIT_BYTE(wcd9xxx_irq) < WCD9XXX_MAX_IRQ_REGS) && (BIT_BYTE(wcd9xxx_irq) >= 0))
+		wcd9xxx_res->irq_masks_cur[BIT_BYTE(wcd9xxx_irq)]
+			|= BYTE_BIT_MASK(wcd9xxx_irq);
 }
 
 static void wcd9xxx_irq_mask(struct irq_data *d)
@@ -317,7 +319,7 @@ static irqreturn_t wcd9xxx_irq_thread(int irq, void *data)
 
 		memset(status, 0xff, num_irq_regs);
 
-		ret = wcd9xxx_res->codec_bulk_write(wcd9xxx_res,
+		wcd9xxx_res->codec_bulk_write(wcd9xxx_res,
 				WCD9XXX_A_INTR_CLEAR0,
 				num_irq_regs, status);
 		if (wcd9xxx_get_intf_type() == WCD9XXX_INTERFACE_TYPE_I2C)
@@ -618,10 +620,11 @@ static int phyirq_to_virq(struct wcd9xxx_core_resource *wcd9xxx_res, int offset)
 static int virq_to_phyirq(struct wcd9xxx_core_resource *wcd9xxx_res, int virq)
 {
 	struct irq_data *irq_data = irq_get_irq_data(virq);
-	if (irq_data != NULL)
+	if (unlikely(!irq_data)) {
+		pr_err("%s: irq_data is NULL", __func__);
+		return -EINVAL;
+	}
 	return irq_data->hwirq;
-	else
-		return 0;
 }
 
 static unsigned int wcd9xxx_irq_get_upstream_irq(
@@ -670,8 +673,8 @@ static int __devinit wcd9xxx_irq_probe(struct platform_device *pdev)
 	} else {
 		dev_dbg(&pdev->dev, "%s: virq = %d\n", __func__, irq);
 		domain = irq_find_host(pdev->dev.of_node);
-		if (domain == NULL) {
-			pr_err("%s: domain is NULL\n", __func__);
+		if (unlikely(!domain)) {
+			pr_err("%s: domain is NULL", __func__);
 			return -EINVAL;
 		}
 		data = (struct wcd9xxx_irq_drv_data *)domain->host_data;
@@ -689,8 +692,8 @@ static int wcd9xxx_irq_remove(struct platform_device *pdev)
 	struct wcd9xxx_irq_drv_data *data;
 
 	domain = irq_find_host(pdev->dev.of_node);
-	if (domain == NULL) {
-		pr_err("%s: domain is NULL\n", __func__);
+	if (unlikely(!domain)) {
+		pr_err("%s: domain is NULL", __func__);
 		return -EINVAL;
 	}
 	data = (struct wcd9xxx_irq_drv_data *)domain->host_data;

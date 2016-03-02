@@ -32,31 +32,48 @@
  *                2012/10/18	K.Okawa(KXD14)
  *                002 modify for MN88552
  ******************************************************************************/
+/*..+....1....+....2....+....3....+....4....+....5....+....6....+....7....+...*/
 
 #ifndef _TUNER_DRV_CONFIG_H
 #define _TUNER_DRV_CONFIG_H
 
-#define TUNER_SET_ON                     1       
-#define TUNER_SET_OFF                    0       
+/******************************************************************************
+ * data
+ ******************************************************************************/
+#define TUNER_SET_ON                     1       /* setting ON              */
+#define TUNER_SET_OFF                    0       /* setting OFF             */
 
+/* device driver file name */
 #define TUNER_CONFIG_DRIVER_NAME		"mmtuner_drv"
 
+/* device number */
+//#define TUNER_CONFIG_DRV_MAJOR         221 //240      /* MAJOR No.               */
+//#define TUNER_CONFIG_DRV_MINOR         0   //200       /* MINOR No.               */
 
+/* compile switch for IRQ */
+/* #define TUNER_CONFIG_IRQ_PC_LINUX */
 
-#define TUNER_CONFIG_INT              0x07       
+/* IRQ# */
+#define TUNER_CONFIG_INT              0x07       /* IRQ No.                 */
 
-#define TUNER_CONFIG_I2C_BUSNUM       0x03      
+/* I2C bus # */
+#define TUNER_CONFIG_I2C_BUSNUM       0x03      /* I2C Bus No.             */
 
-#define TUNER_CONFIG_KTH_PRI            95       
+/* kernel thread priority  */
+#define TUNER_CONFIG_KTH_PRI            95       /* priority (0～99)        */
 
+/* exclusive access control  */
+/* #define TUNER_CONFIG_DRV_MULTI              *//* exclusive control enable */
 
-#define TUNER_CONFIG_IRQ_LEVEL  TUNER_SET_ON    
+/* interrupt trigger type */
+#define TUNER_CONFIG_IRQ_LEVEL  TUNER_SET_ON    /* trigger type = level     */
 
-#define TUNER_SLAVE_ADR_S             0x6C      
-#define TUNER_SLAVE_ADR_M1            0x6D      
-#define TUNER_SLAVE_ADR_M2            0x6E      
+/* I2C slave address of tuner device register bank */
+#define TUNER_SLAVE_ADR_S             0x6C      /* reg. bank: Sub           */
+#define TUNER_SLAVE_ADR_M1            0x6D      /* reg. bank: Main#1        */
+#define TUNER_SLAVE_ADR_M2            0x6E      /* reg. bank: Main#2        */
 
-#endif
+#endif/* _TUNER_DRV_CONFIG_H */
 /*******************************************************************************
  *              Copyright(c) 2011 Panasonic Co., Ltd.
  ******************************************************************************/

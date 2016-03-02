@@ -44,6 +44,11 @@
 #include <asm/smp_plat.h>
 #include <asm/mach/arch.h>
 
+/*
+ * as from 2.5, kernels no longer have an init_tasks structure
+ * so we need some other way of telling a new secondary core
+ * where to place its SVC stack
+ */
 struct secondary_data secondary_data;
 
 enum ipi_msg_type {
@@ -72,6 +77,10 @@ int __cpuinit __cpu_up(unsigned int cpu)
 	struct task_struct *idle = ci->idle;
 	int ret;
 
+	/*
+	 * Spawn a new process manually, if not already done.
+	 * Grab a pointer to its task struct so we can mess with it
+	 */
 	if (!idle) {
 		idle = fork_idle(cpu);
 		if (IS_ERR(idle)) {
@@ -80,17 +89,32 @@ int __cpuinit __cpu_up(unsigned int cpu)
 		}
 		ci->idle = idle;
 	} else {
+		/*
+		 * Since this idle thread is being re-used, call
+		 * init_idle() to reinitialize the thread structure.
+		 */
 		init_idle(idle, cpu);
 	}
 
+	/*
+	 * We need to tell the secondary core where to find
+	 * its stack and the page tables.
+	 */
 	secondary_data.stack = task_stack_page(idle) + THREAD_START_SP;
 	secondary_data.pgdir = virt_to_phys(idmap_pgd);
 	secondary_data.swapper_pg_dir = virt_to_phys(swapper_pg_dir);
 	__cpuc_flush_dcache_area(&secondary_data, sizeof(secondary_data));
 	outer_clean_range(__pa(&secondary_data), __pa(&secondary_data + 1));
 
+	/*
+	 * Now bring the CPU into our world.
+	 */
 	ret = boot_secondary(cpu, idle);
 	if (ret == 0) {
+		/*
+		 * CPU was successfully started, wait for it
+		 * to come online or time out.
+		 */
 		wait_for_completion_timeout(&cpu_running,
 						 msecs_to_jiffies(1000));
 
@@ -108,6 +132,7 @@ int __cpuinit __cpu_up(unsigned int cpu)
 	return ret;
 }
 
+/* platform specific SMP operations */
 void __attribute__((weak)) __init smp_init_cpus(void)
 {
 	if (smp_ops.smp_init_cpus)
@@ -154,9 +179,17 @@ int __attribute__((weak)) platform_cpu_disable(unsigned int cpu)
 	if (smp_ops.cpu_disable)
 		return smp_ops.cpu_disable(cpu);
 
+	/*
+	* By default, allow disabling all CPUs except the first one,
+	* since this is special on a lot of platforms, e.g. because
+	* of clock tick interrupts.
+	*/
 	return cpu == 0 ? -EPERM : 0;
 }
 
+/*
+ * __cpu_disable runs on the processor to be shutdown.
+ */
 int __cpu_disable(void)
 {
 	unsigned int cpu = smp_processor_id();
@@ -167,12 +200,26 @@ int __cpu_disable(void)
 	if (ret)
 		return ret;
 
+	/*
+	 * Take this CPU offline.  Once we clear this, we can't return,
+	 * and we must not schedule until we're ready to give up the cpu.
+	 */
 	set_cpu_online(cpu, false);
 
+	/*
+	 * OK - migrate IRQs away from this CPU
+	 */
 	migrate_irqs();
 
+	/*
+	 * Stop the local timer for this CPU.
+	 */
 	percpu_timer_stop();
 
+	/*
+	 * Flush user cache and TLB mappings, and then remove this CPU
+	 * from the vm mask set of all processes.
+	 */
 	flush_cache_all();
 	local_flush_tlb_all();
 
@@ -188,6 +235,10 @@ int __cpu_disable(void)
 
 static DECLARE_COMPLETION(cpu_died);
 
+/*
+ * called on the thread which is asking for a CPU to be shutdown -
+ * waits until shutdown has completed, or it is timed out.
+ */
 void __cpu_die(unsigned int cpu)
 {
 	if (!wait_for_completion_timeout(&cpu_died, msecs_to_jiffies(5000))) {
@@ -200,6 +251,14 @@ void __cpu_die(unsigned int cpu)
 		printk("CPU%u: unable to kill\n", cpu);
 }
 
+/*
+ * Called from the idle thread for the CPU which has been shutdown.
+ *
+ * Note that we disable IRQs here, but do not re-enable them
+ * before returning to the caller. This is also the behaviour
+ * of the other hotplug-cpu capable cores, so presumably coming
+ * out of idle fixes this.
+ */
 void __ref cpu_die(void)
 {
 	unsigned int cpu = smp_processor_id();
@@ -209,19 +268,32 @@ void __ref cpu_die(void)
 	local_irq_disable();
 	mb();
 
-	
+	/* Tell __cpu_die() that this CPU is now safe to dispose of */
 	complete(&cpu_died);
 
+	/*
+	 * actual CPU shutdown procedure is at least platform (if not
+	 * CPU) specific.
+	 */
 	platform_cpu_die(cpu);
 
+	/*
+	 * Do not return to the idle loop - jump back to the secondary
+	 * cpu initialisation.  There's some initialisation which needs
+	 * to be repeated to undo the effects of taking the CPU offline.
+	 */
 	__asm__("mov	sp, %0\n"
 	"	mov	fp, #0\n"
 	"	b	secondary_start_kernel"
 		:
 		: "r" (task_stack_page(current) + THREAD_SIZE - 8));
 }
-#endif 
+#endif /* CONFIG_HOTPLUG_CPU */
 
+/*
+ * Called by both boot and secondaries to move global data into
+ * per-processor storage.
+ */
 static void __cpuinit smp_store_cpu_info(unsigned int cpuid)
 {
 	struct cpuinfo_arm *cpu_info = &per_cpu(cpu_data, cpuid);
@@ -231,11 +303,19 @@ static void __cpuinit smp_store_cpu_info(unsigned int cpuid)
 	store_cpu_topology(cpuid);
 }
 
+/*
+ * This is the secondary CPU boot entry.  We're using this CPUs
+ * idle thread stack, but a set of temporary page tables.
+ */
 asmlinkage void __cpuinit secondary_start_kernel(void)
 {
 	struct mm_struct *mm = &init_mm;
 	unsigned int cpu = smp_processor_id();
 
+	/*
+	 * All kernel threads share the same mm context; grab a
+	 * reference and switch to it.
+	 */
 	atomic_inc(&mm->mm_count);
 	current->active_mm = mm;
 	cpumask_set_cpu(cpu, mm_cpumask(mm));
@@ -249,6 +329,9 @@ asmlinkage void __cpuinit secondary_start_kernel(void)
 	preempt_disable();
 	trace_hardirqs_off();
 
+	/*
+	 * Give the platform a chance to do its own initialisation.
+	 */
 	platform_secondary_init(cpu);
 
 	notify_cpu_starting(cpu);
@@ -257,14 +340,25 @@ asmlinkage void __cpuinit secondary_start_kernel(void)
 
 	smp_store_cpu_info(cpu);
 
+	/*
+	 * OK, now it's safe to let the boot CPU continue.  Wait for
+	 * the CPU migration code to notice that the CPU is online
+	 * before we continue - which happens after __cpu_up returns.
+	 */
 	set_cpu_online(cpu, true);
 	complete(&cpu_running);
 
+	/*
+	 * Setup the percpu timer for this CPU.
+	 */
 	percpu_timer_setup();
 
 	local_irq_enable();
 	local_fiq_enable();
 
+	/*
+	 * OK, it's off to the idle thread for us
+	 */
 	cpu_idle();
 }
 
@@ -298,13 +392,30 @@ void __init smp_prepare_cpus(unsigned int max_cpus)
 
 	smp_store_cpu_info(smp_processor_id());
 
+	/*
+	 * are we trying to boot more cores than exist?
+	 */
 	if (max_cpus > ncores)
 		max_cpus = ncores;
 	if (ncores > 1 && max_cpus) {
+		/*
+		 * Enable the local timer or broadcast device for the
+		 * boot CPU, but only if we have more than one CPU.
+		 */
 		percpu_timer_setup();
 
+		/*
+		 * Initialise the present map, which describes the set of CPUs
+		 * actually populated at the present time. A platform should
+		 * re-initialize the map in platform_smp_prepare_cpus() if
+		 * present != possible (e.g. physical hotplug).
+		 */
 		init_cpu_present(cpu_possible_mask);
 
+		/*
+		 * Initialise the SCU if there are more than one CPU
+		 * and let them know where to start.
+		 */
 		platform_smp_prepare_cpus(max_cpus);
 	}
 }
@@ -363,6 +474,9 @@ u64 smp_irq_stat_cpu(unsigned int cpu)
 	return sum;
 }
 
+/*
+ * Timer (local or broadcast) support
+ */
 static DEFINE_PER_CPU(struct clock_event_device, percpu_clockevent);
 
 static void ipi_timer(void)
@@ -424,6 +538,11 @@ void __cpuinit percpu_timer_setup(void)
 }
 
 #ifdef CONFIG_HOTPLUG_CPU
+/*
+ * The generic clock events code purposely does not stop the local timer
+ * on CPU_DEAD/CPU_DEAD_FROZEN hotplug events, so we have to do it
+ * manually here.
+ */
 static void percpu_timer_stop(void)
 {
 	unsigned int cpu = smp_processor_id();
@@ -437,6 +556,9 @@ static void percpu_timer_stop(void)
 static DEFINE_RAW_SPINLOCK(stop_lock);
 
 DEFINE_PER_CPU(struct pt_regs, regs_before_stop);
+/*
+ * ipi_cpu_stop - handle IPI from smp_send_stop()
+ */
 static void ipi_cpu_stop(unsigned int cpu, struct pt_regs *regs)
 {
 	if (system_state == SYSTEM_BOOTING ||
@@ -462,6 +584,7 @@ static void ipi_cpu_stop(unsigned int cpu, struct pt_regs *regs)
 static cpumask_t backtrace_mask;
 static DEFINE_RAW_SPINLOCK(backtrace_lock);
 
+/* "in progress" flag of arch_trigger_all_cpu_backtrace */
 static unsigned long backtrace_flag;
 
 void smp_send_all_cpu_backtrace(void)
@@ -470,6 +593,10 @@ void smp_send_all_cpu_backtrace(void)
 	int i;
 
 	if (test_and_set_bit(0, &backtrace_flag))
+		/*
+		 * If there is already a trigger_all_cpu_backtrace() in progress
+		 * (backtrace_flag == 1), don't output double cpu dump infos.
+		 */
 		return;
 
 	cpumask_copy(&backtrace_mask, cpu_online_mask);
@@ -482,7 +609,7 @@ void smp_send_all_cpu_backtrace(void)
 	if (!cpus_empty(backtrace_mask))
 		smp_cross_call(&backtrace_mask, IPI_CPU_BACKTRACE);
 
-	
+	/* Wait for up to 10 seconds for all other CPUs to do the backtrace */
 	for (i = 0; i < 10 * 1000; i++) {
 		if (cpumask_empty(&backtrace_mask))
 			break;
@@ -493,6 +620,9 @@ void smp_send_all_cpu_backtrace(void)
 	smp_mb__after_clear_bit();
 }
 
+/*
+ * ipi_cpu_backtrace - handle IPI from smp_send_all_cpu_backtrace()
+ */
 static void ipi_cpu_backtrace(unsigned int cpu, struct pt_regs *regs)
 {
 	if (cpu_isset(cpu, backtrace_mask)) {
@@ -504,6 +634,9 @@ static void ipi_cpu_backtrace(unsigned int cpu, struct pt_regs *regs)
 	}
 }
 
+/*
+ * Main handler for inter-processor interrupts
+ */
 asmlinkage void __exception_irq_entry do_IPI(int ipinr, struct pt_regs *regs)
 {
 	handle_IPI(ipinr, regs);
@@ -519,7 +652,7 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
 
 	switch (ipinr) {
 	case IPI_CPU_START:
-		
+		/* Wake up from WFI/WFE using SGI */
 		break;
 	case IPI_TIMER:
 		irq_enter();
@@ -588,7 +721,7 @@ void smp_send_stop(void)
 	if (!cpumask_empty(&mask))
 		smp_cross_call(&mask, IPI_CPU_STOP);
 
-	
+	/* Wait up to one second for other CPUs to stop */
 	timeout = USEC_PER_SEC;
 	while (num_active_cpus() > 1 && timeout--)
 		udelay(1);
@@ -599,6 +732,9 @@ void smp_send_stop(void)
 	smp_kill_cpus(&mask);
 }
 
+/*
+ * not supported here
+ */
 int setup_profiling_timer(unsigned int multiplier)
 {
 	return -EINVAL;

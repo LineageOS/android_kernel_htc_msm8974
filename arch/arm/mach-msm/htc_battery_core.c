@@ -280,6 +280,13 @@ static ssize_t htc_battery_show_htc_extension_attr(struct device *dev,
 	return 0;
 }
 
+static ssize_t htc_battery_overload(struct device *dev,
+                struct device_attribute *attr,
+                char *buf)
+{
+    return sprintf(buf, "%d\n", battery_core_info.rep.overload);
+}
+
 static ssize_t htc_battery_set_delta(struct device *dev,
 				struct device_attribute *attr,
 				const char *buf, size_t count)
@@ -686,6 +693,7 @@ static struct device_attribute htc_battery_attrs[] = {
 	__ATTR(batt_attr_text, S_IRUGO, htc_battery_show_batt_attr, NULL),
 	__ATTR(batt_power_meter, S_IRUGO, htc_battery_show_cc_attr, NULL),
 	__ATTR(htc_extension, S_IRUGO, htc_battery_show_htc_extension_attr, NULL),
+	__ATTR(overload, S_IRUGO, htc_battery_overload, NULL),
 };
 
 static struct device_attribute htc_set_delta_attrs[] = {

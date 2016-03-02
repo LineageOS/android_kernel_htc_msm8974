@@ -2168,7 +2168,7 @@ static unsigned long edp_mainlink_get_rate(struct clk *c)
 		rate /= mclk->data.div;
 	}
 
-	pr_debug("%s: rate=%d div=%d\n", __func__, (int)rate, mclk->data.div);
+	pr_debug("%s: rate=%d\n", __func__, (int)rate);
 
 	return rate;
 }

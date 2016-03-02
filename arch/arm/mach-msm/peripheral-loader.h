@@ -16,6 +16,18 @@ struct device;
 struct module;
 struct pil_priv;
 
+/**
+ * struct pil_desc - PIL descriptor
+ * @name: string used for pil_get()
+ * @dev: parent device
+ * @ops: callback functions
+ * @owner: module the descriptor belongs to
+ * @proxy_timeout: delay in ms until proxy vote is removed
+ * @flags: bitfield for image flags
+ * @priv: DON'T USE - internal only
+ * @proxy_unvote_irq: IRQ to trigger a proxy unvote. proxy_timeout
+ * is ignored if this is set.
+ */
 struct pil_desc {
 	const char *name;
 	struct device *dev;
@@ -28,6 +40,17 @@ struct pil_desc {
 	unsigned int proxy_unvote_irq;
 };
 
+/**
+ * struct pil_reset_ops - PIL operations
+ * @init_image: prepare an image for authentication
+ * @mem_setup: prepare the image memory region
+ * @verify_blob: authenticate a program segment, called once for each loadable
+ *		 program segment (optional)
+ * @proxy_vote: make proxy votes before auth_and_reset (optional)
+ * @auth_and_reset: boot the processor
+ * @proxy_unvote: remove any proxy votes (optional)
+ * @shutdown: shutdown the processor
+ */
 struct pil_reset_ops {
 	int (*init_image)(struct pil_desc *pil, const u8 *metadata,
 			  size_t size);

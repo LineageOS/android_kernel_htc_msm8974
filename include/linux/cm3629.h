@@ -18,6 +18,13 @@
 
 #define CM3629_I2C_NAME "CM3629"
 
+/* Define Slave Address*/
+/*
+#define ALS_slave_address	0x30
+#define ALS_slave_read		0x31
+#define PS_slave_address	0x32
+#define PS_slave_read		0x33
+*/
 
 /*Define ALS Command Code*/
 #define ALS_config_cmd		0x00
@@ -148,6 +155,12 @@
 #define CM3629_PS1_IF_CLOSE	(1 << 1)
 #define CM3629_PS1_IF_AWAY	(1 << 0)
 
+/* for evm
+extern unsigned int ps_kparam1;
+extern unsigned int ps_kparam2;
+extern unsigned int als_kadc;
+extern unsigned int ws_kadc;
+*/
 enum {
 	CAPELLA_CM36282,
 	CAPELLA_CM36292,
@@ -177,7 +190,7 @@ struct cm3629_platform_data {
 	uint32_t ps1_thh_diff;
 	uint32_t ps2_thd_set;
 	uint8_t inte_cancel_set;
-	
+	/*command code 0x02, intelligent cancel level, for ps calibration*/
 	uint32_t ps_conf2_val; /* PS_CONF2 value */
 	uint8_t *mapping_table;
 	uint8_t mapping_size;

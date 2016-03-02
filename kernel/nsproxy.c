@@ -51,11 +51,6 @@ static inline struct nsproxy *create_nsproxy(void)
 	return nsproxy;
 }
 
-/*
- * Create new nsproxy and all of its the associated namespaces.
- * Return the newly created nsproxy.  Do not attach this to the task,
- * leave it to the caller to do proper locking and attach it to task.
- */
 static struct nsproxy *create_new_namespaces(unsigned long flags,
 			struct task_struct *tsk, struct fs_struct *new_fs)
 {
@@ -115,10 +110,6 @@ out_ns:
 	return ERR_PTR(err);
 }
 
-/*
- * called from clone.  This now handles copy for nsproxy and all
- * namespaces therein.
- */
 int copy_namespaces(unsigned long flags, struct task_struct *tsk)
 {
 	struct nsproxy *old_ns = tsk->nsproxy;
@@ -139,13 +130,6 @@ int copy_namespaces(unsigned long flags, struct task_struct *tsk)
 		goto out;
 	}
 
-	/*
-	 * CLONE_NEWIPC must detach from the undolist: after switching
-	 * to a new ipc namespace, the semaphore arrays from the old
-	 * namespace are unreachable.  In clone parlance, CLONE_SYSVSEM
-	 * means share undolist with parent, so we must forbid using
-	 * it along with CLONE_NEWIPC.
-	 */
 	if ((flags & CLONE_NEWIPC) && (flags & CLONE_SYSVSEM)) {
 		err = -EINVAL;
 		goto out;
@@ -178,10 +162,6 @@ void free_nsproxy(struct nsproxy *ns)
 	kmem_cache_free(nsproxy_cachep, ns);
 }
 
-/*
- * Called from unshare. Unshare all the namespaces part of nsproxy.
- * On success, returns the new nsproxy.
- */
 int unshare_nsproxy_namespaces(unsigned long unshare_flags,
 		struct nsproxy **new_nsp, struct fs_struct *new_fs)
 {
@@ -216,12 +196,6 @@ void switch_task_namespaces(struct task_struct *p, struct nsproxy *new)
 	rcu_assign_pointer(p->nsproxy, new);
 
 	if (ns && atomic_dec_and_test(&ns->count)) {
-		/*
-		 * wait for others to get what they want from this nsproxy.
-		 *
-		 * cannot release this nsproxy via the call_rcu() since
-		 * put_mnt_ns() will want to sleep
-		 */
 		synchronize_rcu();
 		free_nsproxy(ns);
 	}
@@ -249,7 +223,7 @@ SYSCALL_DEFINE2(setns, int, fd, int, nstype)
 		return PTR_ERR(file);
 
 	err = -EINVAL;
-	ei = PROC_I(file->f_dentry->d_inode);
+	ei = PROC_I(file_inode(file));
 	ops = ei->ns_ops;
 	if (nstype && (ops->type != nstype))
 		goto out;

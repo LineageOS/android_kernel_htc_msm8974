@@ -26,9 +26,6 @@
 #include "mdss_dsi_cmd.h"
 #include "mdss_dsi.h"
 
-/*
- * mipi dsi buf mechanism
- */
 char *mdss_dsi_buf_reserve(struct dsi_buf *dp, int len)
 {
 	dp->data += len;
@@ -60,7 +57,7 @@ char *mdss_dsi_buf_init(struct dsi_buf *dp)
 
 	dp->data = dp->start;
 	off = (int)dp->data;
-	/* 8 byte align */
+	
 	off &= 0x07;
 	if (off)
 		off = 8 - off;
@@ -89,9 +86,6 @@ int mdss_dsi_buf_alloc(struct dsi_buf *dp, int size)
 	return size;
 }
 
-/*
- * mipi dsi generic long write
- */
 static int mdss_dsi_generic_lwrite(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 {
 	struct dsi_ctrl_hdr *dchdr;
@@ -102,22 +96,22 @@ static int mdss_dsi_generic_lwrite(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 	dchdr = &cm->dchdr;
 	bp = mdss_dsi_buf_reserve_hdr(dp, DSI_HOST_HDR_SIZE);
 
-	/* fill up payload */
+	
 	if (cm->payload) {
 		len = dchdr->dlen;
 		len += 3;
-		len &= ~0x03;	/* multipled by 4 */
+		len &= ~0x03;	
 		for (i = 0; i < dchdr->dlen; i++)
 			*bp++ = cm->payload[i];
 
-		/* append 0xff to the end */
+		
 		for (; i < len; i++)
 			*bp++ = 0xff;
 
 		dp->len += len;
 	}
 
-	/* fill up header */
+	
 	hp = dp->hdr;
 	*hp = 0;
 	*hp = DSI_HDR_WC(dchdr->dlen);
@@ -133,9 +127,6 @@ static int mdss_dsi_generic_lwrite(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 	return len;
 }
 
-/*
- * mipi dsi generic short write with 0, 1 2 parameters
- */
 static int mdss_dsi_generic_swrite(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 {
 	struct dsi_ctrl_hdr *dchdr;
@@ -173,12 +164,9 @@ static int mdss_dsi_generic_swrite(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 	}
 
 	mdss_dsi_buf_push(dp, DSI_HOST_HDR_SIZE);
-	return DSI_HOST_HDR_SIZE; /* 4 bytes */
+	return DSI_HOST_HDR_SIZE; 
 }
 
-/*
- * mipi dsi gerneric read with 0, 1 2 parameters
- */
 static int mdss_dsi_generic_read(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 {
 	struct dsi_ctrl_hdr *dchdr;
@@ -216,12 +204,9 @@ static int mdss_dsi_generic_read(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 	}
 
 	mdss_dsi_buf_push(dp, DSI_HOST_HDR_SIZE);
-	return DSI_HOST_HDR_SIZE; /* 4 bytes */
+	return DSI_HOST_HDR_SIZE; 
 }
 
-/*
- * mipi dsi dcs long write
- */
 static int mdss_dsi_dcs_lwrite(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 {
 	struct dsi_ctrl_hdr *dchdr;
@@ -232,25 +217,21 @@ static int mdss_dsi_dcs_lwrite(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 	dchdr = &cm->dchdr;
 	bp = mdss_dsi_buf_reserve_hdr(dp, DSI_HOST_HDR_SIZE);
 
-	/*
-	 * fill up payload
-	 * dcs command byte (first byte) followed by payload
-	 */
 	if (cm->payload) {
 		len = dchdr->dlen;
 		len += 3;
-		len &= ~0x03;	/* multipled by 4 */
+		len &= ~0x03;	
 		for (i = 0; i < dchdr->dlen; i++)
 			*bp++ = cm->payload[i];
 
-		/* append 0xff to the end */
+		
 		for (; i < len; i++)
 			*bp++ = 0xff;
 
 		dp->len += len;
 	}
 
-	/* fill up header */
+	
 	hp = dp->hdr;
 	*hp = 0;
 	*hp = DSI_HDR_WC(dchdr->dlen);
@@ -266,9 +247,6 @@ static int mdss_dsi_dcs_lwrite(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 	return len;
 }
 
-/*
- * mipi dsi dcs short write with 0 parameters
- */
 static int mdss_dsi_dcs_swrite(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 {
 	struct dsi_ctrl_hdr *dchdr;
@@ -285,7 +263,7 @@ static int mdss_dsi_dcs_swrite(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 	hp = dp->hdr;
 	*hp = 0;
 	*hp |= DSI_HDR_VC(dchdr->vc);
-	if (dchdr->ack)		/* ask ACK trigger msg from peripeheral */
+	if (dchdr->ack)		
 		*hp |= DSI_HDR_BTA;
 	if (dchdr->last)
 		*hp |= DSI_HDR_LAST;
@@ -293,16 +271,13 @@ static int mdss_dsi_dcs_swrite(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 	len = (dchdr->dlen > 1) ? 1 : dchdr->dlen;
 
 	*hp |= DSI_HDR_DTYPE(DTYPE_DCS_WRITE);
-	*hp |= DSI_HDR_DATA1(cm->payload[0]);	/* dcs command byte */
+	*hp |= DSI_HDR_DATA1(cm->payload[0]);	
 	*hp |= DSI_HDR_DATA2(0);
 
 	mdss_dsi_buf_push(dp, DSI_HOST_HDR_SIZE);
-	return DSI_HOST_HDR_SIZE; /* 4 bytes */
+	return DSI_HOST_HDR_SIZE; 
 }
 
-/*
- * mipi dsi dcs short write with 1 parameters
- */
 static int mdss_dsi_dcs_swrite1(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 {
 	struct dsi_ctrl_hdr *dchdr;
@@ -318,21 +293,18 @@ static int mdss_dsi_dcs_swrite1(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 	hp = dp->hdr;
 	*hp = 0;
 	*hp |= DSI_HDR_VC(dchdr->vc);
-	if (dchdr->ack)		/* ask ACK trigger msg from peripeheral */
+	if (dchdr->ack)		
 		*hp |= DSI_HDR_BTA;
 	if (dchdr->last)
 		*hp |= DSI_HDR_LAST;
 
 	*hp |= DSI_HDR_DTYPE(DTYPE_DCS_WRITE1);
-	*hp |= DSI_HDR_DATA1(cm->payload[0]);	/* dcs comamnd byte */
-	*hp |= DSI_HDR_DATA2(cm->payload[1]);	/* parameter */
+	*hp |= DSI_HDR_DATA1(cm->payload[0]);	
+	*hp |= DSI_HDR_DATA2(cm->payload[1]);	
 
 	mdss_dsi_buf_push(dp, DSI_HOST_HDR_SIZE);
-	return DSI_HOST_HDR_SIZE; /* 4 bytes */
+	return DSI_HOST_HDR_SIZE; 
 }
-/*
- * mipi dsi dcs read with 0 parameters
- */
 
 static int mdss_dsi_dcs_read(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 {
@@ -354,11 +326,11 @@ static int mdss_dsi_dcs_read(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 	if (dchdr->last)
 		*hp |= DSI_HDR_LAST;
 
-	*hp |= DSI_HDR_DATA1(cm->payload[0]);	/* dcs command byte */
+	*hp |= DSI_HDR_DATA1(cm->payload[0]);	
 	*hp |= DSI_HDR_DATA2(0);
 
 	mdss_dsi_buf_push(dp, DSI_HOST_HDR_SIZE);
-	return DSI_HOST_HDR_SIZE; /* 4 bytes */
+	return DSI_HOST_HDR_SIZE; 
 }
 
 static int mdss_dsi_cm_on(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
@@ -376,7 +348,7 @@ static int mdss_dsi_cm_on(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 		*hp |= DSI_HDR_LAST;
 
 	mdss_dsi_buf_push(dp, DSI_HOST_HDR_SIZE);
-	return DSI_HOST_HDR_SIZE; /* 4 bytes */
+	return DSI_HOST_HDR_SIZE; 
 }
 
 static int mdss_dsi_cm_off(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
@@ -394,7 +366,7 @@ static int mdss_dsi_cm_off(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 		*hp |= DSI_HDR_LAST;
 
 	mdss_dsi_buf_push(dp, DSI_HOST_HDR_SIZE);
-	return DSI_HOST_HDR_SIZE; /* 4 bytes */
+	return DSI_HOST_HDR_SIZE; 
 }
 
 static int mdss_dsi_peripheral_on(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
@@ -412,7 +384,7 @@ static int mdss_dsi_peripheral_on(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 		*hp |= DSI_HDR_LAST;
 
 	mdss_dsi_buf_push(dp, DSI_HOST_HDR_SIZE);
-	return DSI_HOST_HDR_SIZE; /* 4 bytes */
+	return DSI_HOST_HDR_SIZE; 
 }
 
 static int mdss_dsi_peripheral_off(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
@@ -430,7 +402,7 @@ static int mdss_dsi_peripheral_off(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 		*hp |= DSI_HDR_LAST;
 
 	mdss_dsi_buf_push(dp, DSI_HOST_HDR_SIZE);
-	return DSI_HOST_HDR_SIZE; /* 4 bytes */
+	return DSI_HOST_HDR_SIZE; 
 }
 
 static int mdss_dsi_set_max_pktsize(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
@@ -456,7 +428,7 @@ static int mdss_dsi_set_max_pktsize(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 	*hp |= DSI_HDR_DATA2(cm->payload[1]);
 
 	mdss_dsi_buf_push(dp, DSI_HOST_HDR_SIZE);
-	return DSI_HOST_HDR_SIZE; /* 4 bytes */
+	return DSI_HOST_HDR_SIZE; 
 }
 
 static int mdss_dsi_null_pkt(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
@@ -476,7 +448,7 @@ static int mdss_dsi_null_pkt(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 		*hp |= DSI_HDR_LAST;
 
 	mdss_dsi_buf_push(dp, DSI_HOST_HDR_SIZE);
-	return DSI_HOST_HDR_SIZE; /* 4 bytes */
+	return DSI_HOST_HDR_SIZE; 
 }
 
 static int mdss_dsi_blank_pkt(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
@@ -496,12 +468,9 @@ static int mdss_dsi_blank_pkt(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 		*hp |= DSI_HDR_LAST;
 
 	mdss_dsi_buf_push(dp, DSI_HOST_HDR_SIZE);
-	return DSI_HOST_HDR_SIZE; /* 4 bytes */
+	return DSI_HOST_HDR_SIZE; 
 }
 
-/*
- * prepare cmd buffer to be txed
- */
 int mdss_dsi_cmd_dma_add(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 {
 	struct dsi_ctrl_hdr *dchdr;
@@ -566,23 +535,17 @@ int mdss_dsi_cmd_dma_add(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 	return len;
 }
 
-/*
- * mdss_dsi_short_read1_resp: 1 parameter
- */
 int mdss_dsi_short_read1_resp(struct dsi_buf *rp)
 {
-	/* strip out dcs type */
+	
 	rp->data++;
 	rp->len = 1;
 	return rp->len;
 }
 
-/*
- * mdss_dsi_short_read2_resp: 2 parameter
- */
 int mdss_dsi_short_read2_resp(struct dsi_buf *rp)
 {
-	/* strip out dcs type */
+	
 	rp->data++;
 	rp->len = 2;
 	return rp->len;
@@ -590,7 +553,7 @@ int mdss_dsi_short_read2_resp(struct dsi_buf *rp)
 
 int mdss_dsi_long_read_resp(struct dsi_buf *rp)
 {
-	/* strip out dcs header */
+	
 	rp->data += 4;
 	rp->len -= 4;
 	return rp->len;
@@ -630,9 +593,6 @@ void mdss_dsi_set_tear_off(struct mdss_dsi_ctrl_pdata *ctrl)
 	mdss_dsi_cmdlist_put(ctrl, &cmdreq);
 }
 
-/*
- * mdss_dsi_cmd_get: ctrl->cmd_mutex acquired by caller
- */
 struct dcs_cmd_req *mdss_dsi_cmdlist_get(struct mdss_dsi_ctrl_pdata *ctrl)
 {
 	struct dcs_cmd_list *clist;
@@ -665,7 +625,7 @@ int mdss_dsi_cmdlist_put(struct mdss_dsi_ctrl_pdata *ctrl,
 	clist->put %= CMD_REQ_MAX;
 	clist->tot++;
 	if (clist->put == clist->get) {
-		/* drop the oldest one */
+		
 		pr_debug("%s: DROP, tot=%d put=%d get=%d\n", __func__,
 			clist->tot, clist->put, clist->get);
 		clist->get++;

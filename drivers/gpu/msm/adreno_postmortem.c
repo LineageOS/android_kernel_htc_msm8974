@@ -173,7 +173,7 @@ static void adreno_dump_regs(struct kgsl_device *device,
 	int range = 0, offset = 0;
 
 	for (range = 0; range < size; range++) {
-		
+		/* start and end are in dword offsets */
 		int start = registers[range * 2];
 		int end = registers[range * 2 + 1];
 

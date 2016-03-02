@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -8,10 +8,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- */
-/*
- * SPI driver for Qualcomm MSM platforms
  *
  */
 
@@ -41,11 +37,11 @@
 #include <linux/mutex.h>
 #include <linux/atomic.h>
 #include <linux/pm_runtime.h>
-#include <mach/msm_spi.h>
 #include <mach/sps.h>
 #include <mach/dma.h>
 #include <mach/msm_bus.h>
 #include <mach/msm_bus_board.h>
+#include <linux/qcom-spi.h>
 #include "spi_qsd.h"
 
 static int msm_spi_pm_resume_runtime(struct device *device);
@@ -75,7 +71,7 @@ static inline int msm_spi_configure_gsbi(struct msm_spi *dd,
 	if (!gsbi_base)
 		return -ENXIO;
 
-	/* Set GSBI to SPI mode */
+	
 	writel_relaxed(GSBI_SPI_CONFIG, gsbi_base + GSBI_CTRL_REG);
 
 	return 0;
@@ -169,16 +165,6 @@ static inline void msm_spi_free_cs_gpio(struct msm_spi *dd)
 }
 
 
-/**
- * msm_spi_clk_max_rate: finds the nearest lower rate for a clk
- * @clk the clock for which to find nearest lower rate
- * @rate clock frequency in Hz
- * @return nearest lower rate or negative error value
- *
- * Public clock API extends clk_round_rate which is a ceiling function. This
- * function is a floor function implemented as a binary search using the
- * ceiling function.
- */
 static long msm_spi_clk_max_rate(struct clk *clk, unsigned long rate)
 {
 	long lowest_available, nearest_low, step_size, cur;
@@ -190,7 +176,7 @@ static long msm_spi_clk_max_rate(struct clk *clk, unsigned long rate)
 	if (cur == rate)
 		return rate;
 
-	/* if we got here then: cur > rate */
+	
 	lowest_available =  clk_round_rate(clk, 0);
 	if (lowest_available > rate)
 		return -EINVAL;
@@ -206,10 +192,6 @@ static long msm_spi_clk_max_rate(struct clk *clk, unsigned long rate)
 		if ((cur < rate) && (cur > nearest_low))
 			nearest_low = cur;
 
-		/*
-		 * if we stepped too far, then start stepping in the other
-		 * direction with half the step size
-		 */
 		if (((cur > rate) && (step_direction > 0))
 		 || ((cur < rate) && (step_direction < 0))) {
 			step_direction = -step_direction;
@@ -264,11 +246,6 @@ static void msm_spi_clk_path_teardown(struct msm_spi *dd)
 	}
 }
 
-/**
- * msm_spi_clk_path_init_structs: internal impl detail of msm_spi_clk_path_init
- *
- * allocates and initilizes the bus scaling vectors.
- */
 static int msm_spi_clk_path_init_structs(struct msm_spi *dd)
 {
 	struct msm_bus_vectors *paths    = NULL;
@@ -340,18 +317,6 @@ path_init_err:
 	return -ENOMEM;
 }
 
-/**
- * msm_spi_clk_path_postponed_register: reg with bus-scaling after it is probed
- *
- * @return zero on success
- *
- * Workaround: SPI driver may be probed before the bus scaling driver. Calling
- * msm_bus_scale_register_client() will fail if the bus scaling driver is not
- * ready yet. Thus, this function should be called not from probe but from a
- * later context. Also, this function may be called more then once before
- * register succeed. At this case only one error message will be logged. At boot
- * time all clocks are on, so earlier SPI transactions should succeed.
- */
 static int msm_spi_clk_path_postponed_register(struct msm_spi *dd)
 {
 	dd->clk_path_vote.client_hdl = msm_bus_scale_register_client(
@@ -359,7 +324,7 @@ static int msm_spi_clk_path_postponed_register(struct msm_spi *dd)
 
 	if (dd->clk_path_vote.client_hdl) {
 		if (dd->clk_path_vote.reg_err) {
-			/* log a success message if an error msg was logged */
+			
 			dd->clk_path_vote.reg_err = false;
 			dev_info(dd->dev,
 				"msm_bus_scale_register_client(mstr-id:%d "
@@ -371,7 +336,7 @@ static int msm_spi_clk_path_postponed_register(struct msm_spi *dd)
 		if (dd->pdata->active_only)
 			msm_spi_clk_path_vote(dd);
 	} else {
-		/* guard to log only one error on multiple failure */
+		
 		if (!dd->clk_path_vote.reg_err) {
 			dd->clk_path_vote.reg_err = true;
 
@@ -387,20 +352,16 @@ static int msm_spi_clk_path_postponed_register(struct msm_spi *dd)
 
 static void msm_spi_clk_path_init(struct msm_spi *dd)
 {
-	/*
-	 * bail out if path voting is diabled (master_id == 0) or if it is
-	 * already registered (client_hdl != 0)
-	 */
 	if (!dd->pdata->master_id || dd->clk_path_vote.client_hdl)
 		return;
 
-	/* if fail once then try no more */
+	
 	if (!dd->clk_path_vote.pdata && msm_spi_clk_path_init_structs(dd)) {
 		dd->pdata->master_id = 0;
 		return;
 	};
 
-	/* on failure try again later */
+	
 	if (msm_spi_clk_path_postponed_register(dd))
 		return;
 
@@ -417,13 +378,13 @@ static int msm_spi_calculate_size(int *fifo_size,
 
 	switch (block) {
 	case 0:
-		words = 1; /* 4 bytes */
+		words = 1; 
 		break;
 	case 1:
-		words = 4; /* 16 bytes */
+		words = 4; 
 		break;
 	case 2:
-		words = 8; /* 32 bytes */
+		words = 8; 
 		break;
 	default:
 		return -EINVAL;
@@ -446,7 +407,7 @@ static int msm_spi_calculate_size(int *fifo_size,
 		return -EINVAL;
 	}
 
-	*block_size = words * sizeof(u32); /* in bytes */
+	*block_size = words * sizeof(u32); 
 	return 0;
 }
 
@@ -485,7 +446,7 @@ static void __init msm_spi_calculate_fifo_size(struct msm_spi *dd)
 		goto fifo_size_err;
 	}
 	if (dd->qup_ver == SPI_QUP_VERSION_NONE) {
-		/* DM mode is not available for this block size */
+		
 		if (dd->input_block_size == 4 || dd->output_block_size == 4)
 			dd->use_dma = 0;
 
@@ -515,12 +476,6 @@ static void msm_spi_read_word_from_fifo(struct msm_spi *dd)
 	if (dd->read_buf) {
 		for (i = 0; (i < dd->bytes_per_word) &&
 			     dd->rx_bytes_remaining; i++) {
-			/* The data format depends on bytes_per_word:
-			   4 bytes: 0x12345678
-			   3 bytes: 0x00123456
-			   2 bytes: 0x00001234
-			   1 byte : 0x00000012
-			*/
 			shift = 8 * (dd->bytes_per_word - i - 1);
 			*dd->read_buf++ = (data_in & (0xFF << shift)) >> shift;
 			dd->rx_bytes_remaining--;
@@ -561,10 +516,6 @@ static inline bool msm_spi_is_valid_state(struct msm_spi *dd)
 
 static inline void msm_spi_udelay(unsigned long delay_usecs)
 {
-	/*
-	 * For smaller values of delay, context switch time
-	 * would negate the usage of usleep
-	 */
 	if (delay_usecs > 20)
 		usleep_range(delay_usecs, delay_usecs);
 	else if (delay_usecs)
@@ -578,20 +529,11 @@ static inline int msm_spi_wait_valid(struct msm_spi *dd)
 
 	if (dd->clock_speed == 0)
 		return -EINVAL;
-	/*
-	 * Based on the SPI clock speed, sufficient time
-	 * should be given for the SPI state transition
-	 * to occur
-	 */
 	delay = (10 * USEC_PER_SEC) / dd->clock_speed;
-	/*
-	 * For small delay values, the default timeout would
-	 * be one jiffy
-	 */
 	if (delay < SPI_DELAY_THRESHOLD)
 		delay = SPI_DELAY_THRESHOLD;
 
-	/* Adding one to round off to the nearest jiffy */
+	
 	timeout = jiffies + msecs_to_jiffies(delay * SPI_DEFAULT_TIMEOUT) + 1;
 	while (!msm_spi_is_valid_state(dd)) {
 		if (time_after(jiffies, timeout)) {
@@ -616,8 +558,6 @@ static inline int msm_spi_set_state(struct msm_spi *dd,
 	if (msm_spi_wait_valid(dd))
 		return -EIO;
 	cur_state = readl_relaxed(dd->base + SPI_STATE);
-	/* Per spec:
-	   For PAUSE_STATE to RESET_STATE, two writes of (10) are required */
 	if (((cur_state & SPI_OP_STATE) == SPI_OP_STATE_PAUSE) &&
 			(state == SPI_OP_STATE_RESET)) {
 		writel_relaxed(SPI_OP_STATE_CLEAR_BITS, dd->base + SPI_STATE);
@@ -632,9 +572,6 @@ static inline int msm_spi_set_state(struct msm_spi *dd,
 	return 0;
 }
 
-/**
- * msm_spi_set_bpw_and_no_io_flags: configure N, and no-input/no-output flags
- */
 static inline void
 msm_spi_set_bpw_and_no_io_flags(struct msm_spi *dd, u32 *config, int n)
 {
@@ -652,11 +589,6 @@ msm_spi_set_bpw_and_no_io_flags(struct msm_spi *dd, u32 *config, int n)
 	}
 }
 
-/**
- * msm_spi_calc_spi_config_loopback_and_input_first: Calculate the values that
- * should be updated into SPI_CONFIG's LOOPBACK and INPUT_FIRST flags
- * @return calculatd value for SPI_CONFIG
- */
 static u32
 msm_spi_calc_spi_config_loopback_and_input_first(u32 spi_config, u8 mode)
 {
@@ -673,10 +605,6 @@ msm_spi_calc_spi_config_loopback_and_input_first(u32 spi_config, u8 mode)
 	return spi_config;
 }
 
-/**
- * msm_spi_set_spi_config: prepares register SPI_CONFIG to process the
- * next transfer
- */
 static void msm_spi_set_spi_config(struct msm_spi *dd, int bpw)
 {
 	u32 spi_config = readl_relaxed(dd->base + SPI_CONFIG);
@@ -684,13 +612,9 @@ static void msm_spi_set_spi_config(struct msm_spi *dd, int bpw)
 					spi_config, dd->cur_msg->spi->mode);
 
 	if (dd->qup_ver == SPI_QUP_VERSION_NONE)
-		/* flags removed from SPI_CONFIG in QUP version-2 */
+		
 		msm_spi_set_bpw_and_no_io_flags(dd, &spi_config, bpw-1);
 
-	/*
-	 * HS_MODE improves signal stability for spi-clk high rates
-	 * but is invalid in LOOPBACK mode.
-	 */
 	if ((dd->clock_speed >= SPI_HS_MIN_RATE) &&
 	   !(dd->cur_msg->spi->mode & SPI_LOOP))
 		spi_config |= SPI_CFG_HS_MODE;
@@ -700,20 +624,8 @@ static void msm_spi_set_spi_config(struct msm_spi *dd, int bpw)
 	writel_relaxed(spi_config, dd->base + SPI_CONFIG);
 }
 
-/**
- * msm_spi_set_mx_counts: set SPI_MX_INPUT_COUNT and SPI_MX_INPUT_COUNT
- * for FIFO-mode. set SPI_MX_INPUT_COUNT and SPI_MX_OUTPUT_COUNT for
- * BAM and DMOV modes.
- * @n_words The number of reads/writes of size N.
- */
 static void msm_spi_set_mx_counts(struct msm_spi *dd, u32 n_words)
 {
-	/*
-	 * n_words cannot exceed fifo_size, and only one READ COUNT
-	 * interrupt is generated per transaction, so for transactions
-	 * larger than fifo size READ COUNT must be disabled.
-	 * For those transactions we usually move to Data Mover mode.
-	 */
 	if (dd->mode == SPI_FIFO_MODE) {
 		if (n_words <= dd->input_fifo_size) {
 			writel_relaxed(n_words,
@@ -724,21 +636,15 @@ static void msm_spi_set_mx_counts(struct msm_spi *dd, u32 n_words)
 			msm_spi_set_write_count(dd, 0);
 		}
 		if (dd->qup_ver == SPI_QUP_VERSION_BFAM) {
-			/* must be zero for FIFO */
+			
 			writel_relaxed(0, dd->base + SPI_MX_INPUT_COUNT);
 			writel_relaxed(0, dd->base + SPI_MX_OUTPUT_COUNT);
 		}
 	} else {
-		/* must be zero for BAM and DMOV */
+		
 		writel_relaxed(0, dd->base + SPI_MX_READ_COUNT);
 		msm_spi_set_write_count(dd, 0);
 
-		/*
-		 * for DMA transfers, both QUP_MX_INPUT_COUNT and
-		 * QUP_MX_OUTPUT_COUNT must be zero to all cases but one.
-		 * That case is a non-balanced transfer when there is
-		 * only a read_buf.
-		 */
 		if (dd->qup_ver == SPI_QUP_VERSION_BFAM) {
 			if (dd->write_buf)
 				writel_relaxed(0,
@@ -829,17 +735,11 @@ msm_spi_bam_process_rx(struct msm_spi *dd, u32 *bytes_to_send, u32 desc_cnt)
 	rem_bc = dd->cur_rx_transfer->len - dd->bam.curr_rx_bytes_recvd;
 	data_xfr_size = (rem_bc < *bytes_to_send) ? rem_bc : *bytes_to_send;
 
-	/*
-	 * set flags for last descriptor only
-	 */
 	if ((desc_cnt == 1)
 		|| (*bytes_to_send == data_xfr_size))
 		prod_flags = (dd->write_buf)
 			? 0 : (SPS_IOVEC_FLAG_EOT | SPS_IOVEC_FLAG_NWD);
 
-	/*
-	 * enqueue read buffer in BAM
-	 */
 	ret = sps_transfer_one(dd->bam.prod.handle,
 			dd->cur_rx_transfer->rx_dma
 				+ dd->bam.curr_rx_bytes_recvd,
@@ -867,16 +767,10 @@ msm_spi_bam_process_tx(struct msm_spi *dd, u32 *bytes_to_send, u32 desc_cnt)
 	rem_bc = dd->cur_tx_transfer->len - dd->bam.curr_tx_bytes_sent;
 	data_xfr_size = (rem_bc < *bytes_to_send) ? rem_bc : *bytes_to_send;
 
-	/*
-	 * set flags for last descriptor only
-	*/
 	if ((desc_cnt == 1)
 		|| (*bytes_to_send == data_xfr_size))
 		cons_flags = SPS_IOVEC_FLAG_EOT | SPS_IOVEC_FLAG_NWD;
 
-	/*
-	 * enqueue write buffer in BAM
-	 */
 	ret = sps_transfer_one(dd->bam.cons.handle,
 			dd->cur_tx_transfer->tx_dma
 				+ dd->bam.curr_tx_bytes_sent,
@@ -895,14 +789,6 @@ msm_spi_bam_process_tx(struct msm_spi *dd, u32 *bytes_to_send, u32 desc_cnt)
 }
 
 
-/**
- * msm_spi_bam_begin_transfer: transfer dd->tx_bytes_remaining bytes
- * using BAM.
- * @brief BAM can transfer SPI_MAX_TRFR_BTWN_RESETS byte at a single
- * transfer. Between transfer QUP must change to reset state. A loop is
- * issuing a single BAM transfer at a time.
- * @return zero on success
- */
 static int
 msm_spi_bam_begin_transfer(struct msm_spi *dd)
 {
@@ -1009,22 +895,15 @@ static void msm_spi_setup_dm_transfer(struct msm_spi *dd)
 	atomic_set(&dd->rx_irq_called, 0);
 	atomic_set(&dd->tx_irq_called, 0);
 	if (dd->write_len && !dd->read_len) {
-		/* WR-WR transfer */
+		
 		bytes_sent = dd->cur_msg_len - dd->tx_bytes_remaining;
 		dd->write_buf = dd->temp_buf;
 	} else {
 		bytes_sent = dd->cur_transfer->len - dd->tx_bytes_remaining;
-		/* For WR-RD transfer, bytes_sent can be negative */
+		
 		if (bytes_sent < 0)
 			bytes_sent = 0;
 	}
-	/* We'll send in chunks of SPI_MAX_LEN if larger than
-	 * 4K bytes for targets that have only 12 bits in
-	 * QUP_MAX_OUTPUT_CNT register. If the target supports
-	 * more than 12bits then we send the data in chunks of
-	 * the infinite_mode value that is defined in the
-	 * corresponding board file.
-	 */
 	if (!dd->pdata->infinite_mode)
 		dd->max_trfr_len = SPI_MAX_LEN;
 	else
@@ -1043,7 +922,7 @@ static void msm_spi_setup_dm_transfer(struct msm_spi *dd)
 	dd->mode = SPI_DMOV_MODE;
 
 	if (tx_num_rows) {
-		/* src in 16 MSB, dst in 16 LSB */
+		
 		box = &dd->tx_dmov_cmd->box;
 		box->src_row_addr = dd->cur_transfer->tx_dma + bytes_sent;
 		box->src_dst_len
@@ -1061,7 +940,7 @@ static void msm_spi_setup_dm_transfer(struct msm_spi *dd)
 	}
 
 	if (rx_num_rows) {
-		/* src in 16 MSB, dst in 16 LSB */
+		
 		box = &dd->rx_dmov_cmd->box;
 		box->dst_row_addr = dd->cur_transfer->rx_dma + bytes_sent;
 		box->src_dst_len
@@ -1109,9 +988,6 @@ static void msm_spi_setup_dm_transfer(struct msm_spi *dd)
 		rx_cmd->len = dd->input_burst_size;
 	}
 
-	/* This also takes care of the padding dummy buf
-	   Since this is set to the correct length, the
-	   dummy bytes won't be actually sent */
 	if (dd->multi_xfr) {
 		u32 write_transfers = 0;
 		u32 read_transfers = 0;
@@ -1123,12 +999,6 @@ static void msm_spi_setup_dm_transfer(struct msm_spi *dd)
 				       dd->base + SPI_MX_OUTPUT_COUNT);
 		}
 		if (dd->read_len > 0) {
-			/*
-			 *  The read following a write transfer must take
-			 *  into account, that the bytes pertaining to
-			 *  the write transfer needs to be discarded,
-			 *  before the actual read begins.
-			 */
 			read_transfers = DIV_ROUND_UP(dd->read_len +
 						      dd->write_len,
 						      dd->bytes_per_word);
@@ -1154,23 +1024,11 @@ static void msm_spi_enqueue_dm_commands(struct msm_spi *dd)
 		msm_dmov_enqueue_cmd(dd->rx_dma_chan, &dd->rx_hdr);
 }
 
-/* SPI core on targets that does not support infinite mode can send
-   maximum of 4K transfers or 64K transfers depending up on size of
-   MAX_OUTPUT_COUNT register, Therefore, we are sending in several
-   chunks. Upon completion we send the next chunk, or complete the
-   transfer if everything is finished. On targets that support
-   infinite mode, we send all the bytes in as single chunk.
-*/
 static int msm_spi_dm_send_next(struct msm_spi *dd)
 {
-	/* By now we should have sent all the bytes in FIFO mode,
-	 * However to make things right, we'll check anyway.
-	 */
 	if (dd->mode != SPI_DMOV_MODE)
 		return 0;
 
-	/* On targets which does not support infinite mode,
-	   We need to send more chunks, if we sent max last time  */
 	if (dd->tx_bytes_remaining > dd->max_trfr_len) {
 		dd->tx_bytes_remaining -= dd->max_trfr_len;
 		if (msm_spi_set_state(dd, SPI_OP_STATE_RESET))
@@ -1216,11 +1074,10 @@ static inline void msm_spi_ack_transfer(struct msm_spi *dd)
 	writel_relaxed(SPI_OP_MAX_INPUT_DONE_FLAG |
 		       SPI_OP_MAX_OUTPUT_DONE_FLAG,
 		       dd->base + SPI_OPERATIONAL);
-	/* Ensure done flag was cleared before proceeding further */
+	
 	mb();
 }
 
-/* Figure which irq occured and call the relevant functions */
 static inline irqreturn_t msm_spi_qup_irq(int irq, void *dev_id)
 {
 	u32 op, ret = IRQ_NONE;
@@ -1240,10 +1097,6 @@ static inline irqreturn_t msm_spi_qup_irq(int irq, void *dev_id)
 	if (op & SPI_OP_INPUT_SERVICE_FLAG) {
 		writel_relaxed(SPI_OP_INPUT_SERVICE_FLAG,
 			       dd->base + SPI_OPERATIONAL);
-		/*
-		 * Ensure service flag was cleared before further
-		 * processing of interrupt.
-		 */
 		mb();
 		ret |= msm_spi_input_irq(irq, dev_id);
 	}
@@ -1251,10 +1104,6 @@ static inline irqreturn_t msm_spi_qup_irq(int irq, void *dev_id)
 	if (op & SPI_OP_OUTPUT_SERVICE_FLAG) {
 		writel_relaxed(SPI_OP_OUTPUT_SERVICE_FLAG,
 			       dd->base + SPI_OPERATIONAL);
-		/*
-		 * Ensure service flag was cleared before further
-		 * processing of interrupt.
-		 */
 		mb();
 		ret |= msm_spi_output_irq(irq, dev_id);
 	}
@@ -1363,8 +1212,6 @@ static irqreturn_t msm_spi_output_irq(int irq, void *dev_id)
 		return IRQ_HANDLED;
 
 	if (dd->mode == SPI_DMOV_MODE) {
-		/* TX_ONLY transaction is handled here
-		   This is the only place we send complete at tx and not rx */
 		if (dd->read_buf == NULL &&
 		    readl_relaxed(dd->base + SPI_OPERATIONAL) &
 		    SPI_OP_MAX_OUTPUT_DONE_FLAG) {
@@ -1377,7 +1224,7 @@ static irqreturn_t msm_spi_output_irq(int irq, void *dev_id)
 		return IRQ_NONE;
 	}
 
-	/* Output FIFO is empty. Transmit any outstanding write data. */
+	
 	if (dd->mode == SPI_FIFO_MODE)
 		msm_spi_write_rmn_to_fifo(dd);
 
@@ -1404,19 +1251,11 @@ static irqreturn_t msm_spi_error_irq(int irq, void *dev_id)
 		dev_warn(master->dev.parent, "SPI clock underrun error\n");
 	msm_spi_clear_error_flags(dd);
 	msm_spi_ack_clk_err(dd);
-	/* Ensure clearing of QUP_ERROR_FLAGS was completed */
+	
 	mb();
 	return IRQ_HANDLED;
 }
 
-/**
- * msm_spi_dmov_map_buffers: prepares buffer for DMA transfer
- * @return zero on success or negative error code
- *
- * calls dma_map_single() on the read/write buffers, effectively invalidating
- * their cash entries. for For WR-WR and WR-RD transfers, allocates temporary
- * buffer and copy the data to/from the client buffers
- */
 static int msm_spi_dmov_map_buffers(struct msm_spi *dd)
 {
 	struct device *dev;
@@ -1432,10 +1271,6 @@ static int msm_spi_dmov_map_buffers(struct msm_spi *dd)
 	rx_buf = first_xfr->rx_buf;
 	tx_len = rx_len = first_xfr->len;
 
-	/*
-	 * For WR-WR and WR-RD transfers, we allocate our own temporary
-	 * buffer and copy the data to/from the client buffers.
-	 */
 	if (!dd->qup_ver && dd->multi_xfr) {
 		dd->temp_buf = kzalloc(dd->cur_msg_len,
 				       GFP_KERNEL | __GFP_DMA);
@@ -1507,7 +1342,7 @@ static int msm_spi_bam_map_buffers(struct msm_spi *dd)
 	u32 tx_len, rx_len;
 	int num_xfrs_grped = dd->num_xfrs_grped;
 
-	dev = &dd->cur_msg->spi->dev;
+	dev = dd->dev;
 	first_xfr = dd->cur_transfer;
 
 	do {
@@ -1517,7 +1352,7 @@ static int msm_spi_bam_map_buffers(struct msm_spi *dd)
 		if (tx_buf != NULL) {
 			first_xfr->tx_dma = dma_map_single(dev, tx_buf,
 							tx_len, DMA_TO_DEVICE);
-			if (dma_mapping_error(NULL, first_xfr->tx_dma)) {
+			if (dma_mapping_error(dev, first_xfr->tx_dma)) {
 				ret = -ENOMEM;
 				goto error;
 			}
@@ -1526,9 +1361,9 @@ static int msm_spi_bam_map_buffers(struct msm_spi *dd)
 		if (rx_buf != NULL) {
 			first_xfr->rx_dma = dma_map_single(dev, rx_buf,	rx_len,
 							DMA_FROM_DEVICE);
-			if (dma_mapping_error(NULL, first_xfr->rx_dma)) {
+			if (dma_mapping_error(dev, first_xfr->rx_dma)) {
 				if (tx_buf != NULL)
-					dma_unmap_single(NULL,
+					dma_unmap_single(dev,
 							first_xfr->tx_dma,
 							tx_len, DMA_TO_DEVICE);
 				ret = -ENOMEM;
@@ -1620,7 +1455,7 @@ static void msm_spi_dmov_unmap_buffers(struct msm_spi *dd)
 	}
 
 unmap_end:
-	/* If we padded the transfer, we copy it from the padding buf */
+	
 	if (dd->rx_unaligned_len && dd->read_buf) {
 		offset = dd->cur_transfer->len - dd->rx_unaligned_len;
 		dma_coherent_post_ops();
@@ -1641,7 +1476,7 @@ static void msm_spi_bam_unmap_buffers(struct msm_spi *dd)
 	dev = &dd->cur_msg->spi->dev;
 	first_xfr = dd->cur_transfer;
 
-	 /* mapped by client */
+	 
 	if (dd->cur_msg->is_dma_mapped)
 		return;
 
@@ -1675,26 +1510,13 @@ static inline void msm_spi_dma_unmap_buffers(struct msm_spi *dd)
 		msm_spi_bam_unmap_buffers(dd);
 }
 
-/**
- * msm_spi_use_dma - decides whether to use Data-Mover or BAM for
- * the given transfer
- * @dd:       device
- * @tr:       transfer
- *
- * Start using DMA if:
- * 1. Is supported by HW
- * 2. Is not diabled by platfrom data
- * 3. Transfer size is greater than 3*block size.
- * 4. Buffers are aligned to cache line.
- * 5. Bytes-per-word is 8,16 or 32.
-  */
 static inline bool
 msm_spi_use_dma(struct msm_spi *dd, struct spi_transfer *tr, u8 bpw)
 {
 	if (!dd->use_dma)
 		return false;
 
-	/* check constraints from platform data */
+	
 	if ((dd->qup_ver == SPI_QUP_VERSION_BFAM) && !dd->pdata->use_bam)
 		return false;
 
@@ -1725,10 +1547,6 @@ msm_spi_use_dma(struct msm_spi *dd, struct spi_transfer *tr, u8 bpw)
 	return true;
 }
 
-/**
- * msm_spi_set_transfer_mode: Chooses optimal transfer mode. Sets dd->mode and
- * prepares to process a transfer.
- */
 static void
 msm_spi_set_transfer_mode(struct msm_spi *dd, u8 bpw, u32 read_count)
 {
@@ -1751,28 +1569,20 @@ msm_spi_set_transfer_mode(struct msm_spi *dd, u8 bpw, u32 read_count)
 	}
 }
 
-/**
- * msm_spi_set_qup_io_modes: prepares register QUP_IO_MODES to process a
- * transfer
- */
 static void msm_spi_set_qup_io_modes(struct msm_spi *dd)
 {
 	u32 spi_iom;
 	spi_iom = readl_relaxed(dd->base + SPI_IO_MODES);
-	/* Set input and output transfer mode: FIFO, DMOV, or BAM */
+	
 	spi_iom &= ~(SPI_IO_M_INPUT_MODE | SPI_IO_M_OUTPUT_MODE);
 	spi_iom = (spi_iom | (dd->mode << OUTPUT_MODE_SHIFT));
 	spi_iom = (spi_iom | (dd->mode << INPUT_MODE_SHIFT));
-	/* Turn on packing for data mover */
+	
 	if ((dd->mode == SPI_DMOV_MODE) || (dd->mode == SPI_BAM_MODE))
 		spi_iom |= SPI_IO_M_PACK_EN | SPI_IO_M_UNPACK_EN;
 	else
 		spi_iom &= ~(SPI_IO_M_PACK_EN | SPI_IO_M_UNPACK_EN);
 
-	/*if (dd->mode == SPI_BAM_MODE) {
-		spi_iom |= SPI_IO_C_NO_TRI_STATE;
-		spi_iom &= ~(SPI_IO_C_CS_SELECT | SPI_IO_C_CS_N_POLARITY);
-	}*/
 	writel_relaxed(spi_iom, dd->base + SPI_IO_MODES);
 }
 
@@ -1785,11 +1595,6 @@ static u32 msm_spi_calc_spi_ioc_clk_polarity(u32 spi_ioc, u8 mode)
 	return spi_ioc;
 }
 
-/**
- * msm_spi_set_spi_io_control: prepares register SPI_IO_CONTROL to process the
- * next transfer
- * @return the new set value of SPI_IO_CONTROL
- */
 static u32 msm_spi_set_spi_io_control(struct msm_spi *dd)
 {
 	u32 spi_ioc, spi_ioc_orig, chip_select;
@@ -1798,7 +1603,7 @@ static u32 msm_spi_set_spi_io_control(struct msm_spi *dd)
 	spi_ioc_orig = spi_ioc;
 	spi_ioc = msm_spi_calc_spi_ioc_clk_polarity(spi_ioc
 						, dd->cur_msg->spi->mode);
-	/* Set chip-select */
+	
 	chip_select = dd->cur_msg->spi->chip_select << 2;
 	if ((spi_ioc & SPI_IO_C_CS_SELECT) != chip_select)
 		spi_ioc = (spi_ioc & ~SPI_IO_C_CS_SELECT) | chip_select;
@@ -1811,14 +1616,8 @@ static u32 msm_spi_set_spi_io_control(struct msm_spi *dd)
 	return spi_ioc;
 }
 
-/**
- * msm_spi_set_qup_op_mask: prepares register QUP_OPERATIONAL_MASK to process
- * the next transfer
- */
 static void msm_spi_set_qup_op_mask(struct msm_spi *dd)
 {
-	/* mask INPUT and OUTPUT service flags in to prevent IRQs on FIFO status
-	 * change in BAM mode */
 	u32 mask = (dd->mode == SPI_BAM_MODE) ?
 		QUP_OP_MASK_OUTPUT_SERVICE_FLAG | QUP_OP_MASK_INPUT_SERVICE_FLAG
 		: 0;
@@ -1833,6 +1632,7 @@ static void msm_spi_process_transfer(struct msm_spi *dd)
 	u32 timeout;
 	u32 spi_ioc;
 	u32 int_loopback = 0;
+	int ret;
 
 	dd->tx_bytes_remaining = dd->cur_msg_len;
 	dd->rx_bytes_remaining = dd->cur_msg_len;
@@ -1885,10 +1685,12 @@ static void msm_spi_process_transfer(struct msm_spi *dd)
 	msm_spi_set_transfer_mode(dd, bpw, read_count);
 	msm_spi_set_mx_counts(dd, read_count);
 	if (dd->mode == SPI_DMOV_MODE) {
-		if (msm_spi_dma_map_buffers(dd) < 0) {
+		ret = msm_spi_dma_map_buffers(dd);
+		if (ret < 0) {
 			pr_err("Mapping DMA buffers\n");
+			dd->cur_msg->status = ret;
 			return;
-			}
+		}
 	} else if (dd->mode == SPI_BAM_MODE) {
 			if (msm_spi_dma_map_buffers(dd) < 0) {
 				pr_err("Mapping DMA buffers\n");
@@ -1905,10 +1707,6 @@ static void msm_spi_process_transfer(struct msm_spi *dd)
 		msm_spi_setup_dm_transfer(dd);
 		msm_spi_enqueue_dm_commands(dd);
 	}
-	/* The output fifo interrupt handler will handle all writes after
-	   the first. Restricting this to one write avoids contention
-	   issues and race conditions between this thread and the int handler
-	*/
 	else if (dd->mode == SPI_FIFO_MODE) {
 		if (msm_spi_prepare_for_write(dd))
 			goto transfer_end;
@@ -1937,7 +1735,7 @@ static void msm_spi_process_transfer(struct msm_spi *dd)
 			goto transfer_end;
 		}
 
-	/* Assume success, this might change later upon transaction result */
+	
 	dd->cur_msg->status = 0;
 	do {
 		if (!wait_for_completion_timeout(&dd->transfer_complete,
@@ -1996,10 +1794,6 @@ static void get_transfer_length(struct msm_spi *dd)
 		tr = list_entry(first_xfr->transfer_list.next,
 				struct spi_transfer,
 				transfer_list);
-		/*
-		 * We update dd->read_len and dd->write_len only
-		 * for WR-WR and WR-RD transfers.
-		 */
 		if ((first_xfr->tx_buf) && (!first_xfr->rx_buf)) {
 			if (((tr->tx_buf) && (!tr->rx_buf)) ||
 			    ((!tr->tx_buf) && (tr->rx_buf))) {
@@ -2029,8 +1823,8 @@ static inline void write_force_cs(struct msm_spi *dd, bool set_flag)
 
 static inline int combine_transfers(struct msm_spi *dd)
 {
-	struct spi_transfer *t = dd->cur_transfer;
-	struct spi_transfer *nxt;
+    struct spi_transfer *t = dd->cur_transfer;
+    struct spi_transfer *nxt;
 	int xfrs_grped = 1;
 	dd->xfrs_delay_usec = 0;
 
@@ -2043,30 +1837,30 @@ static inline int combine_transfers(struct msm_spi *dd)
 	if (dd->cur_transfer->rx_buf)
 		dd->bam.bam_rx_len += dd->cur_transfer->len;
 
-	while (t->transfer_list.next != &dd->cur_msg->transfers) {
-		nxt = list_entry(t->transfer_list.next,
-				 struct spi_transfer,
-				 transfer_list);
-		if (t->cs_change != nxt->cs_change)
-			return xfrs_grped;
-		if (t->delay_usecs) {
-			dd->xfrs_delay_usec = t->delay_usecs;
-			dev_info(dd->dev, "SPI slave requests delay per txn :%d usecs",
-					t->delay_usecs);
-			return xfrs_grped;
-		}
-		if (nxt->tx_buf)
-			dd->bam.bam_tx_len += nxt->len;
-		if (nxt->rx_buf)
-			dd->bam.bam_rx_len += nxt->len;
+       while (t->transfer_list.next != &dd->cur_msg->transfers) {
+               nxt = list_entry(t->transfer_list.next,
+                                struct spi_transfer,
+                                transfer_list);
+               if (t->cs_change != nxt->cs_change)
+                       return xfrs_grped;
+               if (t->delay_usecs) {
+                       dd->xfrs_delay_usec = t->delay_usecs;
+                       dev_info(dd->dev, "SPI slave requests delay per txn :%d usecs",
+                                       t->delay_usecs);
+                       return xfrs_grped;
+               }
+               if (nxt->tx_buf)
+                       dd->bam.bam_tx_len += nxt->len;
+               if (nxt->rx_buf)
+                       dd->bam.bam_rx_len += nxt->len;
 
-		dd->cur_msg_len += nxt->len;
-		xfrs_grped++;
-		t = nxt;
-	}
+               dd->cur_msg_len += nxt->len;
+               xfrs_grped++;
+               t = nxt;
+       }
 
-	if (1 == xfrs_grped)
-		dd->xfrs_delay_usec = dd->cur_transfer->delay_usecs;
+       if (1 == xfrs_grped)
+	        dd->xfrs_delay_usec = dd->cur_transfer->delay_usecs;
 
 	return xfrs_grped;
 }
@@ -2093,10 +1887,6 @@ static void msm_spi_process_message(struct msm_spi *dd)
 		if (dd->qup_ver)
 			write_force_cs(dd, 0);
 
-		/*
-		 * Handling of multi-transfers.
-		 * FIFO mode is used by default
-		 */
 		list_for_each_entry(dd->cur_transfer,
 					&dd->cur_msg->transfers,
 					transfer_list) {
@@ -2121,13 +1911,10 @@ static void msm_spi_process_message(struct msm_spi *dd)
 			xfrs_grped--;
 		}
 	} else {
-		/* Handling of a single transfer or
-		 * WR-WR or WR-RD transfers
-		 */
 		if ((!dd->cur_msg->is_dma_mapped) &&
 			(msm_spi_use_dma(dd, dd->cur_transfer,
 				dd->cur_transfer->bits_per_word))) {
-			/* Mapping of DMA buffers */
+			
 			int ret = msm_spi_dma_map_buffers(dd);
 			if (ret < 0) {
 				dd->cur_msg->status = ret;
@@ -2147,13 +1934,63 @@ error:
 	msm_spi_free_cs_gpio(dd);
 }
 
-/**
- * msm_spi_transfer_one_message: To process one spi message at a time
- * @master: spi master controller reference
- * @msg: one multi-segment SPI transaction
- * @return zero on success or negative error value
- *
- */
+static void reset_core(struct msm_spi *dd)
+{
+	msm_spi_register_init(dd);
+	msm_spi_enable_error_flags(dd);
+
+	writel_relaxed(SPI_IO_C_NO_TRI_STATE, dd->base + SPI_IO_CONTROL);
+	msm_spi_set_state(dd, SPI_OP_STATE_RESET);
+}
+
+static void put_local_resources(struct msm_spi *dd)
+{
+	msm_spi_disable_irqs(dd);
+	clk_disable_unprepare(dd->clk);
+	clk_disable_unprepare(dd->pclk);
+
+	
+	if (dd->pdata && dd->pdata->gpio_release)
+		dd->pdata->gpio_release();
+
+	msm_spi_free_gpios(dd);
+}
+
+static int get_local_resources(struct msm_spi *dd)
+{
+	int ret = -EINVAL;
+	
+	if (dd->pdata->gpio_config) {
+		ret = dd->pdata->gpio_config();
+		if (ret) {
+			dev_err(dd->dev,
+					"%s: error configuring GPIOs\n",
+					__func__);
+			return ret;
+		}
+	}
+
+	ret = msm_spi_request_gpios(dd);
+	if (ret)
+		return ret;
+
+	ret = clk_prepare_enable(dd->clk);
+	if (ret)
+		goto clk0_err;
+	ret = clk_prepare_enable(dd->pclk);
+	if (ret)
+		goto clk1_err;
+	msm_spi_enable_irqs(dd);
+
+	return 0;
+
+clk1_err:
+	clk_disable_unprepare(dd->clk);
+clk0_err:
+	msm_spi_free_gpios(dd);
+	return ret;
+}
+
 static int msm_spi_transfer_one_message(struct spi_master *master,
 					  struct spi_message *msg)
 {
@@ -2168,7 +2005,7 @@ static int msm_spi_transfer_one_message(struct spi_master *master,
 		return -EINVAL;
 
 	list_for_each_entry(tr, &msg->transfers, transfer_list) {
-		/* Check message parameters */
+		
 		if (tr->speed_hz > dd->pdata->max_clock_speed ||
 		    (tr->bits_per_word &&
 		     (tr->bits_per_word < 4 || tr->bits_per_word > 32)) ||
@@ -2178,17 +2015,15 @@ static int msm_spi_transfer_one_message(struct spi_master *master,
 				tr->speed_hz, tr->bits_per_word,
 				tr->tx_buf, tr->rx_buf);
 			status_error = -EINVAL;
-			goto out;
+			msg->status = status_error;
+			spi_finalize_current_message(master);
+			put_local_resources(dd);
+			return 0;
 		}
 	}
 
 	mutex_lock(&dd->core_lock);
 
-	/*
-	 * Counter-part of system-suspend when runtime-pm is not enabled.
-	 * This way, resume can be left empty and device will be put in
-	 * active mode only if client requests anything on the bus
-	 */
 	if (!pm_runtime_enabled(dd->dev))
 		msm_spi_pm_resume_runtime(dd->dev);
 
@@ -2198,6 +2033,20 @@ static int msm_spi_transfer_one_message(struct spi_master *master,
 	spin_lock_irqsave(&dd->queue_lock, flags);
 	dd->transfer_pending = 1;
 	spin_unlock_irqrestore(&dd->queue_lock, flags);
+	if (dd->pdata->is_shared) {
+		if (get_local_resources(dd)) {
+			mutex_unlock(&dd->core_lock);
+			return -EINVAL;
+		}
+
+		reset_core(dd);
+		if (dd->use_dma) {
+			msm_spi_bam_pipe_connect(dd, &dd->bam.prod,
+					&dd->bam.prod.config);
+			msm_spi_bam_pipe_connect(dd, &dd->bam.cons,
+					&dd->bam.cons.config);
+		}
+	}
 
 	if (dd->suspended || !msm_spi_is_valid_state(dd)) {
 		dev_err(dd->dev, "%s: SPI operational state not valid\n",
@@ -2223,17 +2072,22 @@ static int msm_spi_transfer_one_message(struct spi_master *master,
 
 	mutex_unlock(&dd->core_lock);
 
-	/*
-	 * If needed, this can be done after the current message is complete,
-	 * and work can be continued upon resume. No motivation for now.
-	 */
 	if (dd->suspended)
 		wake_up_interruptible(&dd->continue_suspend);
 
-out:
-	dd->cur_msg->status = status_error;
+	if (dd->pdata->is_shared) {
+		if (dd->use_dma) {
+			msm_spi_bam_pipe_disconnect(dd, &dd->bam.prod);
+			msm_spi_bam_pipe_disconnect(dd, &dd->bam.cons);
+		}
+		put_local_resources(dd);
+	}
+	mutex_unlock(&dd->core_lock);
+	if (dd->suspended)
+		wake_up_interruptible(&dd->continue_suspend);
+	status_error = dd->cur_msg->status;
 	spi_finalize_current_message(master);
-	return 0;
+	return status_error;
 }
 
 static int msm_spi_prepare_transfer_hardware(struct spi_master *master)
@@ -2281,7 +2135,7 @@ static int msm_spi_setup(struct spi_device *spi)
 
 	mutex_lock(&dd->core_lock);
 
-	/* Counter-part of system-suspend when runtime-pm is not enabled. */
+	
 	if (!pm_runtime_enabled(dd->dev))
 		msm_spi_pm_resume_runtime(dd->dev);
 
@@ -2290,8 +2144,11 @@ static int msm_spi_setup(struct spi_device *spi)
 		return -EBUSY;
 	}
 
-	if (dd->use_rlock)
-		remote_mutex_lock(&dd->r_lock);
+	if (dd->pdata->is_shared) {
+		rc = get_local_resources(dd);
+		if (rc)
+			goto no_resources;
+	}
 
 	spi_ioc = readl_relaxed(dd->base + SPI_IO_CONTROL);
 	mask = SPI_IO_C_CS_N_POLARITY_0 << spi->chip_select;
@@ -2308,15 +2165,14 @@ static int msm_spi_setup(struct spi_device *spi)
 							spi_config, spi->mode);
 	writel_relaxed(spi_config, dd->base + SPI_CONFIG);
 
-	/* Ensure previous write completed before disabling the clocks */
+	
 	mb();
-
-	if (dd->use_rlock)
-		remote_mutex_unlock(&dd->r_lock);
-
-	/* Counter-part of system-resume when runtime-pm is not enabled. */
+	if (dd->pdata->is_shared)
+		put_local_resources(dd);
+	
 	if (!pm_runtime_enabled(dd->dev))
 		msm_spi_pm_suspend_runtime(dd->dev);
+no_resources:
 
 	mutex_unlock(&dd->core_lock);
 
@@ -2331,7 +2187,7 @@ err_setup_exit:
 static int debugfs_iomem_x32_set(void *data, u64 val)
 {
 	writel_relaxed(val, data);
-	/* Ensure the previous write completed. */
+	
 	mb();
 	return 0;
 }
@@ -2339,7 +2195,7 @@ static int debugfs_iomem_x32_set(void *data, u64 val)
 static int debugfs_iomem_x32_get(void *data, u64 *val)
 {
 	*val = readl_relaxed(data);
-	/* Ensure the previous read completed. */
+	
 	mb();
 	return 0;
 }
@@ -2381,7 +2237,6 @@ static void spi_debugfs_init(struct msm_spi *dd) {}
 static void spi_debugfs_exit(struct msm_spi *dd) {}
 #endif
 
-/* ===Device attributes begin=== */
 static ssize_t show_stats(struct device *dev, struct device_attribute *attr,
 			  char *buf)
 {
@@ -2423,7 +2278,6 @@ static ssize_t show_stats(struct device *dev, struct device_attribute *attr,
 			);
 }
 
-/* Reset statistics on write */
 static ssize_t set_stats(struct device *dev, struct device_attribute *attr,
 			 const char *buf, size_t count)
 {
@@ -2447,14 +2301,7 @@ static struct attribute *dev_attrs[] = {
 static struct attribute_group dev_attr_grp = {
 	.attrs = dev_attrs,
 };
-/* ===Device attributes end=== */
 
-/**
- * spi_dmov_tx_complete_func - DataMover tx completion callback
- *
- * Executed in IRQ context (Data Mover's IRQ) DataMover's
- * spinlock @msm_dmov_lock held.
- */
 static void spi_dmov_tx_complete_func(struct msm_dmov_cmd *cmd,
 				      unsigned int result,
 				      struct msm_dmov_errdata *err)
@@ -2465,7 +2312,7 @@ static void spi_dmov_tx_complete_func(struct msm_dmov_cmd *cmd,
 		pr_err("Invalid DMOV result: rc=0x%08x, cmd = %p", result, cmd);
 		return;
 	}
-	/* restore original context */
+	
 	dd = container_of(cmd, struct msm_spi, tx_hdr);
 	if (result & DMOV_RSLT_DONE) {
 		dd->stat_dmov_tx++;
@@ -2473,17 +2320,12 @@ static void spi_dmov_tx_complete_func(struct msm_dmov_cmd *cmd,
 			return;
 		complete(&dd->transfer_complete);
 	} else {
-		/* Error or flush */
+		
 		if (result & DMOV_RSLT_ERROR) {
 			dev_err(dd->dev, "DMA error (0x%08x)\n", result);
 			dd->stat_dmov_tx_err++;
 		}
 		if (result & DMOV_RSLT_FLUSH) {
-			/*
-			 * Flushing normally happens in process of
-			 * removing, when we are waiting for outstanding
-			 * DMA commands to be flushed.
-			 */
 			dev_info(dd->dev,
 				 "DMA channel flushed (0x%08x)\n", result);
 		}
@@ -2497,12 +2339,6 @@ static void spi_dmov_tx_complete_func(struct msm_dmov_cmd *cmd,
 	}
 }
 
-/**
- * spi_dmov_rx_complete_func - DataMover rx completion callback
- *
- * Executed in IRQ context (Data Mover's IRQ)
- * DataMover's spinlock @msm_dmov_lock held.
- */
 static void spi_dmov_rx_complete_func(struct msm_dmov_cmd *cmd,
 				      unsigned int result,
 				      struct msm_dmov_errdata *err)
@@ -2514,7 +2350,7 @@ static void spi_dmov_rx_complete_func(struct msm_dmov_cmd *cmd,
 		       result, cmd);
 		return;
 	}
-	/* restore original context */
+	
 	dd = container_of(cmd, struct msm_spi, rx_hdr);
 	if (result & DMOV_RSLT_DONE) {
 		dd->stat_dmov_rx++;
@@ -2522,7 +2358,7 @@ static void spi_dmov_rx_complete_func(struct msm_dmov_cmd *cmd,
 			return;
 		complete(&dd->transfer_complete);
 	} else {
-		/** Error or flush  */
+		
 		if (result & DMOV_RSLT_ERROR) {
 			dev_err(dd->dev, "DMA error(0x%08x)\n", result);
 			dd->stat_dmov_rx_err++;
@@ -2642,19 +2478,13 @@ static int msm_spi_bam_pipe_init(struct msm_spi *dd,
 		rc = -ENOMEM;
 		goto config_err;
 	}
-	/* zero descriptor FIFO for convenient debugging of first descs */
+	
 	memset(pipe_conf->desc.base, 0x00, pipe_conf->desc.size);
 
 	pipe->handle = pipe_handle;
-	rc = msm_spi_bam_pipe_connect(dd, pipe, pipe_conf);
-	if (rc)
-		goto connect_err;
 
 	return 0;
 
-connect_err:
-	dma_free_coherent(dd->dev, pipe_conf->desc.size,
-		pipe_conf->desc.base, pipe_conf->desc.phys_base);
 config_err:
 	sps_free_endpoint(pipe_handle);
 
@@ -2726,10 +2556,8 @@ static __init int msm_spi_dmov_init(struct msm_spi *dd)
 	dmov_box *box;
 	u32 cache_line = dma_get_cache_alignment();
 
-	/* Allocate all as one chunk, since all is smaller than page size */
+	
 
-	/* We send NULL device, since it requires coherent_dma_mask id
-	   device definition, we're okay with using system pool */
 	dd->tx_dmov_cmd
 		= dma_alloc_coherent(NULL,
 			get_chunk_size(dd, dd->input_burst_size,
@@ -2738,13 +2566,13 @@ static __init int msm_spi_dmov_init(struct msm_spi *dd)
 	if (dd->tx_dmov_cmd == NULL)
 		return -ENOMEM;
 
-	/* DMA addresses should be 64 bit aligned aligned */
+	
 	dd->rx_dmov_cmd = (struct spi_dmov_cmd *)
 			  ALIGN((size_t)&dd->tx_dmov_cmd[1], DM_BYTE_ALIGN);
 	dd->rx_dmov_cmd_dma = ALIGN(dd->tx_dmov_cmd_dma +
 			      sizeof(struct spi_dmov_cmd), DM_BYTE_ALIGN);
 
-	/* Buffers should be aligned to cache line */
+	
 	dd->tx_padding = (u8 *)ALIGN((size_t)&dd->rx_dmov_cmd[1], cache_line);
 	dd->tx_padding_dma = ALIGN(dd->rx_dmov_cmd_dma +
 			      sizeof(struct spi_dmov_cmd), cache_line);
@@ -2753,7 +2581,7 @@ static __init int msm_spi_dmov_init(struct msm_spi *dd)
 	dd->rx_padding_dma = ALIGN(dd->tx_padding_dma + dd->output_burst_size,
 				      cache_line);
 
-	/* Setup DM commands */
+	
 	box = &(dd->rx_dmov_cmd->box);
 	box->cmd = CMD_MODE_BOX | CMD_SRC_CRCI(dd->rx_dma_crci);
 	box->src_row_addr = (uint32_t)dd->mem_phys_addr + SPI_INPUT_FIFO;
@@ -2779,7 +2607,7 @@ static __init int msm_spi_dmov_init(struct msm_spi *dd)
 	dd->rx_dmov_cmd->single_pad.src = (uint32_t)dd->mem_phys_addr +
 					  SPI_INPUT_FIFO;
 
-	/* Clear remaining activities on channel */
+	
 	msm_dmov_flush(dd->tx_dma_chan, 1);
 	msm_dmov_flush(dd->rx_dma_chan, 1);
 
@@ -2787,9 +2615,9 @@ static __init int msm_spi_dmov_init(struct msm_spi *dd)
 }
 
 enum msm_spi_dt_entry_status {
-	DT_REQ,  /* Required:  fail if missing */
-	DT_SGST, /* Suggested: warn if missing */
-	DT_OPT,  /* Optional:  don't warn if missing */
+	DT_REQ,  
+	DT_SGST, 
+	DT_OPT,  
 };
 
 enum msm_spi_dt_entry_type {
@@ -2847,7 +2675,7 @@ static int __init msm_spi_dt_to_pdata_populate(struct platform_device *pdev,
 				dev_err(&pdev->dev, "Missing '%s' DT entry\n",
 								itr->dt_name);
 
-				/* cont on err to dump all missing entries */
+				
 				if (itr->status == DT_REQ && !err)
 					err = ret;
 			}
@@ -2857,9 +2685,6 @@ static int __init msm_spi_dt_to_pdata_populate(struct platform_device *pdev,
 	return err;
 }
 
-/**
- * msm_spi_dt_to_pdata: create pdata and read gpio config from device tree
- */
 struct msm_spi_platform_data * __init msm_spi_dt_to_pdata(
 			struct platform_device *pdev, struct msm_spi *dd)
 {
@@ -2903,6 +2728,8 @@ struct msm_spi_platform_data * __init msm_spi_dt_to_pdata(
 			&dd->cs_gpios[3].gpio_num,       DT_OPT,  DT_GPIO, -1},
 		{"qcom,rt-priority",
 			&pdata->rt_priority,		 DT_OPT,  DT_BOOL,  0},
+		{"qcom,shared",
+			&pdata->is_shared,		 DT_OPT,  DT_BOOL,  0},
 		{NULL,  NULL,                            0,       0,        0},
 		};
 
@@ -3184,7 +3011,7 @@ skip_dma_resources:
 			__func__);
 	}
 
-	/* GSBI dose not exists on B-family MSM-chips */
+	
 	if (dd->qup_ver != SPI_QUP_VERSION_BFAM) {
 		rc = msm_spi_configure_gsbi(dd, pdev);
 		if (rc)
@@ -3199,12 +3026,6 @@ skip_dma_resources:
 	}
 
 	msm_spi_register_init(dd);
-	/*
-	 * The SPI core generates a bogus input overrun error on some targets,
-	 * when a transition from run to reset state occurs and if the FIFO has
-	 * an odd number of entries. Hence we disable the INPUT_OVER_RUN_ERR_EN
-	 * bit.
-	 */
 	msm_spi_enable_error_flags(dd);
 
 	writel_relaxed(SPI_IO_C_NO_TRI_STATE, dd->base + SPI_IO_CONTROL);
@@ -3303,33 +3124,22 @@ static int msm_spi_pm_suspend_runtime(struct device *device)
 	if (dd->suspended)
 		return 0;
 
-	/*
-	 * Make sure nothing is added to the queue while we're
-	 * suspending
-	 */
 	spin_lock_irqsave(&dd->queue_lock, flags);
 	dd->suspended = 1;
 	spin_unlock_irqrestore(&dd->queue_lock, flags);
 
-	/* Wait for transactions to end, or time out */
+	
 	wait_event_interruptible(dd->continue_suspend,
 		!dd->transfer_pending);
 
-	msm_spi_disable_irqs(dd);
-	clk_disable_unprepare(dd->clk);
-	clk_disable_unprepare(dd->pclk);
+	if (dd->pdata && !dd->pdata->is_shared && dd->use_dma) {
+		msm_spi_bam_pipe_disconnect(dd, &dd->bam.prod);
+		msm_spi_bam_pipe_disconnect(dd, &dd->bam.cons);
+	}
 	if (dd->pdata && !dd->pdata->active_only)
 		msm_spi_clk_path_unvote(dd);
-
-	/* Free  the spi clk, miso, mosi, cs gpio */
-	if (dd->pdata && dd->pdata->gpio_release)
-		dd->pdata->gpio_release();
-
-	msm_spi_free_gpios(dd);
-
-	if (pm_qos_request_active(&qos_req_list))
-		pm_qos_update_request(&qos_req_list,
-				PM_QOS_DEFAULT_VALUE);
+	if (dd->pdata && !dd->pdata->is_shared)
+		put_local_resources(dd);
 suspend_exit:
 	return 0;
 }
@@ -3339,7 +3149,6 @@ static int msm_spi_pm_resume_runtime(struct device *device)
 	struct platform_device *pdev = to_platform_device(device);
 	struct spi_master *master = platform_get_drvdata(pdev);
 	struct msm_spi	  *dd;
-	int ret = 0;
 
 	dev_dbg(device, "pm_runtime: resuming...\n");
 	if (!master)
@@ -3350,32 +3159,18 @@ static int msm_spi_pm_resume_runtime(struct device *device)
 
 	if (!dd->suspended)
 		return 0;
-
-	if (pm_qos_request_active(&qos_req_list))
-		pm_qos_update_request(&qos_req_list,
-				  dd->pm_lat);
-
-	/* Configure the spi clk, miso, mosi and cs gpio */
-	if (dd->pdata->gpio_config) {
-		ret = dd->pdata->gpio_config();
-		if (ret) {
-			dev_err(dd->dev,
-					"%s: error configuring GPIOs\n",
-					__func__);
-			return ret;
-		}
-	}
-
-	ret = msm_spi_request_gpios(dd);
-	if (ret)
-		return ret;
-
+	
+	if (!dd->pdata->is_shared)
+		get_local_resources(dd);
 	msm_spi_clk_path_init(dd);
 	if (!dd->pdata->active_only)
 		msm_spi_clk_path_vote(dd);
-	clk_prepare_enable(dd->clk);
-	clk_prepare_enable(dd->pclk);
-	msm_spi_enable_irqs(dd);
+	if (!dd->pdata->is_shared && dd->use_dma) {
+		msm_spi_bam_pipe_connect(dd, &dd->bam.prod,
+				&dd->bam.prod.config);
+		msm_spi_bam_pipe_connect(dd, &dd->bam.cons,
+				&dd->bam.cons.config);
+	}
 	dd->suspended = 0;
 
 resume_exit:
@@ -3397,9 +3192,6 @@ static int msm_spi_suspend(struct device *device)
 			goto suspend_exit;
 		msm_spi_pm_suspend_runtime(device);
 
-		/*
-		 * set the device's runtime PM status to 'suspended'
-		 */
 		pm_runtime_disable(device);
 		pm_runtime_set_suspended(device);
 		pm_runtime_enable(device);
@@ -3410,11 +3202,6 @@ suspend_exit:
 
 static int msm_spi_resume(struct device *device)
 {
-	/*
-	 * Rely on runtime-PM to call resume in case it is enabled
-	 * Even if it's not enabled, rely on 1st client transaction to do
-	 * clock ON and gpio configuration
-	 */
 	dev_dbg(device, "system resume");
 	return 0;
 }
@@ -3423,7 +3210,7 @@ static int msm_spi_resume(struct device *device)
 #define msm_spi_resume NULL
 #define msm_spi_pm_suspend_runtime NULL
 #define msm_spi_pm_resume_runtime NULL
-#endif /* CONFIG_PM */
+#endif 
 
 static int __devexit msm_spi_remove(struct platform_device *pdev)
 {

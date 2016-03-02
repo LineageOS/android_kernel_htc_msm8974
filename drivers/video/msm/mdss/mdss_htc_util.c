@@ -506,7 +506,9 @@ void htc_reset_status(void)
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(htc_attr_status); i++) {
-		htc_attr_status[i].cur_value = htc_attr_status[i].def_value;
+		
+		if (i == CABC_INDEX)
+			htc_attr_status[i].cur_value = htc_attr_status[i].def_value;
 	}
 
 	return;
@@ -624,10 +626,9 @@ void htc_dimming_off(void)
 #define HUE_MAX   4096
 void htc_set_pp_pa(struct mdss_mdp_ctl *ctl)
 {
-	struct mdss_data_type *mdata;
-	struct mdss_mdp_mixer *mixer;
-	u32 base = 0, opmode;
-	char __iomem *basel;
+	struct mdp_pa_cfg_data config;
+	u32 copyback = 0;
+	int ret;
 
 	
 	if (htc_attr_status[HUE_INDEX].req_value == htc_attr_status[HUE_INDEX].cur_value)
@@ -636,37 +637,28 @@ void htc_set_pp_pa(struct mdss_mdp_ctl *ctl)
 	if (htc_attr_status[HUE_INDEX].req_value >= HUE_MAX)
 		return;
 
-	mdata = mdss_mdp_get_mdata();
-	mixer = mdata->mixer_intf;
+	config.block = MDP_LOGICAL_BLOCK_DISP_0;
+	config.pa_data.flags = MDP_PP_OPS_READ;
+	ret = mdss_mdp_pa_config(&config, &copyback);
+	if ((ret == 0) && copyback) {
+		config.pa_data.flags = MDP_PP_OPS_ENABLE | MDP_PP_OPS_WRITE;
+		config.pa_data.hue_adj = htc_attr_status[HUE_INDEX].req_value;
+		ret = mdss_mdp_pa_config(&config, &copyback);
+		if (ret == 0)
+			htc_attr_status[HUE_INDEX].cur_value = htc_attr_status[HUE_INDEX].req_value;
+	}
 
-	base = MDSS_MDP_REG_DSPP_OFFSET(0);
-	basel = mixer->dspp_base;
-
-	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON, false);
-
-	MDSS_MDP_REG_WRITE(base + MDSS_MDP_REG_DSPP_PA_BASE, htc_attr_status[HUE_INDEX].req_value);
-
-	opmode = MDSS_MDP_REG_READ(base);
-	opmode |= (1 << 20); 
-	writel_relaxed(opmode, basel + MDSS_MDP_REG_DSPP_OP_MODE);
-
-	ctl->flush_bits |= BIT(13);
-
-	wmb();
-	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF, false);
-
-	htc_attr_status[HUE_INDEX].cur_value = htc_attr_status[HUE_INDEX].req_value;
-	PR_DISP_INFO("%s pp_hue = 0x%x\n", __func__, htc_attr_status[HUE_INDEX].req_value);
+	PR_DISP_INFO("%s pp_hue = 0x%x, ret = %d\n", __func__, htc_attr_status[HUE_INDEX].cur_value, ret);
 }
 
 void htc_set_pp_pcc(struct mdss_mdp_ctl *ctl)
 {
-	struct mdss_data_type *mdata;
-	struct mdss_mdp_mixer *mixer;
 	struct mdss_dspp_pcc_config *pcc;
-	u32 base = 0, opmode, req_val;
-	char __iomem *basel;
-	int i;
+	u32 base = 0, req_val;
+	int i, ret;
+	struct mdp_pcc_cfg_data config;
+	u32 copyback = 0;
+	uint32_t tempOps;
 	req_val = htc_attr_status[PP_PCC_INDEX].req_value;
 
 	
@@ -678,26 +670,12 @@ void htc_set_pp_pcc(struct mdss_mdp_ctl *ctl)
 		return;
 	}
 
-	mdata = mdss_mdp_get_mdata();
-	if(!mdata) {
-		pr_err("%s:mdss_mdp_get_mdata was NULL\n", __func__);
-		return;
-	}
-
-	mixer = mdata->mixer_intf;
-	if(!mixer) {
-		pr_err("%s:mdata->mixer_intf was NULL\n", __func__);
-		return;
-	}
-
 	base = MDSS_MDP_REG_DSPP_OFFSET(0);
-	basel = mixer->dspp_base;
 
 	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON, false);
-	opmode = MDSS_MDP_REG_READ(base);
 
 	if(dspp_pcc_mode[req_val].pcc_enable) {
-		opmode |= MDSS_MDP_DSPP_OP_PCC_EN; 
+		tempOps = MDP_PP_OPS_ENABLE;
 		pcc = dspp_pcc_mode[req_val].dspp_pcc_config;
 		if (pcc)
 			for (i = 0; i < dspp_pcc_mode[req_val].dspp_pcc_config_cnt; i++) {
@@ -706,16 +684,167 @@ void htc_set_pp_pcc(struct mdss_mdp_ctl *ctl)
 				pcc++;
 			}
 	} else {
-		opmode &= ~MDSS_MDP_DSPP_OP_PCC_EN; 
+		tempOps = MDP_PP_OPS_DISABLE;
 	}
 
-	writel_relaxed(opmode, basel + MDSS_MDP_REG_DSPP_OP_MODE);
-
-	ctl->flush_bits |= BIT(13);
-
-	wmb();
 	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF, false);
 
-	htc_attr_status[PP_PCC_INDEX].cur_value = req_val;
-	PR_DISP_INFO("%s pp_pcc mode = 0x%x\n", __func__, req_val);
+	config.block = MDP_LOGICAL_BLOCK_DISP_0;
+	config.ops = MDP_PP_OPS_READ;
+	ret = mdss_mdp_pcc_config(&config, &copyback);
+	if ((ret == 0) && copyback) {
+		config.ops = tempOps;
+		ret = mdss_mdp_pcc_config(&config, &copyback);
+		if (ret == 0)
+			htc_attr_status[PP_PCC_INDEX].cur_value = req_val;
+	}
+
+	PR_DISP_INFO("%s pp_pcc mode = 0x%x, ret = %d\n", __func__, htc_attr_status[PP_PCC_INDEX].cur_value, ret);
+}
+
+int htc_backlight_transfer_bl_brightness(int val, struct mdss_panel_info *panel_info, bool brightness_to_bl)
+{
+	unsigned int result;
+	int index = 0;
+	u16 *val_table;
+	u16 *ret_table;
+	struct htc_backlight1_table *brt_bl_table = &panel_info->brt_bl_table;
+	int size = brt_bl_table->size;
+
+	
+	if(!size || !brt_bl_table->brt_data|| !brt_bl_table->bl_data)
+		return -ENOENT;
+
+	if (brightness_to_bl) {
+		val_table = brt_bl_table->brt_data;
+		ret_table = brt_bl_table->bl_data;
+	} else {
+		val_table = brt_bl_table->bl_data;
+		ret_table = brt_bl_table->brt_data;
+	}
+
+	if (val <= 0){
+		result = 0;
+	} else if (val < val_table[0]) {
+		
+		result = ret_table[0];
+	} else if (val >= val_table[size - 1]) {
+		
+		result = ret_table[size - 1];
+	} else {
+		
+		result = val;
+		for(index = 0; index < size - 1; index++){
+			if (val >= val_table[index] && val <= val_table[index + 1]) {
+				int x0 = val_table[index];
+				int y0 = ret_table[index];
+				int x1 = val_table[index + 1];
+				int y1 = ret_table[index + 1];
+
+				if (x0 == x1)
+					result = y0;
+				result = y0 + (y1 - y0) * (val - x0) / (x1 - x0);
+				break;
+			}
+		}
+	}
+	pr_info("%s: mode=%d, %d transfer to %d\n", __func__, brightness_to_bl, val, result);
+	return result;
+}
+
+int htc_backlight_bl_to_nits(int val, struct mdss_panel_info *panel_info)
+{
+	int index = 0, remainder = 0, max_index = 0;
+	unsigned int nits, code1, code2;
+	int scale;
+	struct htc_backlight2_table *nits_bl_table = &panel_info->nits_bl_table;
+
+	scale = nits_bl_table->scale;
+	max_index = nits_bl_table->size;
+	if (!scale || !max_index || !nits_bl_table->data)
+		return -ENOENT;
+
+	if (val <= 0)
+		return 0;
+
+
+	for (index = 1; index < max_index; index++) {
+		if (val <= nits_bl_table->data[index])
+			break;
+	}
+
+	code1 = nits_bl_table->data[index - 1];
+	code2 = nits_bl_table->data[index];
+	remainder = (code2 - val) * scale / (code2 - code1);
+
+	nits = index * scale - remainder;
+
+	pr_info("%s: bl=%d, nits=%d", __func__, val, nits);
+	return nits;
+}
+
+int htc_backlight_nits_to_bl(int val, struct mdss_panel_info *panel_info)
+{
+	int index = 0, remainder = 0, max_index = 0;
+	unsigned int code, code1, code2;
+	int scale;
+	static unsigned long timeout = 0;
+	static int suppress_count = 0;
+	static int suppress_nits = 0;
+	static int prev_val = 0;
+	static DEFINE_SPINLOCK(lock);
+	unsigned long flags;
+	bool print_log = false;
+	struct htc_backlight2_table *nits_bl_table = &panel_info->nits_bl_table;
+
+	scale = nits_bl_table->scale;
+	max_index = nits_bl_table->size;
+	if (!scale || !max_index || !nits_bl_table->data)
+		return -ENOENT;
+
+	index = val / scale;
+	remainder = val % scale;
+
+	
+	if (index >= max_index) {
+		index = max_index;
+		remainder = 0;
+	}
+
+	if (remainder != 0 ) {
+		code1 = nits_bl_table->data[index];
+		code2 = nits_bl_table->data[index + 1];
+
+		
+		code = (code2 - code1) * remainder / scale + code1;
+	} else {
+		
+		code = nits_bl_table->data[index];
+	}
+
+	spin_lock_irqsave(&lock, flags);
+
+	
+	print_log = time_after(jiffies, timeout);
+	print_log |= !prev_val || ((prev_val / scale) != index);
+	print_log |= !val;
+
+	if (print_log || !timeout) {
+		if (suppress_count) {
+			pr_info("%s: nits=%d, bl=%d, suppress %d logs, last value=(%d)", __func__, val, code, suppress_count, suppress_nits);
+			suppress_count = 0;
+		} else {
+			pr_info("%s: nits=%d, bl=%d", __func__, val, code);
+		}
+		
+		timeout = jiffies + msecs_to_jiffies(500);
+		prev_val = val;
+	} else {
+		suppress_nits = val;
+		suppress_count++;
+		pr_debug("%s: nits=%d, bl=%d \n", __func__, val, code);
+	}
+	spin_unlock_irqrestore(&lock, flags);
+
+	return code;
 }

@@ -363,8 +363,9 @@ static void msm_vfe40_process_reset_irq(struct vfe_device *vfe_dev,
 static void msm_vfe40_process_halt_irq(struct vfe_device *vfe_dev,
 	uint32_t irq_status0, uint32_t irq_status1)
 {
-	if (irq_status1 & (1 << 8))
-		complete(&vfe_dev->halt_complete);
+    if (irq_status1 & (1 << 8)) {
+        msm_camera_io_w(0x0, vfe_dev->vfe_base + 0x2C0);
+    }
 }
 
 static void msm_vfe40_process_camif_irq(struct vfe_device *vfe_dev,
@@ -1155,8 +1156,9 @@ static long msm_vfe40_axi_halt(struct vfe_device *vfe_dev,
 		init_completion(&vfe_dev->halt_complete);
 		msm_camera_io_w_mb(0x1, vfe_dev->vfe_base + 0x2C0);
 		atomic_set(&vfe_dev->error_info.overflow_state, NO_OVERFLOW);
+		
 		rc = wait_for_completion_interruptible_timeout(
-		&vfe_dev->halt_complete, msecs_to_jiffies(500));
+		&vfe_dev->halt_complete, msecs_to_jiffies(100));
 	}
 	else
 	{

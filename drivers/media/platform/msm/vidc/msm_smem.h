@@ -25,9 +25,9 @@ struct smem_client {
         void *clnt_alloc;
         void *clnt_import;
         struct msm_vidc_platform_resources *res;
-	
+	/* HTC_START: Print ION alloc/import/free logs to debug ION memory leak on kernel space */
 	struct msm_vidc_inst *inst;
-	
+	/* HTC_END */
 };
 
 enum smem_type {

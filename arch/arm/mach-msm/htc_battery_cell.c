@@ -20,9 +20,9 @@
 #include <linux/of.h>
 #include <linux/slab.h>
 
-static struct htc_battery_cell *cells;	/* ptr to an array */
-static int cell_num;					/* cells array size */
-static struct htc_battery_cell *cur_cell; /* cell current using */
+static struct htc_battery_cell *cells;	
+static int cell_num;					
+static struct htc_battery_cell *cur_cell; 
 
 static unsigned int hv_authenticated;
 
@@ -115,7 +115,7 @@ inline struct htc_battery_cell *htc_battery_cell_find(int id_raw)
 	}
 	pr_err("[BATT] %s: cell id can not be identified (id_raw=%d)\n",
 			__func__, id_raw);
-	/* BUG_ON(!pcell); */
+	
 	return pcell;
 }
 
@@ -130,22 +130,19 @@ inline int htc_battery_cell_find_and_set_id_auto(int id_raw)
 		pr_err("[BATT] cell pointer is NULL so unknown ID is return.\n");
 		return HTC_BATTERY_CELL_ID_UNKNOWN;
 	}
-	/* CASE 1: cell(id) doesn't change */
+	
 	if (cur_cell == pcell)
 		return pcell->id;
-	/* CASE 2: cell(id) changes */
+	
 	if (cur_cell) {
-		/* id change policy: cur_cell may switch to UNKNOWN(255)
-		 * only if we got unknown id successively UNKNOWN_COUNT times
-		 */
 		if (pcell->id == HTC_BATTERY_CELL_ID_UNKNOWN) {
 			unknown_count++;
 			if (unknown_count < HTC_BATTERY_CELL_CHECK_UNKNOWN_COUNT)
-				return cur_cell->id; /* id remains no changing */
+				return cur_cell->id; 
 		} else
 			unknown_count = 0;
 	} else {
-		/* cur_cell hasn't been set yet */
+		
 		pr_warn("[BATT]warn: cur_cell is initiated by %s", __func__);
 		cur_cell = pcell;
 		return pcell->id;
@@ -170,7 +167,7 @@ static int __init check_dq_setup(char *str)
 		hv_authenticated = 0;
 		pr_info("[BATT] HV authentication failed.\n");
 	}
-	return 0; /* return 0 to let someone else can parse the same str.*/
+	return 0; 
 }
 __setup("androidboot.dq=", check_dq_setup);
 
@@ -285,9 +282,10 @@ static int htc_batt_cell_probe(struct platform_device *pdev)
 
 no_batterydata_in_dt:
 	pr_warn("some batterydata missing in device tree\n");
-	batt_cells = NULL;
 	batt_cell_nums = 0;
 	htc_battery_cell_init(batt_cells, batt_cell_nums);
+	
+	kfree(batt_cells);
 	return rc;
 }
 

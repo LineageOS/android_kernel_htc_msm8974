@@ -259,8 +259,8 @@ static int rt5501_i2c_write(struct rt5501_reg_data *txData, int length)
 		},
 	};
 	for (i = 0; i < length; i++) {
-		
-		
+		//if (i == 2)  /* According to rt5501 Spec */
+		//	mdelay(1);
 		buf[0] = txData[i].addr;
 		buf[1] = txData[i].val;
 
@@ -301,8 +301,8 @@ static int rt5501_i2c_write_for_read(char *txData, int length)
 		},
 	};
 	for (i = 0; i < length; i++) {
-		
-		
+		//if (i == 2)  /* According to rt5501 Spec */
+		//	mdelay(1);
 		buf[0] = i;
 		buf[1] = txData[i];
 #if DEBUG
@@ -392,6 +392,12 @@ static int rt5501_i2c_read_addr(char *rxData, unsigned char addr)
 		return rc;
 	}
 
+	/*{
+		int i = 0;
+		for (i = 0; i < length; i++)
+			pr_info("i2c_read %s: rx[%d] = %2x\n", __func__, i, \
+				rxData[i]);
+	}*/
         pr_info("%s:i2c_read addr 0x%x value = 0x%x\n", __func__, addr, *rxData);
 	return 0;
 }
@@ -556,7 +562,7 @@ static void hs_imp_detec_func(struct work_struct *work)
 			om = (temp[0] & 0xe) >> 1;
 
 			if((temp[0] == 0xc0 || temp[0] == 0xc1) && (temp[1] == 0)) {
-				
+				//mono headset
 				hsom = HEADSET_MONO;
 			} else {
 
@@ -669,7 +675,7 @@ static void volume_ramp_func(struct work_struct *work)
 		u8 val;
 		pr_info("%s: ramping-------------------------\n",__func__);
 		mdelay(1);
-		
+		//start state machine and disable noise gate
 		if(high_imp)
 			rt5501_write_reg(0xb1,0x80);
 
@@ -933,7 +939,7 @@ err2:
 		update_amp_parameter(RT5501_MODE_OFF);
 		update_amp_parameter(RT5501_MUTE);
 		update_amp_parameter(RT5501_INIT);
-		
+		//update_amp_parameter(RT5501_MODE_MFG);
                 mutex_unlock(&hp_amp_lock);
 		rc = 0;
 		break;

@@ -55,7 +55,7 @@ void session_cleanup(struct session *session)
 	struct bulk_buffer_descriptor *bulk_buf_descr;
 	struct list_head *pos, *q;
 
-	
+	/* Unmap still mapped buffers */
 	list_for_each_safe(pos, q, &session->bulk_buffer_descriptors) {
 		bulk_buf_descr =
 			list_entry(pos, struct bulk_buffer_descriptor, list);
@@ -64,7 +64,7 @@ void session_cleanup(struct session *session)
 				  "handle= %d",
 				  bulk_buf_descr->handle);
 
-		
+		/* ignore any error, as we cannot do anything in this case. */
 		int ret = mobicore_unmap_vmem(session->instance,
 					      bulk_buf_descr->handle);
 		if (ret != 0)
@@ -75,7 +75,7 @@ void session_cleanup(struct session *session)
 		kfree(bulk_buf_descr);
 	}
 
-	
+	/* Finally delete notification connection */
 	connection_cleanup(session->notification_connection);
 	kfree(session);
 }
@@ -97,6 +97,10 @@ struct bulk_buffer_descriptor *session_add_bulk_buf(struct session *session,
 	struct bulk_buffer_descriptor *tmp;
 	struct list_head *pos;
 
+	/*
+	 * Search bulk buffer descriptors for existing vAddr
+	 * At the moment a virtual address can only be added one time
+	 */
 	list_for_each(pos, &session->bulk_buffer_descriptors) {
 		tmp = list_entry(pos, struct bulk_buffer_descriptor, list);
 		if (tmp->virt_addr == buf)
@@ -104,6 +108,10 @@ struct bulk_buffer_descriptor *session_add_bulk_buf(struct session *session,
 	}
 
 	do {
+		/*
+		 * Prepare the interface structure for memory registration in
+		 * Kernel Module
+		 */
 		uint32_t handle;
 
 		int ret = mobicore_map_vmem(session->instance, buf, len,
@@ -118,7 +126,7 @@ struct bulk_buffer_descriptor *session_add_bulk_buf(struct session *session,
 
 		MCDRV_DBG_VERBOSE(mc_kapi, "handle=%d", handle);
 
-		
+		/* Create new descriptor */
 		bulk_buf_descr =
 			bulk_buffer_descriptor_create(buf, len, handle);
 		if (bulk_buf_descr == NULL) {
@@ -126,7 +134,7 @@ struct bulk_buffer_descriptor *session_add_bulk_buf(struct session *session,
 			break;
 		}
 
-		
+		/* Add to vector of descriptors */
 		list_add_tail(&(bulk_buf_descr->list),
 			      &(session->bulk_buffer_descriptors));
 	} while (0);
@@ -144,7 +152,7 @@ bool session_remove_bulk_buf(struct session *session, void *virt_addr)
 	MCDRV_DBG_VERBOSE(mc_kapi, "Virtual Address = 0x%X",
 			  (unsigned int) virt_addr);
 
-	
+	/* Search and remove bulk buffer descriptor */
 	list_for_each_safe(pos, q, &session->bulk_buffer_descriptors) {
 		tmp = list_entry(pos, struct bulk_buffer_descriptor, list);
 		if (tmp->virt_addr == virt_addr) {
@@ -161,7 +169,7 @@ bool session_remove_bulk_buf(struct session *session, void *virt_addr)
 		MCDRV_DBG_VERBOSE(mc_kapi, "Wsm handle=%d",
 				  bulk_buf->handle);
 
-		
+		/* ignore any error, as we cannot do anything */
 		int ret = mobicore_unmap_vmem(session->instance,
 					      bulk_buf->handle);
 		if (ret != 0)
@@ -182,7 +190,7 @@ uint32_t session_find_bulk_buf(struct session *session, void *virt_addr)
 	MCDRV_DBG_VERBOSE(mc_kapi, "Virtual Address = 0x%X",
 			  (unsigned int) virt_addr);
 
-	
+	/* Search and return buffer descriptor handle */
 	list_for_each_safe(pos, q, &session->bulk_buffer_descriptors) {
 		tmp = list_entry(pos, struct bulk_buffer_descriptor, list);
 		if (tmp->virt_addr == virt_addr)

@@ -165,7 +165,7 @@ static inline void __maybe_unused row_dump_reg_and_low_stat(struct row_data *rd)
 	for (i = ROWQ_PRIO_REG_SWRITE; i < ROWQ_MAX_PRIO; i++) {
 		if (!list_empty(&rd->row_queues[i].fifo)) {
 			struct request *check_req = list_entry_rq(rd->row_queues[i].fifo.next);
-			unsigned int check_jiffies = ((unsigned long) (check_req)->csd.list.next);
+			unsigned long check_jiffies = ((unsigned long) (check_req)->csd.list.next);
 
 			if (time_after(jiffies,
 			    check_jiffies + msecs_to_jiffies(ROW_DUMP_REQ_STAT_MSECS))) {

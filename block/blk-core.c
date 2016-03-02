@@ -1305,6 +1305,7 @@ void submit_bio(int rw, struct bio *bio)
 			count_vm_events(PGPGOUT, count);
 		} else {
 			task_io_account_read(bio->bi_size);
+			collect_io_stats(bio->bi_size, READ);
 			count_vm_events(PGPGIN, count);
 		}
 

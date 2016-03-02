@@ -41,11 +41,13 @@ struct ext_usb_chg_pm8941 {
 int pm8941_is_pwr_src_plugged_in(void);
 int pm8941_get_batt_temperature(int *result);
 int pm8941_get_batt_voltage(int *result);
+int pm8941_cable_irq_count(int *result, unsigned long count_irq_period);
 int pm8941_is_batt_temp_fault_disable_chg(int *result);
 int pm8941_is_batt_temperature_fault(int *result);
 int pm8941_set_pwrsrc_and_charger_enable(enum htc_power_source_type src,
 			bool chg_enable, bool pwrsrc_enable);
 int pm8941_charger_enable(bool enable);
+int pm8941_set_charger_after_eoc(bool enable);
 int pm8941_pwrsrc_enable(bool enable);
 int pm8941_get_battery_status(void);
 int pm8941_get_batt_present(void);
@@ -85,6 +87,10 @@ int pm8941_set_ftm_charge_enable_type(enum htc_ftm_power_source_type ftm_src);
 #endif
 #else 
 #ifdef CONFIG_HTC_BATT_8960
+static inline int pm8941_cable_irq_count(int *result, unsigned long count_irq_period)
+{
+	return -ENXIO;
+}
 static inline int pm8941_is_pwr_src_plugged_in(void)
 {
 	return -ENXIO;
@@ -237,6 +243,10 @@ static inline int pm8941_usb_overheat_otg_mode_check(void)
 	return -ENXIO;
 }
 static inline int pm8941_set_ftm_charge_enable_type(enum htc_ftm_power_source_type ftm_src)
+{
+	return -ENXIO;
+}
+static inline int pm8941_set_charger_after_eoc(bool enable)
 {
 	return -ENXIO;
 }

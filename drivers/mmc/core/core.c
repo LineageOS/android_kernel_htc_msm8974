@@ -35,6 +35,7 @@
 #include <linux/mmc/host.h>
 #include <linux/mmc/mmc.h>
 #include <linux/mmc/sd.h>
+#include <linux/list_sort.h>
 
 #include "core.h"
 #include "bus.h"
@@ -2491,10 +2492,12 @@ EXPORT_SYMBOL(mmc_can_discard);
 
 int mmc_can_sanitize(struct mmc_card *card)
 {
+#if 0 
 	if (!mmc_can_trim(card) && !mmc_can_erase(card))
 		return 0;
 	if (card->ext_csd.sec_feature_support & EXT_CSD_SEC_SANITIZE)
 		return 1;
+#endif
 	return 0;
 }
 EXPORT_SYMBOL(mmc_can_sanitize);

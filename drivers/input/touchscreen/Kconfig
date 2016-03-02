@@ -504,24 +504,41 @@ config TOUCHSCREEN_SYNAPTICS_RMI4_I2C
 	  This enables support for Synaptics RMI over I2C based touchscreens(ClearPad 3000).
 
 config TOUCHSCREEN_HIMAX
-        tristate "HIMAX HM852xD serious i2c touchscreen"
-		depends on I2C
-		help
-		This enables support for HIMAX HM852xD over I2C based touchscreens.
+	tristate "HIMAX HM852xD serious i2c touchscreen"
+	depends on I2C
+	help
+	  This enables support for HIMAX HM852xD over I2C based touchscreens.
 
 config TOUCHSCREEN_ONE_LAYER_HIMAX
-        tristate "HIMAX 1 layer  HM852xD serious i2c touchscreen"
-		depends on I2C
-		help
-		This enables support for 1 layer HIMAX HM852xD too for just A11 project.
-		default n
+	tristate "HIMAX 1 layer  HM852xD serious i2c touchscreen"
+	depends on I2C
+	default n
+	help
+	  This enables support for 1 layer HIMAX HM852xD too for just A11 project.
 
+config TOUCHSCREEN_HIMAX_ES
+	tristate "HIMAX HM852xES serious i2c touchscreen"
+	depends on I2C
+	help
+	  This enables support for HIMAX HM852xES over I2C based touchscreens.
+
+config TOUCHSCREEN_HIMAX_DEBUG
+	tristate "HIMAX HM852xES serious debug function"
+	depends on I2C
+	help
+	  This enables HIMAX HM852xES debug function.
 
 config TOUCHSCREEN_HIMAX_ESD_EN
-        tristate "HIMAX HM852xD ESD recovery function"
-		depends on I2C
-		help
-		This enables support ESD recovery function for HIMAX HM852xD.
+	tristate "HIMAX HM852xD ESD recovery function"
+	depends on I2C
+	help
+	  This enables support ESD recovery function for HIMAX HM852xD/HM852xES.
+
+config TOUCHSCREEN_PROXIMITY
+	tristate "Touch proximity sensor"
+	depends on I2C
+	help
+	  if you say yes here, you turn on the touch proximity sensor feature
 
 config SYNA_MULTI_TOUCH
 	tristate "Synaptics i2c touchscreen(ClearPad 3000) MutilTouch support"

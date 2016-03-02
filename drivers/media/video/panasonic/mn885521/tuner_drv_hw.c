@@ -30,7 +30,11 @@
  * HISTORY      : 2011/07/25    K.Kitamura(*)
  *                001 new creation
  ******************************************************************************/
+/*..+....1....+....2....+....3....+....4....+....5....+....6....+....7....+...*/
 
+/******************************************************************************/
+/* include                                                                    */
+/******************************************************************************/
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
@@ -50,9 +54,30 @@
 #include <linux/mm.h>
 #include <linux/vmalloc.h>
 
+/******************************************************************************
+ * function
+ ******************************************************************************/
 int tuner_drv_hw_access( unsigned int uCommand, TUNER_DATA_RW *data,
                          unsigned short param_len );
 
+/******************************************************************************
+ * code area
+ ******************************************************************************/
+/******************************************************************************
+ *    function:   tuner_drv_hw_access
+ *    brief   :   HW access control of a driver
+ *                repeat specified count single register access
+ *    date    :   2011.08.02
+ *    author  :   K.Kitamura(*)
+ *    modifier:   K.Okawa(KXD14)
+ *
+ *    return  :    0                   normal exit
+ *            :   -1                   error exit
+ *    input   :   uCommand             setting command
+ *            :   data                 access data
+ *            :   param_len            nummber of access data
+ *    output  :   none
+ ******************************************************************************/
 int tuner_drv_hw_access( unsigned int uCommand, TUNER_DATA_RW *data,
                          unsigned short param_len )
 {
@@ -62,15 +87,15 @@ int tuner_drv_hw_access( unsigned int uCommand, TUNER_DATA_RW *data,
     unsigned short     addr;
     unsigned short     flags;
     unsigned char      buf[TUNER_I2C_MSG_DATA_NUM];
-    
+    //unsigned char      *buf_all;
     unsigned char      read_data;
-    
+    //unsigned short     cnt;
     unsigned char      ena_data;
     unsigned char      write_data;
     unsigned short     loop_cnt;
 
 
-    
+    /* argument check */
     if( data == NULL )
     {
         DEBUG_PRINT("tuner_drv_hw_access -1- ");
@@ -79,7 +104,7 @@ int tuner_drv_hw_access( unsigned int uCommand, TUNER_DATA_RW *data,
         return -EINVAL;
     }
 
-    
+    /* get i2c adapter */
     adap = i2c_get_adapter( TUNER_CONFIG_I2C_BUSNUM );
     if( adap == NULL )
     {
@@ -88,15 +113,15 @@ int tuner_drv_hw_access( unsigned int uCommand, TUNER_DATA_RW *data,
         return -EINVAL;
     }
 
-    
+    /* initialize */
     memset( msgs, 0x00, sizeof(struct i2c_msg) * 2 );
     ena_data = 0x00;
     flags = 0;
 #if 0
-    
+    /* 一括書き込み制御 */
     if( param_len >= TUNER_I2C_WRITE_ALL_NUM )
     {
-        
+        /* 領域獲得 */
         buf_all  = ( unsigned char * )vmalloc( param_len + 1 );
 
         if( buf_all  == NULL )
@@ -106,12 +131,12 @@ int tuner_drv_hw_access( unsigned int uCommand, TUNER_DATA_RW *data,
             return -EINVAL;
         }
 
-        
+        /* メモリ初期化 */
         memset( buf_all,
                 0x00,
                 param_len + 1 );
 
-        
+        /* 転送データ作成 */
         msgs[ 0 ].addr  = data[ 0 ].slave_adr;
         msgs[ 0 ].flags = 0;
         msgs[ 0 ].len   = ( unsigned short )( param_len + 1 );
@@ -128,10 +153,10 @@ int tuner_drv_hw_access( unsigned int uCommand, TUNER_DATA_RW *data,
                         buf_all[ loop_cnt + 1 ]);
         }
 
-        
+        /* データ転送 */
         ret = i2c_transfer( adap, msgs, TUNER_W_MSGNUM );
 
-        
+        /* メモリ開放 */
         vfree( buf_all );
 
         if( ret < 0 )
@@ -145,21 +170,21 @@ int tuner_drv_hw_access( unsigned int uCommand, TUNER_DATA_RW *data,
         return 0;
     }
 #endif
-    
+    /* access loop */
     for( loop_cnt = 0; loop_cnt < param_len; loop_cnt++ ) {
-        
+        /* initialize i2c messages */
         memset( msgs, 0x00, sizeof(struct i2c_msg) * 2 );
         ena_data = 0x00;
 
-        
+        /* command detect switch */
         switch ( uCommand ) {
-             case TUNER_IOCTL_VALGET:	
+             case TUNER_IOCTL_VALGET:	/* read access */
                 addr   = data[ loop_cnt ].slave_adr;
                 flags  = I2C_M_RD;
                 buf[ 0 ] = (unsigned char)data[ loop_cnt ].adr;
                 buf[ 1 ] = 0;
                 break;
-            case TUNER_IOCTL_VALSET:	
+            case TUNER_IOCTL_VALSET:	/* write access */
                 addr   = data[ loop_cnt ].slave_adr;
                 flags  = 0;
                 buf[ 0 ] = (unsigned char)data[ loop_cnt ].adr;
@@ -171,10 +196,10 @@ int tuner_drv_hw_access( unsigned int uCommand, TUNER_DATA_RW *data,
         }
 
         if( flags != I2C_M_RD ) {
-        	 
+        	 /* bit modify write */
         	 if( !(( data[ loop_cnt ].sbit == 0 ) && ( data[ loop_cnt ].ebit == 7 ))) {
-            	
-                
+            	/* specified start/end bit position mode */
+                /* TODO: enabit */
                 if(( data[ loop_cnt ].sbit == TUNER_SET_ENADATA )
                 && ( data[ loop_cnt ].ebit == TUNER_SET_ENADATA ))
                 {
@@ -182,7 +207,7 @@ int tuner_drv_hw_access( unsigned int uCommand, TUNER_DATA_RW *data,
                 }
                 else
                 {
-                    
+                    /* calculate enable bit mask */
                 	ena_data = (unsigned char)(((1U << (1+data[loop_cnt].ebit-data[loop_cnt].sbit))-1) << data[loop_cnt].sbit);
 #if 0
                     for( cnt = 0; cnt < TUNER_CHARNUM_MAX; cnt++ )
@@ -198,7 +223,7 @@ int tuner_drv_hw_access( unsigned int uCommand, TUNER_DATA_RW *data,
                 
                 if( ena_data != 0xFF )
                 {
-                    
+                    /* read a current value */
                     msgs[ 0 ].addr  = addr;
                     msgs[ 0 ].flags = 0;
                     msgs[ 0 ].len   = TUNER_R_MSGLEN;
@@ -217,19 +242,19 @@ int tuner_drv_hw_access( unsigned int uCommand, TUNER_DATA_RW *data,
                         return -EINVAL;
                     }
 
-                    
+                    /* initialize i2c message */
                     memset( msgs, 0x00, sizeof( struct i2c_msg ) * 2 );
 
-                    
+                    /* clear bits of write position */
                     read_data  &= ( unsigned char )( ~ena_data );
-                    
+                    /* construct a write value */
                     write_data = ( unsigned char )( ena_data & data[ loop_cnt ].param );
                     buf[ 1 ] = ( unsigned char )( write_data | read_data );
                 }
             }
 
-            
-            
+            //DEBUG_PRINT("ioctl(W) slv:0x%02x adr:0x%02x (single) 0x%02x (RMW:0x%02x WDAT:0x%02x)",
+            //                    addr, buf[ 0 ], data[ loop_cnt ].param, read_data,  buf[ 1 ]);
 
             msgs[ 0 ].addr  = addr;
             msgs[ 0 ].flags = flags;
@@ -246,7 +271,7 @@ int tuner_drv_hw_access( unsigned int uCommand, TUNER_DATA_RW *data,
                 return -EINVAL;
             }
         } else {
-        	
+        	/* write register */
             msgs[ 0 ].addr  = addr;
             msgs[ 0 ].flags = 0;
             msgs[ 0 ].len   = TUNER_R_MSGLEN;
@@ -256,6 +281,8 @@ int tuner_drv_hw_access( unsigned int uCommand, TUNER_DATA_RW *data,
             msgs[ 1 ].len   = TUNER_R_MSGLEN;
             msgs[ 1 ].buf   = &buf[ 1 ];
 
+//            DEBUG_PRINT("ioctl(read(Pre)) slv:0x%02x adr:0x%02x (single)",
+//								addr, buf[ 0 ]);
             ret = i2c_transfer( adap, msgs, TUNER_R_MSGNUM );
             if( ret < 0 )
             {
@@ -268,10 +295,10 @@ int tuner_drv_hw_access( unsigned int uCommand, TUNER_DATA_RW *data,
                 return -EINVAL;
             }
 
-            
+            /* return read val. */
             data[ loop_cnt ].param = buf[ 1 ];
-            
-            
+            //DEBUG_PRINT("ioctl(R) slv:0x%02x adr:0x%02x (single) 0x%02x (RETURN:0x%02x)",
+            //                    addr, buf[ 0 ], buf[1], data[ loop_cnt ].param);
 
         }
     }

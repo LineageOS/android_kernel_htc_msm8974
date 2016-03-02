@@ -2383,6 +2383,8 @@ static const struct snd_kcontrol_new lineout4_ground_switch =
 static const struct snd_kcontrol_new aif4_mad_switch =
 	SOC_DAPM_SINGLE("Switch", TAIKO_A_CDC_CLK_OTHR_CTL, 4, 1, 0);
 
+static const struct snd_kcontrol_new aif4_vi_switch =
+	SOC_DAPM_SINGLE("Switch", TAIKO_A_SPKR_PROT_EN, 3, 1, 0);
 static int slim_tx_mixer_get(struct snd_kcontrol *kcontrol,
 			     struct snd_ctl_elem_value *ucontrol)
 {
@@ -2439,7 +2441,7 @@ static int slim_tx_mixer_put(struct snd_kcontrol *kcontrol,
 				if (wcd9xxx_tx_vport_validation(
 						vtable,
 						port_id,
-						taiko_p->dai)) {
+						taiko_p->dai, NUM_CODEC_DAIS)) {
 					dev_dbg(codec->dev, "%s: TX%u is used by other virtual port\n",
 						__func__, port_id + 1);
 					mutex_unlock(&codec->mutex);
@@ -2930,10 +2932,27 @@ static int taiko_codec_config_mad(struct snd_soc_codec *codec)
 				 __func__);
 		return -ENODEV;
 	}
-
-	if (fw == NULL) {
-		pr_err("%s: fw is NULL\n", __func__);
-		return -ENOMEM;
+	hwdep_cal = wcdcal_get_fw_cal(taiko->fw_data, WCD9XXX_MAD_CAL);
+	if (hwdep_cal) {
+		data = hwdep_cal->data;
+		cal_size = hwdep_cal->size;
+		dev_dbg(codec->dev, "%s: using hwdep calibration\n",
+				__func__);
+	} else {
+		ret = request_firmware(&fw, filename, codec->dev);
+		if (ret != 0) {
+			pr_err("Failed to acquire MAD firwmare data %s: %d\n",
+				filename, ret);
+			return -ENODEV;
+		}
+		if (!fw) {
+			dev_err(codec->dev, "failed to get mad fw");
+			return -ENODEV;
+		}
+		data = fw->data;
+		cal_size = fw->size;
+		dev_dbg(codec->dev, "%s: using request_firmware calibration\n",
+				__func__);
 	}
 	hwdep_cal = wcdcal_get_fw_cal(taiko->fw_data, WCD9XXX_MAD_CAL);
 	if (hwdep_cal) {
@@ -3614,7 +3633,7 @@ static int taiko_codec_enable_anc(struct snd_soc_dapm_widget *w,
 {
 	struct snd_soc_codec *codec = w->codec;
 	const char *filename;
-	const struct firmware *fw;
+	const struct firmware *fw = NULL; 
 	int i;
 	int ret =0;
 	int num_anc_slots;
@@ -3630,7 +3649,7 @@ static int taiko_codec_enable_anc(struct snd_soc_dapm_widget *w,
 	const void *data;
 
 
-	if (taiko && taiko->anc_func == 0)
+	if ((taiko == NULL) || (taiko->anc_func == 0)) 
 		return 0;
 
 	switch (event) {
@@ -3660,10 +3679,6 @@ static int taiko_codec_enable_anc(struct snd_soc_dapm_widget *w,
 
 		}
 
-		if (fw == NULL) {
-			pr_err("%s: fw is NULL\n", __func__);
-			return -ENOMEM;
-		}
 		if (cal_size < sizeof(struct wcd9xxx_anc_header)) {
 			dev_err(codec->dev, "Not enough data\n");
 			goto err;
@@ -3679,7 +3694,8 @@ static int taiko_codec_enable_anc(struct snd_soc_dapm_widget *w,
 
 		if (taiko == NULL) {
 			dev_err(codec->dev, "taiko is NULL\n");
-			release_firmware(fw);
+			if(fw) 
+				release_firmware(fw);
 			return -EINVAL;
 		}
 		if (taiko->anc_slot >= num_anc_slots) {
@@ -3918,7 +3934,9 @@ static const struct snd_soc_dapm_route audio_map[] = {
 	{"AIF1 CAP", NULL, "AIF1_CAP Mixer"},
 	{"AIF2 CAP", NULL, "AIF2_CAP Mixer"},
 	{"AIF3 CAP", NULL, "AIF3_CAP Mixer"},
-	{"AIF4 VI", NULL, "SPK_OUT"},
+	
+	{"AIF4 VI", NULL, "VIONOFF"},
+	{"VIONOFF", "Switch", "VIINPUT"},
 
 	
 	{"AIF4 MAD", NULL, "CDC_CONN"},
@@ -5543,7 +5561,7 @@ static int taiko_codec_enable_slimvi_feedback(struct snd_soc_dapm_widget *w,
 	struct wcd9xxx *core = NULL;
 	struct snd_soc_codec *codec = NULL;
 	struct taiko_priv *taiko_p = NULL;
-	u32 ret = 0;
+	int ret = 0;
 	struct wcd9xxx_codec_dai_data *dai = NULL;
 
 	if (!w || !w->codec) {
@@ -5592,6 +5610,15 @@ static int taiko_codec_enable_slimvi_feedback(struct snd_soc_dapm_widget *w,
 		if (ret)
 			pr_err("%s error in close_slim_sch_tx %d\n",
 				__func__, ret);
+		ret = taiko_codec_enable_slim_chmask(dai, false);
+		if (ret < 0) {
+			ret = wcd9xxx_disconnect_port(core,
+						      &dai->wcd9xxx_ch_list,
+						      dai->grph);
+			pr_debug("%s: Disconnect RX port, ret = %d\n",
+				 __func__, ret);
+		}
+
 		snd_soc_update_bits(codec, TAIKO_A_CDC_CLK_TX_CLK_EN_B2_CTL,
 				0xC, 0x0);
 		
@@ -5612,7 +5639,7 @@ static int taiko_codec_enable_slimtx(struct snd_soc_dapm_widget *w,
 	struct wcd9xxx *core;
 	struct snd_soc_codec *codec = w->codec;
 	struct taiko_priv *taiko_p = snd_soc_codec_get_drvdata(codec);
-	u32  ret = 0;
+	int  ret = 0;
 	struct wcd9xxx_codec_dai_data *dai;
 
 	core = dev_get_drvdata(codec->dev->parent);
@@ -6317,6 +6344,10 @@ static const struct snd_soc_dapm_widget taiko_dapm_widgets[] = {
 
 	SND_SOC_DAPM_MIXER("LINEOUT4_PA_MIXER", SND_SOC_NOPM, 0, 0,
 		lineout4_pa_mix, ARRAY_SIZE(lineout4_pa_mix)),
+	SND_SOC_DAPM_SWITCH("VIONOFF", SND_SOC_NOPM, 0, 0,
+			    &aif4_vi_switch),
+	SND_SOC_DAPM_INPUT("VIINPUT"),
+
 };
 
 static irqreturn_t taiko_slimbus_irq(int irq, void *data)
@@ -7123,7 +7154,9 @@ static int taiko_setup_zdet(struct wcd9xxx_mbhc *mbhc,
 		
 		
 		snd_soc_write(codec, WCD9XXX_A_CDC_PA_RAMP_B1_CTL, 0x0);
-		if (!mbhc->hph_pa_dac_state)
+		if (!mbhc->hph_pa_dac_state &&
+		    (!(test_bit(MBHC_EVENT_PA_HPHL, &mbhc->event_state) ||
+		       test_bit(MBHC_EVENT_PA_HPHR, &mbhc->event_state))))
 			wcd9xxx_enable_static_pa(mbhc, false);
 		wcd9xxx_restore_registers(codec, &taiko->reg_save_restore);
 		break;
@@ -7189,6 +7222,7 @@ static int taiko_post_reset_cb(struct wcd9xxx *wcd9xxx)
 	struct taiko_priv *taiko;
 #if 0
 	int rco_clk_rate;
+
 #endif
 	int count;
 

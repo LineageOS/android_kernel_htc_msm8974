@@ -46,6 +46,7 @@
 #include <linux/uaccess.h>
 #include <linux/file.h>
 #include <linux/socket.h>
+/*#include <linux/smp_lock.h> ==> Commenting this since in Kernal 3.0 this feature has been removed.*/
 #include <linux/slab.h>
 #include <linux/kthread.h>
 
@@ -246,13 +247,13 @@ static void gannet_recvloop(void)
 	int size;
 	int bufsize = 1600;
 	unsigned char buf[bufsize + 1];
-	
+	/* Kernal 3.0 Changes Start */
 	static DEFINE_MUTEX(ker_lock_mutex);
 
-	
-	
+	/* kernel thread initialization */
+	/* lock_kernel(); ==> Commenting this line since in Kernal 3.0 this feature has been removed.*/
 	   mutex_lock(&ker_lock_mutex);
-	
+	/* Kernal 3.0 Changes End */
 
 
 	current->flags |= PF_NOFREEZE;
@@ -261,10 +262,10 @@ static void gannet_recvloop(void)
 	   after daemonize they are disabled) */
 	daemonize(MODULE_NAME);
 	allow_signal(SIGKILL);
-	
-	
+	/* Kernal 3.0 Changes Start */
+	/* unlock_kernel(); ==> Commenting this line since in Kernal 3.0 this feature has been removed*/
 	  mutex_unlock(&ker_lock_mutex);
-    
+    /* Kernal 3.0 Changes End */
 
 	/* main loop */
 	while (!gthreadquit) {
@@ -451,6 +452,9 @@ static struct net_device_stats *gannet_get_stats(struct net_device *dev)
 	return &p->stats;
 }
 
+/*static void gannet_set_multicast_list(struct net_device *dev)
+{
+}*/
 
 static void gannet_tx_timeout(struct net_device *dev)
 {
@@ -463,7 +467,7 @@ static const struct net_device_ops gannet_netdev_ops = {
 	.ndo_stop = gannet_stop,
 	.ndo_start_xmit = gannet_xmit,
 	.ndo_get_stats = gannet_get_stats,
-
+	//.ndo_set_multicast_list = gannet_set_multicast_list,
 	.ndo_tx_timeout = gannet_tx_timeout,
 	.ndo_change_mtu = NULL,
 };

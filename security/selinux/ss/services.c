@@ -956,7 +956,6 @@ void security_compute_operation(u32 ssid,
 		goto out;
 	}
 
-
 	if (unlikely(!tclass || tclass > policydb.p_classes.nprim)) {
 		if (printk_ratelimit())
 			printk(KERN_WARNING "SELinux:  Invalid class %hu\n", tclass);

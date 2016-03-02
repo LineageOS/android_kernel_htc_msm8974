@@ -57,7 +57,11 @@
 
 		qcom,pon_1 {
 			qcom,pon-type = <0>;
+			qcom,support-reset = <1>;
 			qcom,pull-up = <1>;
+			qcom,s1-timer = <10256>;
+			qcom,s2-timer = <2000>;
+			qcom,s2-type = <1>;
 			linux,code = <116>;
 		};
 
@@ -219,7 +223,7 @@
 		qcom,chg-adc_tm = <&pm8941_adc_tm>;
 		qcom,ibat-calibration-enabled;
 
-		qcom,chgr@1000 {
+		pm8941_chg_chgr: qcom,chgr@1000 {
 			status = "disabled";
 			reg = <0x1000 0x100>;
 			interrupts =	<0x0 0x10 0x0>,
@@ -863,10 +867,6 @@
 			label = "external_rsense";
 			reg = <0>;
 			qcom,decimation = <0>;
-			qcom,pre-div-channel-scaling = <1>;
-			qcom,calibration-type = "absolute";
-			qcom,scale-function = <0>;
-			qcom,hw-settle-time = <0>;
 			qcom,fast-avg-setup = <0>;
 		};
 	};
@@ -1297,6 +1297,7 @@
 		label = "flash";
 		flash-boost-supply = <&pm8941_chg_boost>;
 		torch-boost-supply = <&pm8941_boost>;
+		flash-wa-supply = <&pm8941_chg_chgr>;
 	};
 
 	qcom,leds@d400 {

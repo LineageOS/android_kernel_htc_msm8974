@@ -2,7 +2,7 @@
  * Core MDSS framebuffer driver.
  *
  * Copyright (C) 2007 Google Incorporated
- * Copyright (c) 2008-2014, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2008-2015, The Linux Foundation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -58,7 +58,6 @@
 #include "mdss_dsi.h"
 #include "mdss_mdp.h"
 
-
 #ifdef CONFIG_FB_MSM_TRIPLE_BUFFER
 #define MDSS_FB_NUM 3
 #else
@@ -77,7 +76,6 @@ static u32 mdss_fb_pseudo_palette[16] = {
 };
 
 static struct msm_mdp_interface *mdp_instance;
-
 static int mdss_fb_register(struct msm_fb_data_type *mfd);
 static int mdss_fb_open(struct fb_info *info, int user);
 static int mdss_fb_release(struct fb_info *info, int user);
@@ -239,30 +237,75 @@ end:
 }
 
 static int lcd_backlight_registered;
-static int lcd_backlight_nits_registered;
+
+static enum led_brightness mdss_fb_get_bl_brightness(struct led_classdev *led_cdev)
+{
+	struct msm_fb_data_type *mfd = dev_get_drvdata(led_cdev->dev->parent);
+	int brt_lvl = mfd->bl_level;
+
+	brt_lvl = htc_backlight_transfer_bl_brightness(brt_lvl, mfd->panel_info, false);
+	if (brt_lvl < 0) {
+		MDSS_BRIGHT_TO_BL(brt_lvl, mfd->bl_level, MDSS_MAX_BL_BRIGHTNESS,
+							mfd->panel_info->bl_max);
+	}
+	return brt_lvl;
+}
+
+static enum led_brightness mdss_fb_get_bl_nits(struct led_classdev *led_cdev)
+{
+	struct msm_fb_data_type *mfd = dev_get_drvdata(led_cdev->dev->parent);
+	int nits_lvl;
+
+	nits_lvl = htc_backlight_bl_to_nits(mfd->bl_level, mfd->panel_info);
+
+	if (nits_lvl < 0) {
+		pr_err("Not define nits table for BL 2.0 \n");
+		return 0;
+	}
+	return nits_lvl;
+}
 
 static void mdss_fb_set_bl_brightness(struct led_classdev *led_cdev,
 				      enum led_brightness value)
 {
 	struct msm_fb_data_type *mfd = dev_get_drvdata(led_cdev->dev->parent);
+
 	int bl_lvl = value;
 
-	if (strcmp(led_cdev->name, "lcd-backlight-nits") == 0) {
-		mfd->panel_info->max_brt = mfd->panel_info->act_max_brt;
-		mfd->panel_info->act_brt = true;
-		pr_debug("actual brightness mode %d \n", mfd->panel_info->max_brt);
-	} else {
-		mfd->panel_info->max_brt = MDSS_MAX_BL_BRIGHTNESS;
-		mfd->panel_info->act_brt = false;
-		pr_debug("orig brightness mode %d \n", mfd->panel_info->max_brt);
-	}
+	if (value > MDSS_MAX_BL_BRIGHTNESS)
+		value = MDSS_MAX_BL_BRIGHTNESS;
 
-	if (value > mfd->panel_info->max_brt)
-		value = mfd->panel_info->max_brt;
-
-	if (!mfd->panel_info->act_brt)
+	bl_lvl = htc_backlight_transfer_bl_brightness(value, mfd->panel_info, true);
+	if (bl_lvl < 0) {
 		MDSS_BRIGHT_TO_BL(bl_lvl, value, mfd->panel_info->bl_max,
 							MDSS_MAX_BL_BRIGHTNESS);
+	}
+
+	if (!bl_lvl && value)
+		bl_lvl = 1;
+
+	if (!IS_CALIB_MODE_BL(mfd) && (!mfd->ext_bl_ctrl || !value ||
+							!mfd->bl_level)) {
+		mutex_lock(&mfd->bl_lock);
+		mdss_fb_set_backlight(mfd, bl_lvl);
+		mutex_unlock(&mfd->bl_lock);
+	}
+}
+
+static void mdss_fb_set_bl_nits(struct led_classdev *led_cdev,
+				      enum led_brightness value)
+{
+	struct msm_fb_data_type *mfd = dev_get_drvdata(led_cdev->dev->parent);
+	int bl_lvl = value;
+
+	if (value > mfd->panel_info->nits_bl_table.max_nits)
+		value = mfd->panel_info->nits_bl_table.max_nits;
+
+	bl_lvl = htc_backlight_nits_to_bl(value, mfd->panel_info);
+	if (bl_lvl < 0) {
+		pr_err("Not define nits table for BL 2.0 \n");
+		return;
+	}
 
 	if (!bl_lvl && value)
 		bl_lvl = 1;
@@ -279,11 +322,13 @@ static struct led_classdev backlight_led = {
 	.name           = "lcd-backlight",
 	.brightness     = MDSS_MAX_BL_BRIGHTNESS,
 	.brightness_set = mdss_fb_set_bl_brightness,
+	.brightness_get = mdss_fb_get_bl_brightness,
 };
 
 static struct led_classdev backlight_led_nits = {
 	.name           = "lcd-backlight-nits",
-	.brightness_set = mdss_fb_set_bl_brightness,
+	.brightness_set = mdss_fb_set_bl_nits,
+	.brightness_get = mdss_fb_get_bl_nits,
 };
 
 static ssize_t mdss_fb_get_type(struct device *dev,
@@ -638,7 +683,6 @@ static int mdss_fb_probe(struct platform_device *pdev)
 
 	
 	if (!lcd_backlight_registered) {
-
 		backlight_led.brightness = mfd->panel_info->brightness_max;
 		backlight_led.max_brightness = mfd->panel_info->brightness_max;
 		if (led_classdev_register(&pdev->dev, &backlight_led))
@@ -649,17 +693,12 @@ static int mdss_fb_probe(struct platform_device *pdev)
 		
 		htc_register_attrs(&backlight_led.dev->kobj, mfd);
 		htc_debugfs_init(mfd);
-	}
 
-	
-	if (!lcd_backlight_nits_registered) {
-		if (mfd->panel_info->max_brt)
-			backlight_led_nits.max_brightness  = mfd->panel_info->act_max_brt;
+		
+		backlight_led_nits.max_brightness  = mfd->panel_info->nits_bl_table.max_nits;
 
 		if (led_classdev_register(&pdev->dev, &backlight_led_nits))
-			pr_err("led_classdev_register failed\n");
-		else
-			lcd_backlight_nits_registered = 1;
+			pr_err("led_classdev_register nits failed\n");
 	}
 
 	mdss_fb_create_sysfs(mfd);
@@ -736,6 +775,7 @@ static int mdss_fb_remove(struct platform_device *pdev)
 	if (lcd_backlight_registered) {
 		lcd_backlight_registered = 0;
 		led_classdev_unregister(&backlight_led);
+		led_classdev_unregister(&backlight_led_nits);
 	}
 
 	return 0;
@@ -953,7 +993,7 @@ void mdss_fb_set_backlight(struct msm_fb_data_type *mfd, u32 bkl_lvl)
 
 	if ((pdata) && (pdata->set_backlight)) {
 		mfd->bl_level_prev_scaled = mfd->bl_level_scaled;
-		if (!IS_CALIB_MODE_BL(mfd) && (!mfd->panel_info->act_brt))
+		if (!IS_CALIB_MODE_BL(mfd))
 			mdss_fb_scale_bl(mfd, &temp);
 		if (mfd->bl_level_scaled == temp) {
 			mfd->bl_level = bkl_lvl;
@@ -986,11 +1026,11 @@ static void mdss_fb_display_on(struct msm_fb_data_type *mfd)
 		if (!ignore_bkl_zero) {
 			pr_info("%s: bl_level %d ignore_bkl_zero %d\n", __func__, mfd->bl_level, ignore_bkl_zero);
 			if (mfd->unset_bl_level == 0) {
-				if (!mfd->panel_info->act_brt)
+				mfd->unset_bl_level = htc_backlight_transfer_bl_brightness(DEFAULT_BRIGHTNESS, mfd->panel_info, true);
+				if (mfd->unset_bl_level < 0) {
 					MDSS_BRIGHT_TO_BL(mfd->unset_bl_level, DEFAULT_BRIGHTNESS, mfd->panel_info->bl_max,
 							MDSS_MAX_BL_BRIGHTNESS);
-				else
-					mfd->unset_bl_level = DEFAULT_BRIGHTNESS;
+				}
 			}
 			ignore_bkl_zero = true;
 		}
@@ -2053,10 +2093,16 @@ static int __mdss_fb_display_thread(void *data)
 
 		if (mfd->panel_info->skip_frame) {
 			if (!frame_count) {
-				if (pwrctrl_pdata.bkl_config)
+				if (pwrctrl_pdata.bkl_config) {
 					pwrctrl_pdata.bkl_config(pdata, 0);
-				else
+				} else {
+#if defined(CONFIG_MACH_DUMMY)
+					memset(mfd->fbi->screen_base, 0, mfd->fbi->fix.smem_len);
+#else
 					pdata->set_backlight(pdata, 0);
+#endif
+
+				}
 			}
 			frame_count++;
 			if (frame_count > 2)
