@@ -85,7 +85,9 @@ struct usb_serial *usb_serial_get_by_index(unsigned index)
 			mutex_unlock(&serial->disc_mutex);
 			serial = NULL;
 		} else {
+/*++ 2014/09/17, USB Team, PCN00046 ++*/
 			mutex_unlock(&serial->disc_mutex);
+/*-- 2014/09/17, USB Team, PCN00046 --*/
 			kref_get(&serial->kref);
 		}
 	}
@@ -1399,8 +1401,10 @@ int usb_serial_register_drivers(struct usb_driver *udriver,
 
 	udriver->no_dynamic_id = 1;
 	rc = usb_register(udriver);
+/*++ 2014/09/17, USB Team, PCN00046 ++*/
 	if (rc)
 		goto failed1;
+/*-- 2014/09/17, USB Team, PCN00046 --*/
 
 	for (sd = serial_drivers; *sd; ++sd) {
 		(*sd)->usb_driver = udriver;
@@ -1417,7 +1421,9 @@ int usb_serial_register_drivers(struct usb_driver *udriver,
  failed:
 	while (sd-- > serial_drivers)
 		usb_serial_deregister(*sd);
+/*++ 2014/09/17, USB Team, PCN00046 ++*/
  failed1:
+/*-- 2014/09/17, USB Team, PCN00046 --*/
 	usb_deregister(udriver);
 	return rc;
 }

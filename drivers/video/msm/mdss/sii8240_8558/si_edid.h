@@ -18,7 +18,7 @@ the GNU General Public License for more details at http://www.gnu.org/licenses/g
 #define SI_EDID_H
 
 
-SI_PUSH_STRUCT_PACKING 
+SI_PUSH_STRUCT_PACKING //(
 
 typedef struct SI_PACK_THIS_STRUCT _TwoBytes_t
 {
@@ -30,8 +30,10 @@ typedef struct SI_PACK_THIS_STRUCT _TwoBytes_t
 #define EDID_EXTENSION_TAG  0x02
 #define EDID_EXTENSION_BLOCK_MAP 0xF0
 #define EDID_REV_THREE      0x03
+//#define LONG_DESCR_LEN                  18
 #define EDID_BLOCK_0        0x00
 #define EDID_BLOCK_2_3      0x01
+//#define EDID_BLOCK_0_OFFSET 0x0000
 
 typedef enum
 {
@@ -41,7 +43,7 @@ typedef enum
     ,DBTC_VENDOR_SPECIFIC_DATA_BLOCK    = 3
     ,DBTC_SPEAKER_ALLOCATION_DATA_BLOCK = 4
     ,DBTC_VESA_DTC_DATA_BLOCK           = 5
-    
+    //reserved                      	= 6
     ,DBTC_USE_EXTENDED_TAG            	= 7
 }data_block_tag_code_e;
 typedef struct SI_PACK_THIS_STRUCT _data_block_header_fields_t
@@ -95,12 +97,12 @@ typedef struct SI_PACK_THIS_STRUCT  _MHL_short_desc_t
 typedef struct SI_PACK_THIS_STRUCT _video_data_block_t
 {
     data_block_header_byte_t header;
-    cea_short_descriptor_t short_descriptors[1];
+    cea_short_descriptor_t short_descriptors[1];//open ended
 }video_data_block_t,*p_video_data_block_t;
 
 typedef enum
 {
-    
+    // reserved             =  0
     afd_linear_PCM_IEC60958 =  1
     ,afd_AC3                =  2
     ,afd_MPEG1_layers_1_2   =  3
@@ -115,7 +117,7 @@ typedef enum
     ,afd_MAT_MLP            = 12
     ,afd_DST                = 13
     ,afd_WMA_Pro            = 14
-    
+    //reserved              = 15
 }AudioFormatCodes_e;
 
 typedef struct SI_PACK_THIS_STRUCT _CEA_short_audio_descriptor_t
@@ -156,7 +158,7 @@ typedef struct SI_PACK_THIS_STRUCT _CEA_short_audio_descriptor_t
 typedef struct SI_PACK_THIS_STRUCT _audio_data_block_t
 {
     data_block_header_byte_t header;
-    CEA_short_audio_descriptor_t  short_audio_descriptors[1]; 
+    CEA_short_audio_descriptor_t  short_audio_descriptors[1]; // open ended
 }audio_data_block_t,*Paudio_data_block_t;
 
 typedef struct SI_PACK_THIS_STRUCT _speaker_allocation_flags_t
@@ -245,7 +247,7 @@ typedef struct SI_PACK_THIS_STRUCT _VSDB_byte_13_through_byte_15_t
 {
     HDMI_LLC_Byte13_t    byte13;
     HDMI_LLC_Byte14_t    byte14;
-    uint8_t vicList[1]; 
+    uint8_t vicList[1]; // variable length list base on HDMI_VIC_len
 }VSDB_byte_13_through_byte_15_t,*PVSDB_byte_13_through_byte_15_t;
 
 typedef struct SI_PACK_THIS_STRUCT _VSDB_all_fields_byte_9_through_byte15_t
@@ -255,7 +257,7 @@ typedef struct SI_PACK_THIS_STRUCT _VSDB_all_fields_byte_9_through_byte15_t
     uint8_t interlaced_video_latency;
     uint8_t interlaced_audio_latency;
     VSDB_byte_13_through_byte_15_t   byte_13_through_byte_15;
-    
+    // There must be no fields after here
 }VSDB_all_fields_byte_9_through_byte15_t,*PVSDB_all_fields_byte_9_through_byte15_t;
 
 typedef struct SI_PACK_THIS_STRUCT _VSDB_all_fields_byte_9_through_byte_15_sans_progressive_latency_t
@@ -263,7 +265,7 @@ typedef struct SI_PACK_THIS_STRUCT _VSDB_all_fields_byte_9_through_byte_15_sans_
     uint8_t interlaced_video_latency;
     uint8_t interlaced_audio_latency;
     VSDB_byte_13_through_byte_15_t   byte_13_through_byte_15;
-    
+    // There must be no fields after here
 }VSDB_all_fields_byte_9_through_byte_15_sans_progressive_latency_t,*PVSDB_all_fields_byte_9_through_byte_15_sans_progressive_latency_t;
 
 typedef struct SI_PACK_THIS_STRUCT _VSDB_all_fields_byte_9_through_byte_15_sans_interlaced_latency_t
@@ -271,13 +273,13 @@ typedef struct SI_PACK_THIS_STRUCT _VSDB_all_fields_byte_9_through_byte_15_sans_
     uint8_t video_latency;
     uint8_t audio_latency;
     VSDB_byte_13_through_byte_15_t   byte_13_through_byte_15;
-    
+    // There must be no fields after here
 }VSDB_all_fields_byte_9_through_byte_15_sans_interlaced_latency_t,*PVSDB_all_fields_byte_9_through_byte_15_sans_interlaced_latency_t;
 
 typedef struct SI_PACK_THIS_STRUCT _VSDB_all_fields_byte_9_through_byte_15_sans_all_latency_t
 {
     VSDB_byte_13_through_byte_15_t   byte_13_through_byte_15;
-    
+    // There must be no fields after here
 }VSDB_all_fields_byte_9_through_byte_15_sans_all_latency_t,*PVSDB_all_fields_byte_9_through_byte_15_sans_all_latency_t;
 
 typedef struct SI_PACK_THIS_STRUCT _HDMI_LLC_vsdb_payload_t
@@ -294,7 +296,7 @@ typedef struct SI_PACK_THIS_STRUCT _HDMI_LLC_vsdb_payload_t
         VSDB_all_fields_byte_9_through_byte_15_sans_interlaced_latency_t  vsdb_all_fields_byte_9_through_byte_15_sans_interlaced_latency;
         VSDB_all_fields_byte_9_through_byte15_t                       vsdb_all_fields_byte_9_through_byte_15;
     }vsdb_fields_byte_9_through_byte_15;
-    
+    // There must be no fields after here
 }HDMI_LLC_vsdb_payload_t,*PHDMI_LLC_vsdb_payload_t;
 
 typedef struct SI_PACK_THIS_STRUCT st_3D_structure_all_15_8_t
@@ -329,7 +331,7 @@ typedef struct SI_PACK_THIS_STRUCT tag_3D_mask_t
 
 typedef struct SI_PACK_THIS_STRUCT tag_2D_VIC_order_3D_structure_t
 {
-    _3D_structure_e _3D_structure:4;     
+    _3D_structure_e _3D_structure:4;     // definition from info frame
     unsigned    _2D_VIC_order:4;
 }_2D_VIC_order_3D_structure_t,*P_2D_VIC_order_3D_structure_t;
 
@@ -342,6 +344,7 @@ typedef struct SI_PACK_THIS_STRUCT tag_3D_detail_t
 typedef struct SI_PACK_THIS_STRUCT tag_3D_structure_and_detail_entry_sans_byte1_t
 {
     _2D_VIC_order_3D_structure_t    byte0;
+/*see HDMI 1.4 spec w.r.t. contents of 3D_structure_X */
 }_3D_structure_and_detail_entry_sans_byte1_t,*P_3D_structure_and_detail_entry_sans_byte1_t;
 
 typedef struct SI_PACK_THIS_STRUCT tag_3D_structure_and_detail_entry_with_byte1_t
@@ -388,7 +391,7 @@ typedef struct SI_PACK_THIS_STRUCT _vsdb_t
     union
     {
         HDMI_LLC_vsdb_payload_t HDMI_LLC;
-        uint8_t payload[1]; 
+        uint8_t payload[1]; // open ended
     }payload_u;
 }vsdb_t,*P_vsdb_t;
 
@@ -473,7 +476,7 @@ typedef struct SI_PACK_THIS_STRUCT _CEA_data_block_collection_t
         extended_tag_code_t extended_tag;
         cea_short_descriptor_t short_descriptor;
     }payload_u;
-    
+    // open ended array of cea_short_descriptor_t starts here
 }CEA_data_block_collection_t,*PCEA_data_block_collection_t;
 
 typedef struct SI_PACK_THIS_STRUCT _CEA_extension_version_1_t
@@ -781,6 +784,7 @@ typedef struct SI_PACK_THIS_STRUCT _VIC_info_t
     uint16_t v_blank_in_pixels;
     uint32_t field_rate_in_milliHz;
     VIC_info_fields_t fields;
+//    uint16_t pixClockDiv10000;
 }VIC_info_t,*PVIC_info_t;
 
 typedef struct SI_PACK_THIS_STRUCT _HDMI_VIC_info_t
@@ -792,24 +796,24 @@ typedef struct SI_PACK_THIS_STRUCT _HDMI_VIC_info_t
 }HDMI_VIC_info_t,*PHDMI_VIC_info_t;
 
 
-#ifdef ENABLE_EDID_INFO_PRINT 
+#ifdef ENABLE_EDID_INFO_PRINT //(
 void dump_EDID_block_impl(const char *pszFunction, int iLineNum,uint8_t override,uint8_t *pData,uint16_t length);
 void clear_EDID_block_impl(uint8_t *pData);
 #define DUMP_EDID_BLOCK_INFO(override,pData,length) dump_EDID_block_impl(__FUNCTION__,__LINE__,override,(uint8_t *)pData,length);
 
-# ifdef ENABLE_EDID_DEBUG_PRINT 
+# ifdef ENABLE_EDID_DEBUG_PRINT //(
 #define DUMP_EDID_BLOCK(override,pData,length) dump_EDID_block_impl(__FUNCTION__,__LINE__,override,(uint8_t *)pData,length);
 #define CLEAR_EDID_BLOCK(pData) clear_EDID_block_impl(pData);
-# else 
-#define DUMP_EDID_BLOCK(override,pData,length) 
-#define CLEAR_EDID_BLOCK(pData) 
-# endif 
+# else //)(
+#define DUMP_EDID_BLOCK(override,pData,length) /* nothing to do */
+#define CLEAR_EDID_BLOCK(pData) /* nothing to do */
+# endif //)
 
-#else 
-#define DUMP_EDID_BLOCK_INFO(override,pData,length) 
-#define DUMP_EDID_BLOCK(override,pData,length) 
-#define CLEAR_EDID_BLOCK(pData) 
-#endif 
+#else //)(
+#define DUMP_EDID_BLOCK_INFO(override,pData,length) /* nothing to do */
+#define DUMP_EDID_BLOCK(override,pData,length) /* nothing to do */
+#define CLEAR_EDID_BLOCK(pData) /* nothing to do */
+#endif //)
 
 enum EDID_error_codes
 {
@@ -828,6 +832,6 @@ enum EDID_error_codes
 	EDID_DDC_BUS_RELEASE_FAILURE,
     EDID_READ_TIMEOUT
 };
-SI_POP_STRUCT_PACKING 
+SI_POP_STRUCT_PACKING //)
 
-#endif 
+#endif /* #if !defined(SI_EDID_H) */

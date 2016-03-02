@@ -296,7 +296,7 @@ int checkcmd_modem_epst(unsigned char *buf)
 			DIAG_INFO("%s:id = 0x%x no default routing path\n", __func__, *(buf+1));
 		return NO_DEF_ID;
 	} else {
-		
+		/*DIAG_INFO("%s: not EPST_PREFIX id = 0x%x route to USB!!!\n", __func__, *buf);*/
 		return NO_PST;
 	}
 
@@ -378,7 +378,7 @@ int modem_to_userspace(void *buf, int r, int type, int is9k)
 	if (driver->hsic_ch)
 		queue_work(diag_bridge[HSIC].wq, &driver->diag_read_hsic_work);
 #endif
-	
+	/* ctxt->rx_count += r; */
 	req->actual = r;
 	xpst_req_put(ctxt, &ctxt->rx_arm9_done, req);
 	wake_up(&ctxt->read_arm9_wq);
@@ -446,6 +446,8 @@ static long htc_diag_ioctl(struct file *file, unsigned int cmd, unsigned long ar
 		break;
 
 	case USB_DIAG_FUNC_IOC_AMR_SET:
+		/*	if (copy_from_user(&ctxt->is2ARM11, argp, sizeof(int)))
+			return -EFAULT;*/
 		DIAG_INFO("diag: fix me USB_DIAG_FUNC_IOC_AMR_SET\n");
 		break;
 	case USB_DIAG_FUNC_IOC_LOGTYPE_GET:
@@ -739,6 +741,7 @@ static int if_route_to_userspace(struct diag_context *ctxt, unsigned int cmd)
 	/* command ids 0xfb..0xff are not used by msm diag; we steal these ids
 	 * for communication between userspace tool and host test tool.
 	 */
+	/*printk("cmd_num=%d cmd_id=%d\n", cmd_num, cmd_id);*/
 	if (cmd_id >= 0xfb && cmd_id <= 0xff)
 		return 1;
 
@@ -1011,6 +1014,7 @@ static int diag2arm9_release(struct inode *ip, struct file *fp)
 	 * slate will open it for one time
 	 * but close it for several times and never open
 	 *************************************/
+	/*smd_diag_enable("diag2arm9_release", 0);*/
 	mutex_unlock(&ctxt->diag2arm9_lock);
 #if defined(CONFIG_MACH_VIGOR)
 	kfree(diag2arm9_buf_9k);

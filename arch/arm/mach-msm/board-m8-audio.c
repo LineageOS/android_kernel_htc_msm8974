@@ -103,6 +103,7 @@ static char *MID_LIST[][2] = {
 	{"0P6B700", "MET#WHL-SPCS"},
 };
 
+//htc audio ++
 #define HTC_HS_AMP  0x1
 #define HTC_RCV_AMP 0x2
 static int htc_amp_mask = 0;
@@ -172,6 +173,7 @@ static struct acoustic_ops acoustic = {
 	.enable_24b_audio = m8_enable_24b_audio
 };
 
+//htc audio --
 
 static inline int param_is_mask(int p)
 {
@@ -207,6 +209,7 @@ static const struct soc_enum msm8974_auxpcm_enum[] = {
 #include <sound/q6afe-v2.h>
 #endif
 
+//htc audio ++
 struct request_gpio {
 	int gpio_no;
 	char *gpio_name;
@@ -250,6 +253,7 @@ static struct mi2s_config {
 	},
 	.afe_port_id = 0,
 };
+//htc audio --
 
 /* MI2S clock */
 struct mi2s_clk {
@@ -260,8 +264,10 @@ struct mi2s_clk {
 };
 static struct mi2s_clk quat_mi2s_clk;
 
+//void *def_taiko_mbhc_cal(void);
 static int msm_snd_enable_codec_ext_clk(struct snd_soc_codec *codec, int enable,
 					bool dapm);
+//htc audio ++
 #if 0
 static struct wcd9xxx_mbhc_config mbhc_cfg = {
 	.read_fw_bin = false,
@@ -277,6 +283,7 @@ static struct wcd9xxx_mbhc_config mbhc_cfg = {
 	.swap_gnd_mic = NULL,
 };
 #endif
+//htc audio --
 struct msm_auxpcm_gpio {
 	unsigned gpio_no;
 	const char *gpio_name;
@@ -360,7 +367,7 @@ static atomic_t sec_auxpcm_rsc_ref;
 static int msm8974_liquid_ext_spk_power_amp_init(void)
 {
 	int ret = 0;
-	return 0; 
+	return 0; //htc audio: we don't use spk amp
 	ext_spk_amp_gpio = of_get_named_gpio(spdev->dev.of_node,
 		"qcom,ext-spk-amp-gpio", 0);
 	if (ext_spk_amp_gpio >= 0) {
@@ -506,6 +513,7 @@ static int msm8974_liquid_init_docking(struct snd_soc_dapm_context *dapm)
 	return 0;
 }
 
+//htc audio ++
 static void htc_rcv_amp_ctl(int enable)
 {
 	int i, value = (enable)?1:0;
@@ -571,6 +579,7 @@ static void htc_amp_control(int amp_mask, int lineout_mask)
 
 }
 
+//htc audio --
 
 static void msm8974_ext_spk_power_amp_on(u32 spk)
 {
@@ -1213,9 +1222,11 @@ static int msm8974_hdmi_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 	pr_debug("%s channels->min %u channels->max %u ()\n", __func__,
 			channels->min, channels->max);
 
+//htc audio ++
 	if(htc_acoustic_query_feature(HTC_AUD_24BIT)) {
 		hdmi_rx_bit_format = SNDRV_PCM_FORMAT_S24_LE;
 	}
+//htc audio --
 
 	param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
 				hdmi_rx_bit_format);
@@ -1285,7 +1296,9 @@ static int msm_prim_auxpcm_startup(struct snd_pcm_substream *substream)
 	struct msm8974_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
 	struct msm_auxpcm_ctrl *auxpcm_ctrl = NULL;
 	int ret = 0;
+//htc audio ++ we don't use auxpcm
 	return 0;
+//htc audio --
 
 	pr_debug("%s(): substream = %s, prim_auxpcm_rsc_ref counter = %d\n",
 		__func__, substream->name, atomic_read(&prim_auxpcm_rsc_ref));
@@ -1320,7 +1333,9 @@ static void msm_prim_auxpcm_shutdown(struct snd_pcm_substream *substream)
 	struct snd_soc_card *card = rtd->card;
 	struct msm8974_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
 	struct msm_auxpcm_ctrl *auxpcm_ctrl = NULL;
+//htc audio ++ we don't use auxpcm
 	return;
+//htc audio --
 
 	pr_debug("%s(): substream = %s, prim_auxpcm_rsc_ref counter = %d\n",
 		__func__, substream->name, atomic_read(&prim_auxpcm_rsc_ref));
@@ -1345,7 +1360,9 @@ static int msm_sec_auxpcm_startup(struct snd_pcm_substream *substream)
 
 	pr_debug("%s(): substream = %s, sec_auxpcm_rsc_ref counter = %d\n",
 		__func__, substream->name, atomic_read(&sec_auxpcm_rsc_ref));
+//htc audio ++ we don't use auxpcm
 	return 0;
+//htc audio --
 	auxpcm_ctrl = pdata->sec_auxpcm_ctrl;
 
 	if (auxpcm_ctrl == NULL || auxpcm_ctrl->pin_data == NULL) {
@@ -1377,7 +1394,9 @@ static void msm_sec_auxpcm_shutdown(struct snd_pcm_substream *substream)
 	struct msm8974_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
 	struct msm_auxpcm_ctrl *auxpcm_ctrl = NULL;
 
+//htc audio ++ we don't use auxpcm
 	return;
+//htc audio --
 	pr_debug("%s(): substream = %s, sec_auxpcm_rsc_ref counter = %d\n",
 		__func__, substream->name, atomic_read(&sec_auxpcm_rsc_ref));
 
@@ -1404,10 +1423,12 @@ static int msm_slim_0_rx_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 	pr_debug("%s()\n", __func__);
 	param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
 				   slim0_rx_bit_format);
+//htc audio ++
 	if(htc_acoustic_query_feature(HTC_AUD_24BIT)) {
 		param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
 			SNDRV_PCM_FORMAT_S24_LE);
 	}
+//htc audio --
 	rate->min = rate->max = slim0_rx_sample_rate;
 	channels->min = channels->max = msm_slim_0_rx_ch;
 
@@ -1491,6 +1512,7 @@ static int msm_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 	return 0;
 }
 
+//htc audio ++
 static int msm_be_mi2s_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 				struct snd_pcm_hw_params *params)
 {
@@ -1511,6 +1533,7 @@ static int msm_be_mi2s_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 
 	return 0;
 }
+//htc audio --
 
 static const struct soc_enum msm_snd_enum[] = {
 	SOC_ENUM_SINGLE_EXT(2, spk_function),
@@ -1546,6 +1569,17 @@ static const struct snd_kcontrol_new msm_snd_controls[] = {
 			hdmi_rx_sample_rate_get, hdmi_rx_sample_rate_put),
 };
 
+/*FIXME:'mbhc_cfg' undeclared
+static bool msm8974_swap_gnd_mic(struct snd_soc_codec *codec)
+{
+	struct snd_soc_card *card = codec->card;
+	struct msm8974_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
+	int value = gpio_get_value_cansleep(pdata->us_euro_gpio);
+	pr_debug("%s: swap select switch %d to %d\n", __func__, value, !value);
+	gpio_set_value_cansleep(pdata->us_euro_gpio, !value);
+	return true;
+}
+*/
 
 static int msm_afe_set_config(struct snd_soc_codec *codec)
 {
@@ -1642,6 +1676,7 @@ static int msm8974_taiko_event_cb(struct snd_soc_codec *codec,
 	}
 }
 
+//htc audio ++
 
 static int msm_htc_amp_get(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol)
@@ -1717,7 +1752,7 @@ static const struct snd_soc_dapm_widget htc_mi2s_widget[] = {
 };
 
 static const struct snd_soc_dapm_route htc_mi2s_virtual_route[] = {
-	
+	/* SLIMBUS Connections */
 	{"HTC_MI2S_OUT", NULL, "HTC VIRTUAL MI2S"},
 };
 
@@ -1736,6 +1771,7 @@ static int msm_htc_mi2s_init(struct snd_soc_pcm_runtime *rtd)
 
 	return 0;
 }
+//htc audio --
 
 static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
 {
@@ -1767,6 +1803,7 @@ static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
 	if (err < 0)
 		return err;
 
+//htc audio ++
 	err = snd_soc_add_codec_controls(codec, int_btsco_rate_mixer_controls,
 					 ARRAY_SIZE(int_btsco_rate_mixer_controls));
 	if (err < 0)
@@ -1776,6 +1813,7 @@ static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
 					 ARRAY_SIZE(htc_amp_siwth_control));
 	if (err < 0)
 		return err;
+//htc audio --
 
 	err = msm8974_liquid_ext_spk_power_amp_init();
 	if (err) {
@@ -1842,8 +1880,9 @@ static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
 		}
 	}
 
+//htc audio ++
 #if 0
-	
+	/* start mbhc */
 	mbhc_cfg.calibration = def_taiko_mbhc_cal();
 	if (mbhc_cfg.calibration) {
 		err = taiko_hs_detect(codec, &mbhc_cfg);
@@ -1854,11 +1893,12 @@ static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
 		goto out;
 	}
 #endif
-	
+	//get wcd int2 direct by project
 	if(htc_wcd_config.init) {
 		gpio_tlmm_config(GPIO_CFG(htc_wcd_config.gpio[0].gpio_no, \
 			0,wcd_gpio_direct,GPIO_CFG_PULL_DOWN,GPIO_CFG_2MA),GPIO_CFG_ENABLE);
 	}
+//htc audio --
 
 	adsp_state_notifier =
 	    subsys_notif_register_notifier("adsp",
@@ -1999,10 +2039,10 @@ static int msm_snd_hw_params(struct snd_pcm_substream *substream,
 			pr_err("%s: failed to get codec chan map\n", __func__);
 			goto end;
 		}
-		
+		/* For tabla_tx1 case */
 		if (codec_dai->id == 1)
 			user_set_tx_ch = msm_slim_0_tx_ch;
-		
+		/* For tabla_tx2 case */
 		else if (codec_dai->id == 3)
 			user_set_tx_ch = params_channels(params);
 		else
@@ -2104,6 +2144,10 @@ static int msm8974_configure_quat_mi2s_gpio(void)
 
 		rtn = gpio_request(htc_mi2s_config.gpio[i].gpio_no,
 				htc_mi2s_config.gpio[i].gpio_name);
+/*
+		gpio_tlmm_config(GPIO_CFG(htc_mi2s_config.gpio[i].gpio_no, 1,
+						GPIO_CFG_INPUT,GPIO_CFG_NO_PULL,GPIO_CFG_8MA),GPIO_CFG_ENABLE);
+*/
 		pr_info("%s: gpio = %d, gpio name = %s, rtn = %d\n", __func__,
 		htc_mi2s_config.gpio[i].gpio_no, htc_mi2s_config.gpio[i].gpio_name, rtn);
 		gpio_set_value(htc_mi2s_config.gpio[i].gpio_no, 1);
@@ -2128,7 +2172,9 @@ static int msm8974_mi2s_startup(struct snd_pcm_substream *substream)
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
 	struct snd_soc_dai *codec_dai = rtd->codec_dai;
+//htc audio ++
 	struct afe_clk_cfg *lpass_mi2s_clk = NULL;
+//htc audio --
 	pr_info("%s: dai name %s %p\n", __func__, cpu_dai->name, cpu_dai->dev);
 	if(!htc_mi2s_config.init) {
 		pr_err("%s: mi2s config is not initial\n",__func__);
@@ -2139,10 +2185,12 @@ static int msm8974_mi2s_startup(struct snd_pcm_substream *substream)
 		pr_info("%s: acquire mi2s resources\n", __func__);
 		msm8974_configure_quat_mi2s_gpio();
 
+//htc audio ++
 		if(htc_acoustic_query_feature(HTC_AUD_24BIT))
 			lpass_mi2s_clk = &lpass_mi2s_enable[1];
 		else
 			lpass_mi2s_clk = &lpass_mi2s_enable[0];
+//htc audio --
 		ret = afe_set_lpass_clock(htc_mi2s_config.afe_port_id, lpass_mi2s_clk);
 		if (ret < 0) {
 			int cnt = atomic_dec_return(&quat_mi2s_clk.mi2s_rsc_ref);
@@ -2332,7 +2380,7 @@ static struct snd_soc_dai_link msm8974_common_dai_links[] = {
 			    SND_SOC_DPCM_TRIGGER_POST},
 		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
 		.ignore_suspend = 1,
-		.ignore_pmdown_time = 1, 
+		.ignore_pmdown_time = 1, /* dai link has playback support */
 		.codec_dai_name = "snd-soc-dummy-dai",
 		.codec_name = "snd-soc-dummy",
 	},
@@ -2435,6 +2483,7 @@ static struct snd_soc_dai_link msm8974_common_dai_links[] = {
 		.codec_dai_name = "snd-soc-dummy-dai",
 		.codec_name = "snd-soc-dummy",
 	},
+//htc audio ++
 	{
 		.name = "Voice2",
 		.stream_name = "Voice2",
@@ -2451,6 +2500,7 @@ static struct snd_soc_dai_link msm8974_common_dai_links[] = {
 		.ignore_pmdown_time = 1,
 		.be_id = MSM_FRONTEND_DAI_VOICE2,
 	},
+//htc audio --
 	{
 		.name = "VoLTE",
 		.stream_name = "VoLTE",
@@ -2485,7 +2535,7 @@ static struct snd_soc_dai_link msm8974_common_dai_links[] = {
 		.ignore_pmdown_time = 1,
 		.be_id = MSM_FRONTEND_DAI_MULTIMEDIA5,
 	},
-	
+	/* LSM FE */
 	{
 		.name = "Listen Audio Service",
 		.stream_name = "Listen Audio Service",
@@ -2765,7 +2815,7 @@ static struct snd_soc_dai_link msm8974_common_dai_links[] = {
 		.be_hw_params_fixup = msm_be_hw_params_fixup,
 		.ignore_suspend = 1,
 	},
-	
+	/* MAD BE */
 	{
 		.name = LPASS_BE_SLIMBUS_5_TX,
 		.stream_name = "Slimbus5 Capture",
@@ -2815,6 +2865,7 @@ static struct snd_soc_dai_link msm8974_common_dai_links[] = {
 		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
 		.ops = &msm8974_slimbus_2_be_ops,
 	},
+//htc audio ++
 	{
 		.name = LPASS_BE_QUAT_MI2S_RX,
 		.stream_name = "Quaternary MI2S Playback",
@@ -2850,7 +2901,7 @@ static struct snd_soc_dai_link msm8974_common_dai_links[] = {
 		.trigger = {SND_SOC_DPCM_TRIGGER_POST, SND_SOC_DPCM_TRIGGER_POST},
 		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
 		.ignore_suspend = 1,
-		.ignore_pmdown_time = 1, 
+		.ignore_pmdown_time = 1, /* this dailink has playback support */
 		.codec_dai_name = "snd-soc-dummy-dai",
 		.codec_name = "snd-soc-dummy",
 	},
@@ -2871,6 +2922,7 @@ static struct snd_soc_dai_link msm8974_common_dai_links[] = {
 		 /* this dainlink has playback support */
 		.be_id = MSM_FRONTEND_DAI_MULTIMEDIA7,
 	},
+//htc audio --
 
 	/* Secondary AUX PCM Backend DAI Links */
 	{
@@ -2952,6 +3004,7 @@ static struct snd_soc_dai_link msm8974_common_dai_links[] = {
 		.codec_name = "snd-soc-dummy",
 		.be_id = MSM_FRONTEND_DAI_QCHAT,
 	},
+//htc audio ++
 	{
 		.name = "MI2S TX Hostless Capture",
 		.stream_name = "MI2S TX Hostless Capture",
@@ -2965,10 +3018,27 @@ static struct snd_soc_dai_link msm8974_common_dai_links[] = {
 		.codec_dai_name = "snd-soc-dummy-dai",
 		.codec_name = "snd-soc-dummy",
 	},
+	{
+		.name = "VoWLAN",
+		.stream_name = "VoWLAN",
+		.cpu_dai_name   = "VoWLAN",
+		.platform_name  = "msm-pcm-voice",
+		.dynamic = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			    SND_SOC_DPCM_TRIGGER_POST},
+		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+		.codec_dai_name = "snd-soc-dummy-dai",
+		.codec_name = "snd-soc-dummy",
+		.be_id = MSM_FRONTEND_DAI_VOWLAN,
+	},
+//htc audio --
 
 };
 
 static struct snd_soc_dai_link msm8974_hdmi_dai_link[] = {
+/* HDMI BACK END DAI Link */
 	{
 		.name = LPASS_BE_HDMI,
 		.stream_name = "HDMI Playback",
@@ -3004,7 +3074,9 @@ static int msm8974_dtparse_auxpcm(struct platform_device *pdev,
 	enum of_gpio_flags flags = OF_GPIO_ACTIVE_LOW;
 	int auxpcm_cnt = 0;
 
+//htc audio ++ we don't use auxpcm
 	return 0;
+//htc audio --
 
 	pin_data = devm_kzalloc(&pdev->dev, (ARRAY_SIZE(gpio_no) *
 				sizeof(struct msm_auxpcm_gpio)),
@@ -3079,7 +3151,7 @@ static int msm8974_prepare_us_euro(struct snd_soc_card *card)
 {
 	struct msm8974_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
 	int ret;
-	return 0; 
+	return 0; //htc audio: we don't use
 	if (pdata->us_euro_gpio) {
 		dev_dbg(card->dev, "%s : us_euro gpio request %d", __func__,
 			pdata->us_euro_gpio);
@@ -3095,6 +3167,7 @@ static int msm8974_prepare_us_euro(struct snd_soc_card *card)
 	return 0;
 }
 
+//htc audio ++
 static int msm8974_dtparse_mi2s(struct platform_device *pdev,
 				struct mi2s_config *pconfig)
 {
@@ -3217,13 +3290,14 @@ static int msm8974_dtparse_wcd(struct platform_device *pdev,
 	return 0;
 }
 
+//htc audio --
 
 static __devinit int msm8974_asoc_machine_probe(struct platform_device *pdev)
 {
 	struct snd_soc_card *card = &snd_soc_card_msm8974;
 	struct msm8974_asoc_mach_data *pdata;
 	int ret;
-	
+	//const char *auxpcm_pri_gpio_set = NULL;
 
 	pr_info("%s: ++\n",__func__);
 
@@ -3318,6 +3392,7 @@ static __devinit int msm8974_asoc_machine_probe(struct platform_device *pdev)
 		goto err;
 	}
 
+//htc audio ++
 	mutex_init(&htc_amp_mutex);
 
 	msm8974_dtparse_mi2s(pdev, &htc_mi2s_config);
@@ -3327,6 +3402,7 @@ static __devinit int msm8974_asoc_machine_probe(struct platform_device *pdev)
 	if (of_property_read_bool(pdev->dev.of_node, "htc,audio_use_dmic")) {
 		atomic_set(&dev_use_dmic,1);
 	}
+//htc audio --
 
 	/* Parse Primary AUXPCM info from DT */
 	ret = msm8974_dtparse_auxpcm(pdev, &pdata->pri_auxpcm_ctrl,
@@ -3346,7 +3422,7 @@ static __devinit int msm8974_asoc_machine_probe(struct platform_device *pdev)
 		goto err;
 	}
 
-#if 0 
+#if 0 //htc audio: we don't use below
 	pdata->us_euro_gpio = of_get_named_gpio(pdev->dev.of_node,
 				"qcom,us-euro-gpios", 0);
 	if (pdata->us_euro_gpio < 0) {
@@ -3356,6 +3432,9 @@ static __devinit int msm8974_asoc_machine_probe(struct platform_device *pdev)
 	} else {
 		dev_dbg(&pdev->dev, "%s detected %d",
 			"qcom,us-euro-gpios", pdata->us_euro_gpio);
+		/*FIXME: 'mbhc_cfg' undeclared
+		 mbhc_cfg.swap_gnd_mic = msm8974_swap_gnd_mic;
+		*/
 	}
 #endif
 	ret = msm8974_prepare_us_euro(card);
@@ -3363,7 +3442,7 @@ static __devinit int msm8974_asoc_machine_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "msm8974_prepare_us_euro failed (%d)\n",
 			ret);
 
-#if 0 
+#if 0 //htc audio: we don't use below
 	ret = of_property_read_string(pdev->dev.of_node,
 			"qcom,prim-auxpcm-gpio-set", &auxpcm_pri_gpio_set);
 	if (ret) {
@@ -3423,7 +3502,7 @@ static int __devexit msm8974_asoc_machine_remove(struct platform_device *pdev)
 		regulator_put(ext_spk_amp_regulator);
 
 	gpio_free(pdata->mclk_gpio);
-#if 0 
+#if 0 //htc audio: we don't use
 	gpio_free(pdata->us_euro_gpio);
 
 	if (ext_spk_amp_gpio >= 0)

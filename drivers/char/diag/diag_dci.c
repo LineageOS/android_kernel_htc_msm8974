@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -51,6 +51,7 @@ struct mutex dci_health_mutex;
 spinlock_t ws_lock;
 unsigned long ws_lock_flags;
 
+/* Number of milliseconds anticipated to process the DCI data */
 #define DCI_WAKEUP_TIMEOUT 1
 
 #define DCI_CAN_ADD_BUF_TO_LIST(buf)					\
@@ -139,7 +140,7 @@ static inline int diag_dci_check_buffer(struct diag_dci_buffer_t *buf, int len)
 	if (!buf)
 		return -EINVAL;
 
-	
+	/* Return 1 if the buffer is not busy and can hold new data */
 	if ((buf->data_len + len < buf->capacity) && !buf->in_busy)
 		return 1;
 
@@ -219,6 +220,10 @@ void diag_dci_wakeup_clients()
 	list_for_each_safe(start, temp, &driver->dci_client_list) {
 		entry = list_entry(start, struct diag_dci_client_tbl, track);
 
+		/*
+		 * Don't wake up the client when there is no pending buffer to
+		 * write or when it is writing to user space
+		 */
 		if (!list_empty(&entry->list_write_buf) && !entry->in_service) {
 			mutex_lock(&entry->write_buf_mutex);
 			entry->in_service = 1;
@@ -269,6 +274,7 @@ void dci_data_drain_work_fn(struct work_struct *work)
 	dci_timer_in_progress = 0;
 }
 
+/* Process the data read from apps userspace client */
 void diag_process_apps_dci_read_data(int data_type, void *buf, int recd_bytes)
 {
 	uint8_t cmd_code;
@@ -305,17 +311,22 @@ void diag_process_apps_dci_read_data(int data_type, void *buf, int recd_bytes)
 
 	}
 
-	
+	/* wake up all sleeping DCI clients which have some data */
 	diag_dci_wakeup_clients();
 	dci_check_drain_timer();
 }
 
+/* Process the data read from the smd dci channel */
 int diag_process_smd_dci_read_data(struct diag_smd_info *smd_info, void *buf,
 								int recd_bytes)
 {
 	int read_bytes, dci_pkt_len;
 	uint8_t recv_pkt_cmd_code;
 
+	/*
+	 * Release wakeup source when there are no more clients to
+	 * process DCI data
+	 */
 	if (driver->num_dci_client == 0) {
 		diag_dci_try_deactivate_wakeup_source();
 		return 0;
@@ -323,38 +334,45 @@ int diag_process_smd_dci_read_data(struct diag_smd_info *smd_info, void *buf,
 
 	diag_dci_smd_record_info(recd_bytes, (uint8_t)smd_info->type,
 				 (uint8_t)smd_info->peripheral);
-	
+	/* Each SMD read can have multiple DCI packets */
 	read_bytes = 0;
 	while (read_bytes < recd_bytes) {
-		
+		/* read actual length of dci pkt */
 		dci_pkt_len = *(uint16_t *)(buf+2);
 
+		/* Check if the length of the current packet is lesser than the
+		 * remaining bytes in the received buffer. This includes space
+		 * for the Start byte (1), Version byte (1), length bytes (2)
+		 * and End byte (1)
+		 */
 		if ((dci_pkt_len+5) > (recd_bytes-read_bytes)) {
 			pr_err("diag: Invalid length in %s, len: %d, dci_pkt_len: %d",
 					__func__, recd_bytes, dci_pkt_len);
 			diag_dci_try_deactivate_wakeup_source();
 			return 0;
 		}
-		
+		/* process one dci packet */
 		pr_debug("diag: dci: peripheral = %d bytes read = %d, single dci pkt len = %d\n",
 			 smd_info->peripheral, read_bytes, dci_pkt_len);
+		/* print_hex_dump(KERN_DEBUG, "Single DCI packet :",
+		 DUMP_PREFIX_ADDRESS, 16, 1, buf, 5 + dci_pkt_len, 1); */
 		recv_pkt_cmd_code = *(uint8_t *)(buf+4);
 		if (recv_pkt_cmd_code == LOG_CMD_CODE) {
-			
+			/* Don't include the 4 bytes for command code */
 			extract_dci_log(buf + 4, recd_bytes - 4,
 					smd_info->peripheral);
 		} else if (recv_pkt_cmd_code == EVENT_CMD_CODE) {
-			
+			/* Don't include the 4 bytes for command code */
 			extract_dci_events(buf + 4, recd_bytes - 4,
 					   smd_info->peripheral);
 		} else
 			extract_dci_pkt_rsp(buf + 4, dci_pkt_len,
 					    smd_info->peripheral, smd_info);
 		read_bytes += 5 + dci_pkt_len;
-		buf += 5 + dci_pkt_len; 
+		buf += 5 + dci_pkt_len; /* advance to next DCI pkt */
 	}
 
-	
+	/* wake up all sleeping DCI clients which have some data */
 	diag_dci_wakeup_clients();
 	dci_check_drain_timer();
 	diag_dci_try_deactivate_wakeup_source();
@@ -436,21 +454,21 @@ static int diag_dci_filter_commands(struct diag_pkt_header_t *header)
 		return -ENOMEM;
 
 	switch (header->cmd_code) {
-	case 0x7d: 
-	case 0x73: 
-	case 0x81: 
-	case 0x82: 
-	case 0x60: 
+	case 0x7d: /* Msg Mask Configuration */
+	case 0x73: /* Log Mask Configuration */
+	case 0x81: /* Event Mask Configuration */
+	case 0x82: /* Event Mask Change */
+	case 0x60: /* Event Mask Toggle */
 		return 1;
 	}
 
 	if (header->cmd_code == 0x4b && header->subsys_id == 0x12) {
 		switch (header->subsys_cmd_code) {
-		case 0x60: 
-		case 0x61: 
-		case 0x62: 
-		case 0x20C: 
-		case 0x20D: 
+		case 0x60: /* Extended Event Mask Config */
+		case 0x61: /* Extended Msg Mask Config */
+		case 0x62: /* Extended Log Mask Config */
+		case 0x20C: /* Set current Preset ID */
+		case 0x20D: /* Get current Preset ID */
 			return 1;
 		}
 	}
@@ -498,19 +516,23 @@ static int diag_dci_remove_req_entry(unsigned char *buf, int len,
 		return -EIO;
 	}
 
-	
+	/* It is an immediate response, delete it from the table */
 	if (*buf != 0x80) {
 		list_del(&entry->track);
 		kfree(entry);
 		return 1;
 	}
 
-	
+	/* It is a delayed response. Check if the length is valid */
 	if (len < MIN_DELAYED_RSP_LEN) {
 		pr_err("diag: Invalid delayed rsp packet length %d\n", len);
 		return -EINVAL;
 	}
 
+	/*
+	 * If the delayed response id field (uint16_t at byte 8) is 0 then
+	 * there is only one response and we can remove the request entry.
+	 */
 	delayed_rsp_id = *(uint16_t *)(buf + 8);
 	if (delayed_rsp_id == 0) {
 		list_del(&entry->track);
@@ -518,6 +540,12 @@ static int diag_dci_remove_req_entry(unsigned char *buf, int len,
 		return 1;
 	}
 
+	/*
+	 * Check the response count field (uint16 at byte 10). The request
+	 * entry can be deleted it it is the last response in the sequence.
+	 * It is the last response in the sequence if the response count
+	 * is 1 or if the signed bit gets dropped.
+	 */
 	rsp_count = *(uint16_t *)(buf + 10);
 	if (rsp_count > 0 && rsp_count < 0x1000) {
 		list_del(&entry->track);
@@ -539,6 +567,8 @@ void extract_dci_pkt_rsp(unsigned char *buf, int len, int data_source,
 	struct diag_dci_buffer_t *rsp_buf = NULL;
 	struct dci_pkt_req_entry_t *req_entry = NULL;
 	unsigned char *temp = buf;
+	int save_req_uid = 0;
+	struct diag_dci_pkt_rsp_header_t pkt_rsp_header;
 
 	if (!buf) {
 		pr_err("diag: Invalid pointer in %s\n", __func__);
@@ -558,7 +588,16 @@ void extract_dci_pkt_rsp(unsigned char *buf, int len, int data_source,
 	tag = *(int *)temp;
 	temp += sizeof(int);
 
+	/*
+	 * The size of the response is (total length) - (length of the command
+	 * code, the tag (int)
+	 */
 	rsp_len = len - (cmd_code_len + sizeof(int));
+	/*
+	 * Check if the length embedded in the packet is correct.
+	 * Include the start (1), version (1), length (2) and the end
+	 * (1) bytes while checking. Total = 5 bytes
+	 */
 	if ((rsp_len == 0) || (rsp_len > (len - 5))) {
 		pr_err("diag: Invalid length in %s, len: %d, rsp_len: %d",
 						__func__, len, rsp_len);
@@ -571,21 +610,32 @@ void extract_dci_pkt_rsp(unsigned char *buf, int len, int data_source,
 		return;
 	}
 	curr_client_pid = req_entry->pid;
+	save_req_uid = req_entry->uid;
 
-	
+	/* Remove the headers and send only the response to this function */
+	mutex_lock(&driver->dci_mutex);
 	delete_flag = diag_dci_remove_req_entry(temp, rsp_len, req_entry);
-	if ((delete_flag != 0) && (delete_flag != 1))
+/*++ 2014/09/17, USB Team, PCN00046 ++*/
+	if ((delete_flag != 0) && (delete_flag != 1)) {
+		mutex_unlock(&driver->dci_mutex);
 		return;
+	}
+/*-- 2014/09/17, USB Team, PCN00046 --*/
+	mutex_unlock(&driver->dci_mutex);
 
 	entry = __diag_dci_get_client_entry(curr_client_pid);
 	if (!entry) {
 		pr_err("diag: In %s, couldn't find entry\n", __func__);
 		return;
 	}
-
 	rsp_buf = entry->buffers[data_source].buf_cmd;
 
 	mutex_lock(&rsp_buf->data_mutex);
+	/*
+	 * Check if we can fit the data in the rsp buffer. The total length of
+	 * the rsp is the rsp length (write_len) + DCI_PKT_RSP_TYPE header (int)
+	 * + field for length (int) + delete_flag (uint8_t)
+	 */
 	if ((rsp_buf->data_len + 9 + rsp_len) > rsp_buf->capacity) {
 		pr_alert("diag: create capacity for pkt rsp\n");
 		rsp_buf->capacity += 9 + rsp_len;
@@ -600,16 +650,15 @@ void extract_dci_pkt_rsp(unsigned char *buf, int len, int data_source,
 		}
 	}
 
-	
-	*(int *)(rsp_buf->data + rsp_buf->data_len) = DCI_PKT_RSP_TYPE;
-	rsp_buf->data_len += sizeof(int);
-	
-	*(int *)(rsp_buf->data + rsp_buf->data_len) = rsp_len + sizeof(int);
-	rsp_buf->data_len += sizeof(int);
-	*(uint8_t *)(rsp_buf->data + rsp_buf->data_len) = delete_flag;
-	rsp_buf->data_len += sizeof(uint8_t);
-	*(int *)(rsp_buf->data + rsp_buf->data_len) = req_entry->uid;
-	rsp_buf->data_len += sizeof(int);
+	/* Fill in packet response header information */
+	pkt_rsp_header.type = DCI_PKT_RSP_TYPE;
+	/* Packet Length = Response Length + Length of uid field (int) */
+	pkt_rsp_header.length = rsp_len + sizeof(int);
+	pkt_rsp_header.delete_flag = delete_flag;
+	pkt_rsp_header.uid = save_req_uid;
+	memcpy(rsp_buf->data, &pkt_rsp_header,
+		sizeof(struct diag_dci_pkt_rsp_header_t));
+	rsp_buf->data_len += sizeof(struct diag_dci_pkt_rsp_header_t);
 	memcpy(rsp_buf->data + rsp_buf->data_len, temp, rsp_len);
 	rsp_buf->data_len += rsp_len;
 	rsp_buf->data_source = data_source;
@@ -618,6 +667,11 @@ void extract_dci_pkt_rsp(unsigned char *buf, int len, int data_source,
 	mutex_unlock(&rsp_buf->data_mutex);
 
 
+	/*
+	 * Add directly to the list for writing responses to the
+	 * userspace as these shouldn't be buffered and shouldn't wait
+	 * for log and event buffers to be full
+	 */
 	dci_add_buffer_to_list(entry, rsp_buf);
 }
 
@@ -675,28 +729,39 @@ void extract_dci_events(unsigned char *buf, int len, int data_source)
 	struct list_head *start, *temp;
 	struct diag_dci_client_tbl *entry = NULL;
 
-	length =  *(uint16_t *)(buf + 1); 
+	length =  *(uint16_t *)(buf + 1); /* total length of event series */
 	if (length == 0) {
 		pr_err("diag: Incoming dci event length is invalid\n");
 		return;
 	}
+	/* Move directly to the start of the event series. 1 byte for
+	 * event code and 2 bytes for the length field.
+	 */
 	temp_len = 3;
 	while (temp_len < (length - 1)) {
 		event_id_packet = *(uint16_t *)(buf + temp_len);
-		event_id = event_id_packet & 0x0FFF; 
+		event_id = event_id_packet & 0x0FFF; /* extract 12 bits */
 		if (event_id_packet & 0x8000) {
+			/* The packet has the two smallest byte of the
+			 * timestamp
+			 */
 			timestamp_len = 2;
 		} else {
+			/* The packet has the full timestamp. The first event
+			 * will always have full timestamp. Save it in the
+			 * timestamp buffer and use it for subsequent events if
+			 * necessary.
+			 */
 			timestamp_len = 8;
 			memcpy(timestamp, buf + temp_len + 2, timestamp_len);
 		}
-		
+		/* 13th and 14th bit represent the payload length */
 		if (((event_id_packet & 0x6000) >> 13) == 3) {
 			payload_len_field = 1;
 			payload_len = *(uint8_t *)
 					(buf + temp_len + 2 + timestamp_len);
 			if (payload_len < (MAX_EVENT_SIZE - 13)) {
-				
+				/* copy the payload length and the payload */
 				memcpy(event_data + 12, buf + temp_len + 2 +
 							timestamp_len, 1);
 				memcpy(event_data + 13, buf + temp_len + 2 +
@@ -709,11 +774,18 @@ void extract_dci_events(unsigned char *buf, int len, int data_source)
 		} else {
 			payload_len_field = 0;
 			payload_len = (event_id_packet & 0x6000) >> 13;
-			
+			/* copy the payload */
 			memcpy(event_data + 12, buf + temp_len + 2 +
 						timestamp_len, payload_len);
 		}
 
+		/* Before copying the data to userspace, check if we are still
+		 * within the buffer limit. This is an error case, don't count
+		 * it towards the health statistics.
+		 *
+		 * Here, the offset of 2 bytes(uint16_t) is for the
+		 * event_id_packet length
+		 */
 		temp_len += sizeof(uint16_t) + timestamp_len +
 						payload_len_field + payload_len;
 		if (temp_len > len) {
@@ -722,17 +794,21 @@ void extract_dci_events(unsigned char *buf, int len, int data_source)
 			return;
 		}
 
+		/* 2 bytes for the event id & timestamp len is hard coded to 8,
+		   as individual events have full timestamp */
 		*(uint16_t *)(event_data) = 10 +
 					payload_len_field + payload_len;
 		*(uint16_t *)(event_data + 2) = event_id_packet & 0x7FFF;
 		memcpy(event_data + 4, timestamp, 8);
+		/* 2 bytes for the event length field which is added to
+		   the event data */
 		total_event_len = 2 + 10 + payload_len_field + payload_len;
-		
+		/* parse through event mask tbl of each client and check mask */
 		list_for_each_safe(start, temp, &driver->dci_client_list) {
 			entry = list_entry(start, struct diag_dci_client_tbl,
 									track);
 			if (__diag_dci_query_event_mask(entry, event_id)) {
-				
+				/* copy to client buffer */
 				copy_dci_event(event_data, total_event_len,
 					       entry, data_source);
 			}
@@ -761,6 +837,9 @@ static void copy_dci_log(unsigned char *buf, int len,
 	}
 	total_len = sizeof(int) + log_length;
 
+	/* Check if we are within the len. The check should include the
+	 * first 4 bytes for the Log code(2) and the length bytes (2)
+	 */
 	if ((log_length + sizeof(uint16_t) + 2) > len) {
 		pr_err("diag: Invalid length in %s, log_len: %d, len: %d",
 						__func__, log_length, len);
@@ -812,6 +891,10 @@ void extract_dci_log(unsigned char *buf, int len, int data_source)
 		return;
 	}
 
+	/* The first six bytes for the incoming log packet contains
+	 * Command code (2), the length of the packet (2) and the length
+	 * of the log (2)
+	 */
 	log_code = *(uint16_t *)(buf + 6);
 	read_bytes += sizeof(uint16_t) + 6;
 	if (read_bytes > len) {
@@ -820,13 +903,13 @@ void extract_dci_log(unsigned char *buf, int len, int data_source)
 		return;
 	}
 
-	
+	/* parse through log mask table of each client and check mask */
 	list_for_each_safe(start, temp, &driver->dci_client_list) {
 		entry = list_entry(start, struct diag_dci_client_tbl, track);
 		if (__diag_dci_query_log_mask(entry, log_code)) {
 			pr_debug("\t log code %x needed by client %d",
 				 log_code, entry->client->tgid);
-			
+			/* copy to client buffer */
 			copy_dci_log(buf, len, entry, data_source);
 		}
 	}
@@ -845,9 +928,14 @@ void diag_update_smd_dci_work_fn(struct work_struct *work)
 	struct list_head *start, *temp;
 	struct diag_dci_client_tbl *entry = NULL;
 
-	
+	/* Update apps and peripheral(s) with the dci log and event masks */
 	memset(dirty_bits, 0, 16 * sizeof(uint8_t));
 
+	/*
+	 * From each log entry used by each client, determine
+	 * which log entries in the cumulative logs that need
+	 * to be updated on the peripheral.
+	 */
 	list_for_each_safe(start, temp, &driver->dci_client_list) {
 		entry = list_entry(start, struct diag_dci_client_tbl, track);
 		client_log_mask_ptr = entry->dci_log_mask;
@@ -859,7 +947,7 @@ void diag_update_smd_dci_work_fn(struct work_struct *work)
 	}
 
 	mutex_lock(&dci_log_mask_mutex);
-	
+	/* Update the appropriate dirty bits in the cumulative mask */
 	log_mask_ptr = dci_cumulative_log_mask;
 	for (i = 0; i < 16; i++) {
 		if (dirty_bits[i])
@@ -869,14 +957,14 @@ void diag_update_smd_dci_work_fn(struct work_struct *work)
 	}
 	mutex_unlock(&dci_log_mask_mutex);
 
-	
+	/* Send updated mask to userspace clients */
 	diag_update_userspace_clients(DCI_LOG_MASKS_TYPE);
-	
+	/* Send updated log mask to peripherals */
 	ret = diag_send_dci_log_mask();
 
-	
+	/* Send updated event mask to userspace clients */
 	diag_update_userspace_clients(DCI_EVENT_MASKS_TYPE);
-	
+	/* Send updated event mask to peripheral */
 	ret = diag_send_dci_event_mask();
 
 	smd_info->notify_context = 0;
@@ -893,7 +981,7 @@ void diag_dci_notify_client(int peripheral_mask, int data)
 	info.si_code = SI_QUEUE;
 	info.si_int = (peripheral_mask | data);
 
-	
+	/* Notify the DCI process that the peripheral DCI Channel is up */
 	list_for_each_safe(start, temp, &driver->dci_client_list) {
 		entry = list_entry(start, struct diag_dci_client_tbl, track);
 		if (entry->client_info.notification_list & peripheral_mask) {
@@ -913,6 +1001,8 @@ static int diag_send_dci_pkt(struct diag_master_table entry,
 	int i, status = DIAG_DCI_NO_ERROR;
 	unsigned int read_len = 0;
 
+	/* The first 4 bytes is the uid tag and the next four bytes is
+	   the minmum packet length of a request packet */
 	if (len < DCI_PKT_REQ_MIN_LEN) {
 		pr_err("diag: dci: Invalid pkt len %d in %s\n", len, __func__);
 		return -EIO;
@@ -921,28 +1011,28 @@ static int diag_send_dci_pkt(struct diag_master_table entry,
 		pr_err("diag: dci: Invalid payload length in %s\n", __func__);
 		return -EIO;
 	}
-	
+	/* remove UID from user space pkt before sending to peripheral*/
 	buf = buf + sizeof(int);
 	read_len += sizeof(int);
 	len = len - sizeof(int);
 	mutex_lock(&driver->dci_mutex);
-	
-	driver->apps_dci_buf[0] = CONTROL_CHAR; 
-	driver->apps_dci_buf[1] = 1; 
-	*(uint16_t *)(driver->apps_dci_buf + 2) = len + 4 + 1; 
+	/* prepare DCI packet */
+	driver->apps_dci_buf[0] = CONTROL_CHAR; /* start */
+	driver->apps_dci_buf[1] = 1; /* version */
+	*(uint16_t *)(driver->apps_dci_buf + 2) = len + 4 + 1; /* length */
 	driver->apps_dci_buf[4] = DCI_PKT_RSP_CODE;
 	*(int *)(driver->apps_dci_buf + 5) = tag;
 	for (i = 0; i < len; i++)
 		driver->apps_dci_buf[i+9] = *(buf+i);
 	read_len += len;
-	driver->apps_dci_buf[9+len] = CONTROL_CHAR; 
+	driver->apps_dci_buf[9+len] = CONTROL_CHAR; /* end */
 	if ((read_len + 9) >= USER_SPACE_DATA) {
 		pr_err("diag: dci: Invalid length while forming dci pkt in %s",
 								__func__);
 		mutex_unlock(&driver->dci_mutex);
 		return -EIO;
 	}
-	
+	/* This command is registered locally on the Apps */
 	if (entry.client_id == APPS_DATA) {
 		driver->dci_pkt_length = len + 10;
 		diag_update_pkt_buffer(driver->apps_dci_buf, DCI_PKT_TYPE);
@@ -1019,7 +1109,7 @@ static int diag_dci_process_apps_pkt(struct diag_pkt_header_t *pkt_header,
 			*(uint16_t *)(payload_ptr) = *(uint16_t *)(req_buf + 1);
 			write_len += sizeof(uint16_t);
 			payload_ptr += sizeof(uint16_t);
-			*payload_ptr = 0x1; 
+			*payload_ptr = 0x1; /* Unknown */
 			write_len += sizeof(uint8_t);
 			goto fill_buffer;
 		}
@@ -1067,7 +1157,7 @@ static int diag_dci_process_apps_pkt(struct diag_pkt_header_t *pkt_header,
 
 fill_buffer:
 	if (write_len > 0) {
-		
+		/* Check if we are within the range of the buffer*/
 		if (write_len + header_len > PKT_SIZE) {
 			pr_err("diag: In %s, invalid length %d\n", __func__,
 						write_len + header_len);
@@ -1075,6 +1165,10 @@ fill_buffer:
 		}
 		dci_header.start = CONTROL_CHAR;
 		dci_header.version = 1;
+		/*
+		 * Length of the rsp pkt = actual data len + pkt rsp code
+		 * (uint8_t) + tag (int)
+		 */
 		dci_header.len = write_len + sizeof(uint8_t) + sizeof(int);
 		dci_header.pkt_code = DCI_PKT_RSP_CODE;
 		dci_header.tag = tag;
@@ -1085,8 +1179,13 @@ fill_buffer:
 		driver->in_busy_dcipktdata = 0;
 
 		if (goto_download) {
+			/*
+			 * Sleep for sometime so that the response reaches the
+			 * client. The value 5000 empirically as an optimum
+			 * time for the response to reach the client.
+			 */
 			usleep_range(5000, 5100);
-			
+			/* call download API */
 			msm_set_restart_mode(RESTART_DLOAD);
 			pr_alert("diag: download mode set, Rebooting SoC..\n");
 			kernel_restart(NULL);
@@ -1116,9 +1215,9 @@ static int diag_process_dci_pkt_rsp(unsigned char *buf, int len)
 		return -EIO;
 	}
 
-	req_uid = *(int *)temp; 
+	req_uid = *(int *)temp; /* UID of the request */
 	temp += sizeof(int);
-	req_buf = temp; 
+	req_buf = temp; /* Start of the Request */
 	header = (struct diag_pkt_header_t *)temp;
 	temp += sizeof(struct diag_pkt_header_t);
 	read_len = sizeof(int) + sizeof(struct diag_pkt_header_t);
@@ -1127,7 +1226,7 @@ static int diag_process_dci_pkt_rsp(unsigned char *buf, int len)
 		return -EIO;
 	}
 
-	
+	/* Check if the command is allowed on DCI */
 	if (diag_dci_filter_commands(header)) {
 		pr_debug("diag: command not supported %d %d %d",
 			 header->cmd_code, header->subsys_id,
@@ -1135,6 +1234,10 @@ static int diag_process_dci_pkt_rsp(unsigned char *buf, int len)
 		return DIAG_DCI_SEND_DATA_FAIL;
 	}
 
+	/*
+	 * Previous packet is yet to be consumed by the client. Wait
+	 * till the buffer is free.
+	 */
 	while (retry_count < max_retries) {
 		retry_count++;
 		if (driver->in_busy_dcipktdata)
@@ -1142,26 +1245,26 @@ static int diag_process_dci_pkt_rsp(unsigned char *buf, int len)
 		else
 			break;
 	}
-	
+	/* The buffer is still busy */
 	if (driver->in_busy_dcipktdata) {
 		pr_err("diag: In %s, apps dci buffer is still busy. Dropping packet\n",
 								__func__);
 		return -EAGAIN;
 	}
 
-	
+	/* Register this new DCI packet */
 	req_entry = diag_register_dci_transaction(req_uid);
 	if (!req_entry) {
 		pr_alert("diag: registering new DCI transaction failed\n");
 		return DIAG_DCI_NO_REG;
 	}
 
-	
+	/* Check if it is a dedicated Apps command */
 	ret = diag_dci_process_apps_pkt(header, req_buf, req_entry->tag);
 	if (ret == DIAG_DCI_NO_ERROR || ret < 0)
 		return ret;
 
-	
+	/* Check the registration table for command entries */
 	for (i = 0; i < diag_max_reg && !found; i++) {
 		entry = driver->table[i];
 		if (entry.process_id == NO_PROCESS)
@@ -1184,10 +1287,16 @@ static int diag_process_dci_pkt_rsp(unsigned char *buf, int len)
 		} else if (entry.cmd_code == 255 && entry.subsys_id == 255) {
 			if (entry.cmd_code_lo <= header->cmd_code &&
 			    entry.cmd_code_hi >= header->cmd_code) {
+				/*
+				 * If its a Mode reset command, make sure it is
+				 * registered on the Apps Processor
+				 */
 				if (entry.cmd_code_lo == MODE_CMD &&
-				    entry.cmd_code_hi == MODE_CMD)
+				    entry.cmd_code_hi == MODE_CMD &&
+					header->subsys_id == RESET_ID) {
 					if (entry.client_id != APPS_DATA)
 						continue;
+				}
 					ret = diag_send_dci_pkt(entry, buf, len,
 								req_entry->tag);
 					found = 1;
@@ -1214,22 +1323,24 @@ int diag_process_dci_transaction(unsigned char *buf, int len)
 		return -ENOMEM;
 	}
 
-	
+	/* This is Pkt request/response transaction */
 	if (*(int *)temp > 0) {
 		return diag_process_dci_pkt_rsp(buf, len);
 	} else if (*(int *)temp == DCI_LOG_TYPE) {
+		/* Minimum length of a log mask config is 12 + 2 bytes for
+		   atleast one log code to be set or reset */
 		if (len < DCI_LOG_CON_MIN_LEN || len > USER_SPACE_DATA) {
 			pr_err("diag: dci: Invalid length in %s\n", __func__);
 			return -EIO;
 		}
-		
+		/* find client table entry */
 		dci_entry = diag_dci_get_client_entry();
 		if (!dci_entry) {
 			pr_err("diag: In %s, invalid client\n", __func__);
 			return ret;
 		}
 
-		
+		/* Extract each log code and put in client table */
 		temp += sizeof(int);
 		read_len += sizeof(int);
 		set_mask = *(int *)temp;
@@ -1252,7 +1363,7 @@ int diag_process_dci_transaction(unsigned char *buf, int len)
 			return -ENOMEM;
 		}
 		pr_debug("diag: head of dci log mask %p\n", head_log_mask_ptr);
-		count = 0; 
+		count = 0; /* iterator for extracting log codes */
 		while (count < num_codes) {
 			if (read_len >= USER_SPACE_DATA) {
 				pr_err("diag: dci: Invalid length for log type in %s",
@@ -1268,6 +1379,10 @@ int diag_process_dci_transaction(unsigned char *buf, int len)
 				return ret;
 			}
 			byte_mask = 0x01 << (item_num % 8);
+			/*
+			 * Parse through log mask table and find
+			 * relevant range
+			 */
 			log_mask_ptr = head_log_mask_ptr;
 			found = 0;
 			offset = 0;
@@ -1288,13 +1403,13 @@ int diag_process_dci_transaction(unsigned char *buf, int len)
 				pr_err("diag: dci equip id not found\n");
 				return ret;
 			}
-			*(log_mask_ptr+1) = 1; 
+			*(log_mask_ptr+1) = 1; /* set the dirty byte */
 			log_mask_ptr = log_mask_ptr + byte_index;
 			if (set_mask)
 				*log_mask_ptr |= byte_mask;
 			else
 				*log_mask_ptr &= ~byte_mask;
-			
+			/* add to cumulative mask */
 			update_dci_cumulative_log_mask(
 				offset, byte_index,
 				byte_mask);
@@ -1303,22 +1418,24 @@ int diag_process_dci_transaction(unsigned char *buf, int len)
 			count++;
 			ret = DIAG_DCI_NO_ERROR;
 		}
-		
+		/* send updated mask to userspace clients */
 		diag_update_userspace_clients(DCI_LOG_MASKS_TYPE);
-		
+		/* send updated mask to peripherals */
 		ret = diag_send_dci_log_mask();
 	} else if (*(int *)temp == DCI_EVENT_TYPE) {
+		/* Minimum length of a event mask config is 12 + 4 bytes for
+		  atleast one event id to be set or reset. */
 		if (len < DCI_EVENT_CON_MIN_LEN || len > USER_SPACE_DATA) {
 			pr_err("diag: dci: Invalid length in %s\n", __func__);
 			return -EIO;
 		}
-		
+		/* find client table entry */
 		dci_entry = diag_dci_get_client_entry();
 		if (!dci_entry) {
 			pr_err("diag: In %s, invalid client\n", __func__);
 			return ret;
 		}
-		
+		/* Extract each log code and put in client table */
 		temp += sizeof(int);
 		read_len += sizeof(int);
 		set_mask = *(int *)temp;
@@ -1328,6 +1445,9 @@ int diag_process_dci_transaction(unsigned char *buf, int len)
 		temp += sizeof(int);
 		read_len += sizeof(int);
 
+		/* Check for positive number of event ids. Also, the number of
+		   event ids should fit in the buffer along with set_mask and
+		   num_codes which are 4 bytes each */
 		if (num_codes == 0 || (num_codes >= (USER_SPACE_DATA - 8)/2)) {
 			pr_err("diag: dci: Invalid number of event ids %d\n",
 								num_codes);
@@ -1341,7 +1461,7 @@ int diag_process_dci_transaction(unsigned char *buf, int len)
 			return -ENOMEM;
 		}
 		pr_debug("diag: head of dci event mask %p\n", event_mask_ptr);
-		count = 0; 
+		count = 0; /* iterator for extracting log codes */
 		while (count < num_codes) {
 			if (read_len >= USER_SPACE_DATA) {
 				pr_err("diag: dci: Invalid length for event type in %s",
@@ -1356,20 +1476,24 @@ int diag_process_dci_transaction(unsigned char *buf, int len)
 			}
 			bit_index = event_id % 8;
 			byte_mask = 0x1 << bit_index;
+			/*
+			 * Parse through event mask table and set
+			 * relevant byte & bit combination
+			 */
 			if (set_mask)
 				*(event_mask_ptr + byte_index) |= byte_mask;
 			else
 				*(event_mask_ptr + byte_index) &= ~byte_mask;
-			
+			/* add to cumulative mask */
 			update_dci_cumulative_event_mask(byte_index, byte_mask);
 			temp += sizeof(int);
 			read_len += sizeof(int);
 			count++;
 			ret = DIAG_DCI_NO_ERROR;
 		}
-		
+		/* send updated mask to userspace clients */
 		diag_update_userspace_clients(DCI_EVENT_MASKS_TYPE);
-		
+		/* send updated mask to peripherals */
 		ret = diag_send_dci_event_mask();
 	} else {
 		pr_alert("diag: Incorrect DCI transaction\n");
@@ -1399,7 +1523,7 @@ void update_dci_cumulative_event_mask(int offset, uint8_t byte_mask)
 		event_mask_ptr += offset;
 		if ((*event_mask_ptr & byte_mask) == byte_mask) {
 			is_set = true;
-			
+			/* break even if one client has the event mask set */
 			break;
 		}
 	}
@@ -1435,12 +1559,12 @@ int diag_send_dci_event_mask()
 	int ret = DIAG_DCI_NO_ERROR, err = DIAG_DCI_NO_ERROR, i;
 
 	mutex_lock(&driver->diag_cntl_mutex);
-	
+	/* send event mask update */
 	driver->event_mask->cmd_type = DIAG_CTRL_MSG_EVENT_MASK;
 	driver->event_mask->data_len = 7 + DCI_EVENT_MASK_SIZE;
 	driver->event_mask->stream_id = DCI_MASK_STREAM;
-	driver->event_mask->status = 3; 
-	driver->event_mask->event_config = 0; 
+	driver->event_mask->status = 3; /* status for valid mask */
+	driver->event_mask->event_config = 0; /* event config */
 	driver->event_mask->event_mask_size = DCI_EVENT_MASK_SIZE;
 	for (i = 0; i < DCI_EVENT_MASK_SIZE; i++) {
 		if (dci_cumulative_event_mask[i] != 0) {
@@ -1451,6 +1575,11 @@ int diag_send_dci_event_mask()
 	memcpy(buf, driver->event_mask, header_size);
 	memcpy(buf+header_size, dci_cumulative_event_mask, DCI_EVENT_MASK_SIZE);
 	for (i = 0; i < NUM_SMD_DCI_CHANNELS; i++) {
+		/*
+		 * Don't send to peripheral if its regular channel
+		 * is down. It may also mean that the peripheral doesn't
+		 * support DCI.
+		 */
 		if (!driver->smd_dci[i].ch)
 			continue;
 		err = diag_dci_write_proc(i, DIAG_CNTL_TYPE, buf,
@@ -1475,12 +1604,12 @@ void update_dci_cumulative_log_mask(int offset, unsigned int byte_index,
 
 	mutex_lock(&dci_log_mask_mutex);
 	*update_ptr = 0;
-	
+	/* set the equipment IDs */
 	for (i = 0; i < 16; i++)
 		*(update_ptr + (i*514)) = i;
 
 	update_ptr += offset;
-	
+	/* update the dirty bit */
 	*(update_ptr+1) = 1;
 	update_ptr = update_ptr + byte_index;
 	list_for_each_safe(start, temp, &driver->dci_client_list) {
@@ -1489,7 +1618,7 @@ void update_dci_cumulative_log_mask(int offset, unsigned int byte_index,
 		log_mask_ptr = log_mask_ptr + offset + byte_index;
 		if ((*log_mask_ptr & byte_mask) == byte_mask) {
 			is_set = true;
-			
+			/* break even if one client has the log mask set */
 			break;
 		}
 	}
@@ -1534,13 +1663,18 @@ int diag_send_dci_log_mask()
 		driver->log_mask->num_items = 512;
 		driver->log_mask->data_len  = 11 + 512;
 		driver->log_mask->stream_id = DCI_MASK_STREAM;
-		driver->log_mask->status = 3; 
+		driver->log_mask->status = 3; /* status for valid mask */
 		driver->log_mask->equip_id = *log_mask_ptr;
 		driver->log_mask->log_mask_size = 512;
 		memcpy(buf, driver->log_mask, header_size);
 		memcpy(buf+header_size, log_mask_ptr+2, 512);
-		
+		/* if dirty byte is set and channel is valid */
 		for (j = 0; j < NUM_SMD_DCI_CHANNELS; j++) {
+			/*
+			 * Don't send to peripheral if its regular channel
+			 * is down. It may also mean that the peripheral
+			 * doesn't support DCI.
+			 */
 			if (!driver->smd_dci[j].ch)
 				continue;
 
@@ -1554,7 +1688,7 @@ int diag_send_dci_log_mask()
 			}
 		}
 		if (updated)
-			*(log_mask_ptr+1) = 0; 
+			*(log_mask_ptr+1) = 0; /* clear dirty byte */
 		log_mask_ptr += 514;
 	}
 	mutex_unlock(&driver->diag_cntl_mutex);
@@ -1569,11 +1703,11 @@ void create_dci_log_mask_tbl(unsigned char *tbl_buf)
 	if (!tbl_buf)
 		return;
 
-	
+	/* create hard coded table for log mask with 16 categories */
 	for (i = 0; i < 16; i++) {
 		*(uint8_t *)tbl_buf = i;
 		pr_debug("diag: put value %x at %p\n", i, tbl_buf);
-		memset(tbl_buf+1, 0, 513); 
+		memset(tbl_buf+1, 0, 513); /* set dirty bit as 0 */
 		tbl_buf += 514;
 		count += 514;
 	}
@@ -1792,9 +1926,9 @@ int diag_dci_clear_log_mask()
 		}
 	}
 	mutex_unlock(&dci_log_mask_mutex);
-	
+	/* send updated mask to userspace clients */
 	diag_update_userspace_clients(DCI_LOG_MASKS_TYPE);
-	
+	/* Send updated mask to peripherals */
 	err = diag_send_dci_log_mask();
 	return err;
 }
@@ -1824,9 +1958,9 @@ int diag_dci_clear_event_mask()
 			*(update_ptr + j) |= *(event_mask_ptr + j);
 	}
 	mutex_unlock(&dci_event_mask_mutex);
-	
+	/* send updated mask to userspace clients */
 	diag_update_userspace_clients(DCI_EVENT_MASKS_TYPE);
-	
+	/* Send updated mask to peripherals */
 	err = diag_send_dci_event_mask();
 	return err;
 }
@@ -2019,8 +2153,16 @@ int diag_dci_deinit_client()
 		return DIAG_DCI_NOT_SUPPORTED;
 
 	mutex_lock(&driver->dci_mutex);
+	/*
+	 * Remove the entry from the list before freeing the buffers
+	 * to ensure that we don't have any invalid access.
+	 */
 	list_del(&entry->track);
 	driver->num_dci_client--;
+	/*
+	 * Clear the client's log and event masks, update the cumulative
+	 * masks and send the masks to peripherals
+	 */
 	kfree(entry->dci_log_mask);
 	diag_update_userspace_clients(DCI_LOG_MASKS_TYPE);
 	diag_dci_invalidate_cumulative_log_mask();
@@ -2047,7 +2189,7 @@ int diag_dci_deinit_client()
 		}
 	}
 
-	
+	/* Clean up any buffer that is pending write */
 	mutex_lock(&entry->write_buf_mutex);
 	list_for_each_entry_safe(buf_entry, temp, &entry->list_write_buf,
 							buf_track) {
@@ -2077,7 +2219,7 @@ int diag_dci_deinit_client()
 		proc_buf = &entry->buffers[i];
 		buf_entry = proc_buf->buf_curr;
 		mutex_lock(&proc_buf->buf_mutex);
-		
+		/* Clean up secondary buffer from mempool that is active */
 		if (buf_entry && buf_entry->buf_type == DCI_BUF_SECONDARY) {
 			mutex_lock(&buf_entry->data_mutex);
 			diagmem_free(driver, buf_entry->data, POOL_TYPE_DCI);
@@ -2136,6 +2278,10 @@ int diag_dci_write_proc(int peripheral, int pkt_type, char *buf, int len)
 		for (i = 0; i < NUM_SMD_DCI_CMD_CHANNELS; i++)
 			if (peripheral == i)
 				smd_info = &driver->smd_dci_cmd[peripheral];
+		/*
+		 * This peripheral doesn't support separate channel for
+		 * command response.
+		 */
 		if (!smd_info)
 			smd_info = &driver->smd_dci[peripheral];
 	} else if (pkt_type == DIAG_CNTL_TYPE) {
@@ -2163,6 +2309,10 @@ int diag_dci_write_proc(int peripheral, int pkt_type, char *buf, int len)
 		retry++;
 		mutex_unlock(&smd_info->smd_ch_mutex);
 
+		/*
+		 * Sleep for sometime before retrying. The delay of 2000 was
+		 * determined empirically as best value to use.
+		 */
 		for (timer = 0; timer < 5; timer++)
 			usleep(2000);
 	}

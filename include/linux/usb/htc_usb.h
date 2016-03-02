@@ -62,8 +62,25 @@ static char *usb_functions_ptp_adb[] = {
 	"adb",
 };
 
+static char *usb_functions_midi[] = {
+	"midi",
+};
+
+static char *usb_functions_midi_adb[] = {
+	"midi",
+	"adb",
+};
+
+static char *usb_functions_charging[] = {
+	"charging",
+};
+
 static char *usb_functions_adb[] = {
 	"mass_storage",
+	"adb",
+};
+
+static char *usb_functions_adbonly[] = {
 	"adb",
 };
 
@@ -517,6 +534,15 @@ static char *usb_functions_mtp_adb_ums_acm[] = {
 	"mtp",
 	"adb",
 	"mass_storage",
+	"acm",
+};
+static char *usb_functions_mtp_acm[] = {
+	"mtp",
+	"acm",
+};
+static char *usb_functions_mtp_adb_acm[] = {
+	"mtp",
+	"adb",
 	"acm",
 };
 static char *usb_functions_rndis_ums_acm[] = {
@@ -1088,6 +1114,8 @@ static __maybe_unused char *usb_functions_all[] = {
 	"accessory",
 	"mtp",
 	"ptp",
+	"midi",
+	"charging",
 #if defined(CONFIG_USB_ANDROID_MTP36) && defined(CONFIG_USB_ANDROID_MTP)
 	"mtp36",
 #endif
@@ -1121,6 +1149,11 @@ static struct android_usb_product usb_products[] = {
 		.product_id = 0x0c02, 
 		.num_functions	= ARRAY_SIZE(usb_functions_adb),
 		.functions	= usb_functions_adb,
+	},
+	{
+		.product_id = 0x0c81, 
+		.num_functions	= ARRAY_SIZE(usb_functions_adbonly),
+		.functions	= usb_functions_adbonly,
 	},
 	{
 		.product_id	= 0x0f25,
@@ -1558,6 +1591,18 @@ static struct android_usb_product usb_products[] = {
 	},
 	
 	{
+		.product_id	= 0x0f0e,
+		.num_functions	= ARRAY_SIZE(usb_functions_mtp_adb_acm),
+		.functions	= usb_functions_mtp_adb_acm,
+	},
+	
+	{
+		.product_id	= 0x0f0d,
+		.num_functions	= ARRAY_SIZE(usb_functions_mtp_acm),
+		.functions	= usb_functions_mtp_acm,
+	},
+	
+	{
 		.product_id	= 0x0f65,
 		.num_functions	= ARRAY_SIZE(usb_functions_ums_acm),
 		.functions	= usb_functions_ums_acm,
@@ -1861,6 +1906,24 @@ static struct android_usb_product usb_products[] = {
 		.product_id	= 0x0f67,
 		.num_functions	= ARRAY_SIZE(usb_functions_ptp_adb),
 		.functions	= usb_functions_ptp_adb,
+	},
+	
+	{
+		.product_id	= 0x4ee8,
+		.num_functions	= ARRAY_SIZE(usb_functions_midi),
+		.functions	= usb_functions_midi,
+	},
+	
+	{
+		.product_id	= 0x4ee9,
+		.num_functions	= ARRAY_SIZE(usb_functions_midi_adb),
+		.functions	= usb_functions_midi_adb,
+	},
+	
+	{
+		.product_id	= 0xf006,
+		.num_functions	= ARRAY_SIZE(usb_functions_charging),
+		.functions	= usb_functions_charging,
 	},
 	
 	{

@@ -56,36 +56,39 @@ enum flashlight_mode_flags {
 	FL_MODE_VIDEO_TORCH_4,
 };
 
+/*
+ * flashlight_brightness_attribute_definition: the definition of flashlight "brightness" attribute
+ */
 
 enum flashlight_brightness_attribute_definition
-{ 
+{ /* range: [0, 255] */
     FBAD_OFF        = 0,
-    FBAD_TORCH1     = 125, 
-    FBAD_TORCH2     = 126, 
-    FBAD_TORCH      = 127, 
-    FBAD_PREFLASH   = 128, 
-    FBAD_FLASH1     = 130, 
-    FBAD_FLASH2     = 131, 
-    FBAD_FLASH3     = 132, 
-    FBAD_FLASH4     = 133, 
-    FBAD_FLASH5     = 134, 
-    FBAD_FLASH6     = 135, 
-    FBAD_FLASH7     = 136, 
-    FBAD_FULL       = 255, 
+    FBAD_TORCH1     = 125, /* torch 25mA */
+    FBAD_TORCH2     = 126, /* torch 75mA */
+    FBAD_TORCH      = 127, /* torch 125mA */
+    FBAD_PREFLASH   = 128, /* torch 100mA */
+    FBAD_FLASH1     = 130, /* flash 100mA */
+    FBAD_FLASH2     = 131, /* flash 200mA */
+    FBAD_FLASH3     = 132, /* flash 300mA */
+    FBAD_FLASH4     = 133, /* flash 400mA */
+    FBAD_FLASH5     = 134, /* flash 500mA */
+    FBAD_FLASH6     = 135, /* flash 600mA */
+    FBAD_FLASH7     = 136, /* flash 700mA */
+    FBAD_FULL       = 255, /* flash 750mA */
 };
 
 #if defined(CONFIG_FLASHLIGHT_TPS61310) ||defined(CONFIG_FLASHLIGHT_TPS61310_FRONT)
 struct TPS61310_flashlight_platform_data {
 	void (*gpio_init) (void);
 	uint32_t flash_duration_ms;
-	uint32_t led_count; 
+	uint32_t led_count; /* 0: 1 LED, 1: 2 LED */
 	uint32_t tps61310_strb0;
 	uint32_t tps61310_strb1;
 	uint32_t tps61310_reset;
 	uint8_t mode_pin_suspend_state_low;
 	uint32_t enable_FLT_1500mA;
 	uint32_t disable_tx_mask;
-	uint32_t power_save; 
+	uint32_t power_save; //disable modem while FLASH 1.5A flash
 	uint32_t power_save_2;
 };
 #endif
@@ -105,7 +108,7 @@ int tps61310_flashlight_torch_front(int led2, int led13);
 struct LM3643_flashlight_platform_data {
 	void (*gpio_init) (void);
 	uint32_t flash_duration_ms;
-	uint32_t led_count; 
+	uint32_t led_count; /* 0: 1 LED, 1: 2 LED */
 	uint32_t lm3643_hwen;
 	uint32_t lm3643_strobe;
 	uint32_t lm3643_torch;
@@ -113,7 +116,7 @@ struct LM3643_flashlight_platform_data {
 	uint8_t mode_pin_suspend_state_low;
 	uint32_t enable_FLT_1500mA;
 	uint32_t disable_tx_mask;
-	uint32_t power_save; 
+	uint32_t power_save; //disable modem while FLASH 1.5A flash
 	uint32_t power_save_2;
 };
 int lm3643_flashlight_flash(int led1,int led2);

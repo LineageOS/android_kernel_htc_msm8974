@@ -37,11 +37,15 @@
 
 #define MAX_NAME_BUF_LEN	160
 #define MAX_D_NAME_LEN		28
-#define MAX_P_NAME_LEN		(MAX_NAME_BUF_LEN - MAX_D_NAME_LEN - 4) 
+#define MAX_P_NAME_LEN		(MAX_NAME_BUF_LEN - MAX_D_NAME_LEN - 4) //160 - 32
 
 pid_t flc_daemon_pid = -1, flc_agent_pid = -1;
 pid_t zygote_pid = -1, installd_pid = -1, adbd_pid = -1;
 
+/*-----------------------------------------------
+	The following should be customized for each project
+-------------------------------------------------*/
+/* FeliCa */
 #define UID_FELICA_RW_CTRL		9986
 #define UID_FELICA_LOCK_APP		9990
 #define UID_MOBILE_FELICA_CLIENT	9989
@@ -73,14 +77,16 @@ uid_t felica_dev_uid[16] = {UID_MOBILE_FELICA_CLIENT, UID_MOBILE_FELICA_CLIENT, 
 		UID_MOBILE_FELICA_CLIENT, UID_MOBILE_FELICA_CLIENT, UID_MOBILE_FELICA_CLIENT,
 		UID_MOBILE_FELICA_CLIENT, UID_MOBILE_FELICA_CLIENT};
 
+/* installd */
 #define UID_INSTALLD_SERVICE   1012
 
+/* NFC */
 #define UID_NFC_SERVICE        1027
 
 #ifdef CONFIG_APQ8064_ONLY
 #define RTFCTL_NFC_DEV_NUM     8
 #else
-#define RTFCTL_NFC_DEV_NUM     0   
+#define RTFCTL_NFC_DEV_NUM     0   // for Valente_WX
 #endif
 char *nfc_dev[16] = {"/dev/ttyHS1", "/dev/snfc_pon", "/dev/snfc_cen", "/dev/snfc_rfs",
     "/dev/snfc_intu", "/dev/snfc_intu_polling", "/dev/snfc_auto_polling", "/dev/snfc_hsel"};
@@ -91,7 +97,7 @@ static char *get_full_path(struct path *path, struct dentry *dentry, char *buf)
 {
 	char *full_path = 0;
 
-	
+	/* get full or parent path */
 	memset(buf, 0, MAX_NAME_BUF_LEN);
 	full_path = d_path(path, buf, MAX_P_NAME_LEN);
 	if (!full_path  || IS_ERR(full_path)) {
@@ -110,6 +116,7 @@ static char *get_full_path(struct path *path, struct dentry *dentry, char *buf)
 	return full_path;
 }
 
+/* FeliCa */
 #define RTFCTL_FILE_TYPE_NONE		0
 #define RTFCTL_FILE_TYPE_NORMAL	1
 #define RTFCTL_FILE_TYPE_DEVICE	2
@@ -233,9 +240,9 @@ static int is_felica_dev(unsigned int major,unsigned int minor, const char *full
 		}
 	}
 
-	
+	/* major number is the same as others */
 	for (i = 0; i < RTFCTL_FELICA_DEV_NUM; i++) {
-		
+		/* kernel find the driver according to major number */
 		if(felica_dev_t[i][0] == major) {
 			RTFCTL_MSG("fake file: %s (%u, %u)\n", full_path, major, minor);
 			return RTFCTL_FELICA_DEV_FAKE;
@@ -370,6 +377,7 @@ static int is_felica_owner_valid(uid_t uid, gid_t gid, const char *full_path)
 	return 0;
 }
 
+/* NFC */
 #define RTFCTL_NFC_TYPE_NONE     0
 #define RTFCTL_NFC_TYPE_DEVICE   1
 static int is_nfc_file(const char *full_path)
@@ -420,9 +428,9 @@ static int is_nfc_dev(unsigned int major,unsigned int minor, const char *full_pa
 		}
 	}
 
-	
+	/* major number is the same as others */
 	for (i = 1; i < RTFCTL_NFC_DEV_NUM; i++) {
-		
+		/* kernel find the driver according to major number */
 		if(nfc_dev_t[i][0] == major) {
 			RTFCTL_MSG("fake file: %s (%u, %u)\n", full_path, major, minor);
 			return RTFCTL_NFC_DEV_FAKE;
@@ -499,7 +507,7 @@ static int is_installd(pid_t pid, const char *name, uid_t uid)
 		return 1;
 	if (name && !strcmp("installd", name) && (uid == 0))
 		return 1;
-	
+	/* for JB422, which installd doesn't have root permission anymore */
 	if (name && !strcmp("installd", name) && (uid == UID_INSTALLD_SERVICE))
 		return 1;
 	return 0;
@@ -532,6 +540,9 @@ static int is_zygote(struct task_struct *chk_task)
 }
 #endif
 
+/**
+ * Security hook for dentry
+ */
 static int rootfctrl_dentry_open(struct file *file, const struct cred *cred)
 {
 	pid_t pid;
@@ -548,7 +559,7 @@ static int rootfctrl_dentry_open(struct file *file, const struct cred *cred)
 		RTFCTL_MSG("euid: %d, suid: %d\n", current_euid(), current_suid());
 
 #if (RTFCTL_RUN_MODE != RTFCTL_TRACKING_MODE)
-		
+		/* root or access through setuid program are denied */
 		if (is_non_felica_root(current_uid(), pid) || (current_uid() != current_euid())) {
 			printk("[RTFCTL] RType-1-1 <%s-%s (%d, %d, %d, %d)>\n", full_path, tcomm, pid,
 				current_uid(), current_euid(), current_suid());
@@ -563,7 +574,7 @@ static int rootfctrl_dentry_open(struct file *file, const struct cred *cred)
 		RTFCTL_MSG("pid: %d (%s)\n", pid, tcomm);
 
 #if (RTFCTL_RUN_MODE != RTFCTL_TRACKING_MODE)
-		
+		/* access by adb pull/push are denied */
 		if (pid == adbd_pid) {
 			printk("[RTFCTL] RType-1-2 <%s-%s (%d)>\n", full_path, tcomm, pid);
 			return -EACCES;
@@ -573,6 +584,9 @@ static int rootfctrl_dentry_open(struct file *file, const struct cred *cred)
 	return 0;
 }
 
+/**
+ *  Security hooks for file operations
+ */
 #if (RTFCTL_RUN_MODE == RTFCTL_TRACKING_MODE)
 static int rootfctrl_file_permission(struct file *file, int mask)
 {
@@ -583,7 +597,7 @@ static int rootfctrl_file_permission(struct file *file, int mask)
 
 		if (current_uid() == 0) {
 			RTFCTL_MSG("Want to Rejected...\n");
-			
+			//return -EACCES;
 		}
 	}
 	return 0;
@@ -598,7 +612,7 @@ static int rootfctrl_file_ioctrl(struct file *file, unsigned int cmd, unsigned l
 
 		if (current_uid() == 0) {
 			RTFCTL_MSG("Want to Rejected...\n");
-			
+			//return -EACCES;
 		}
 	}
 	return 0;
@@ -613,7 +627,7 @@ static int rootfctrl_file_fcntl(struct file *file, unsigned int cmd, unsigned lo
 
 		if (current_uid() == 0) {
 			RTFCTL_MSG("Want to Rejected...\n");
-			
+			//return -EACCES;
 		}
 	}
 	return 0;
@@ -626,13 +640,16 @@ static int rootfctrl_file_set_fowner(struct file *file)
 		RTFCTL_MSG("*****>>>>> %s <<<<<*****\n", __FUNCTION__);
 		if (current_uid() == 0) {
 			RTFCTL_MSG("Want to Rejected...\n");
-			
+			//return -EACCES;
 		}
 	}
 	return 0;
 }
 #endif
 
+/**
+ *  Security hooks for path operations
+ */
 static int rootfctrl_path_unlink(struct path *dir, struct dentry *dentry)
 {
 	pid_t pid;
@@ -647,7 +664,7 @@ static int rootfctrl_path_unlink(struct path *dir, struct dentry *dentry)
 		RTFCTL_MSG("pid: %d (%s)\n", pid, tcomm);
 
 #if (RTFCTL_RUN_MODE != RTFCTL_TRACKING_MODE)
-		
+		/* delete felica files are denied */
 		printk("[RTFCTL] RType-2 <%s-%s (%d)>\n", full_path, tcomm, pid);
 		return -EACCES;
 #endif
@@ -667,7 +684,7 @@ static int rootfctrl_path_mknod(struct path *dir, struct dentry *dentry, umode_t
 
 		dev_num = new_decode_dev(dev);
 
-		
+		/* felica node major/minor wrong or fake felica node */
 		ret = is_felica_dev(MAJOR(dev_num), MINOR(dev_num), full_path);
 		if (ret < 0) {
 			pid = task_tgid_vnr(current);
@@ -685,7 +702,7 @@ static int rootfctrl_path_mknod(struct path *dir, struct dentry *dentry, umode_t
 #endif
 		}
 
-		
+		/* nfc node major/minor wrong or fake nfc node */
 		ret = is_nfc_dev(MAJOR(dev_num), MINOR(dev_num), full_path);
 		if (ret < 0) {
 			pid = task_tgid_vnr(current);
@@ -713,7 +730,7 @@ static int rootfctrl_path_mknod(struct path *dir, struct dentry *dentry, umode_t
 		RTFCTL_MSG("Can't create Felica file dynamically\n");
 
 #if (RTFCTL_RUN_MODE != RTFCTL_TRACKING_MODE)
-		
+		/* create felica file are denied */
 		printk("[RTFCTL] RType-3-3 <%s (%o)-%s (%d)>\n", full_path, mode, tcomm, pid);
 		return -EACCES;
 #endif
@@ -739,11 +756,11 @@ static int rootfctrl_path_link(struct dentry *old_dentry, struct path *new_dir, 
 
 		RTFCTL_MSG("########## %s ##########\n", __FUNCTION__);
 		RTFCTL_MSG("pid: %d (%s)\n", pid, tcomm);
-		
+		//RTFCTL_MSG("parent: %s\n", get_full_path(new_dir, NULL, buf));
 		RTFCTL_MSG("new_dentry: %s -> old_dentry: %s\n", new_dentry->d_name.name, old_dentry->d_name.name);
 
 #if (RTFCTL_RUN_MODE != RTFCTL_TRACKING_MODE)
-		
+		/* can't create link to felica file anyway (or we can't control it...) */
 		printk("[RTFCTL] RType-4 <%s-%s (%d)>\n", full_path, tcomm, pid);
 		return -EACCES;
 #endif
@@ -774,7 +791,7 @@ static int rootfctrl_path_rename(struct path *old_dir, struct dentry *old_dentry
 		RTFCTL_MSG("pid: %d (%s)\n", pid, tcomm);
 
 #if (RTFCTL_RUN_MODE != RTFCTL_TRACKING_MODE)
-		
+		/* can't rename anyway (or we can't control it...) */
 		printk("[RTFCTL] RType-5 <%s (%d)>\n", tcomm, pid);
 		if (old_full_path)
 			printk("[RTFCTL] RType-5 <old %s>\n", old_full_path);
@@ -863,7 +880,7 @@ static int rootfctrl_path_mkdir(struct path *dir, struct dentry *dentry, umode_t
 		RTFCTL_MSG("mode: %o\n", mode);
 		if (current_uid() == 0) {
 			RTFCTL_MSG("Rejected...\n");
-			
+			//return -EACCES;
 		}
 	}
 	return 0;
@@ -877,7 +894,7 @@ static int rootfctrl_path_rmdir(struct path *dir, struct dentry *dentry)
 		RTFCTL_MSG("dentry: %s\n", dentry->d_name.name);
 		if (current_uid() == 0) {
 			RTFCTL_MSG("Rejected...\n");
-			
+			//return -EACCES;
 		}
 	}
 	return 0;
@@ -901,22 +918,25 @@ static int rootfctrl_path_symlink(struct path *dir, struct dentry *dentry, const
 	path.dentry = dentry;
 
 	if (!strcmp(old_name, "../felica")) {
-	
+	//if (is_felica_file(construct_full_path(dir, old_name, buf))) {
 		RTFCTL_MSG("*****>>>>> %s <<<<<*****\n", __FUNCTION__);
-		
-		
+		//RTFCTL_MSG("path name: %s\n", get_full_path(&path, NULL, name_buf));
+		//RTFCTL_MSG("parent: %s\n", get_full_path(dir, NULL, name_buf));
 		RTFCTL_MSG("dentry: %s\n", dentry->d_name.name);
 		RTFCTL_MSG("old_name: %s\n", old_name);
 
-		
+		/* can't create link to felica file anyway (or we can't control it...) */
 		RTFCTL_MSG(KERN_INFO "Rejected...\n");
-		
+		//return -EACCES;
 	}
 	return 0;
 }
 #endif
 
 
+/**
+ *  Security hooks for task operations
+ */
 static int rootfctrl_task_create(unsigned long clone_flags)
 {
 	pid_t ppid = task_tgid_vnr(current->real_parent);
@@ -959,7 +979,7 @@ static int rootfctrl_task_create(unsigned long clone_flags)
 	if (!strcmp("adbd", tcomm) && ppid == 1) {
 		RTFCTL_MSG("########## %s ##########\n", __FUNCTION__);
 		adbd_pid = task_tgid_vnr(current);
-		
+		//printk("[RTFCTL] Current ad: %d\n", adbd_pid);
 	}
 
 	return 0;
@@ -974,7 +994,7 @@ int rootfctrl_task_kill(struct task_struct *p, struct siginfo *info,
 	get_task_comm(tcomm2, current);
 	get_task_comm(tcomm, p);
 
-	
+	/* "zygote" is not one-shot service, if it's killed, we need to recognize again */
 	if (!strcmp("zygote", tcomm) && (task_tgid_vnr(p) == zygote_pid)) {
 		RTFCTL_MSG("########## %s ##########\n", __FUNCTION__);
 		RTFCTL_MSG("pid: %d (%s) kill pid: %d (%s)\n", task_tgid_vnr(current), tcomm2, task_tgid_vnr(p), tcomm);
@@ -984,7 +1004,7 @@ int rootfctrl_task_kill(struct task_struct *p, struct siginfo *info,
 		zygote_pid = -1;
 	}
 
-	
+	/* "felica_daemon" */
 	if (!strcmp("felica_daemon", tcomm) && (task_tgid_vnr(p) == flc_daemon_pid)) {
 		RTFCTL_MSG("########## %s ##########\n", __FUNCTION__);
 		RTFCTL_MSG("pid: %d (%s) kill pid: %d (%s)\n", task_tgid_vnr(current), tcomm2, task_tgid_vnr(p), tcomm);
@@ -994,7 +1014,7 @@ int rootfctrl_task_kill(struct task_struct *p, struct siginfo *info,
 		flc_daemon_pid = -1;
 	}
 
-	
+	/* "felica_agent" */
 	if (!strcmp("felica_agent", tcomm) && (task_tgid_vnr(p) == flc_agent_pid)) {
 		RTFCTL_MSG("########## %s ##########\n", __FUNCTION__);
 		RTFCTL_MSG("pid: %d (%s) kill pid: %d (%s)\n", task_tgid_vnr(current), tcomm2, task_tgid_vnr(p), tcomm);
@@ -1004,7 +1024,7 @@ int rootfctrl_task_kill(struct task_struct *p, struct siginfo *info,
 		flc_agent_pid = -1;
 	}
 
-	
+	/* "installd" is not one-shot service, if it's killed, we need to recognize again */
 	if (!strcmp("installd", tcomm) && (task_tgid_vnr(p) == installd_pid)) {
 		RTFCTL_MSG("########## %s ##########\n", __FUNCTION__);
 		RTFCTL_MSG("pid: %d (%s) kill pid: %d (%s)\n", task_tgid_vnr(current), tcomm2, task_tgid_vnr(p), tcomm);

@@ -75,6 +75,9 @@ struct headset_query {
 	struct delayed_work volume_ramp_work;
 	struct delayed_work gpio_off_work;
 	int hs_connec;
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+       int hs_imp_over;
+#endif
 	unsigned long power_mask;
 };
 
@@ -104,6 +107,17 @@ static struct workqueue_struct *hs_wq;
 static struct workqueue_struct *ramp_wq;
 static struct workqueue_struct *gpio_wq;
 static int high_imp = 0;
+
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+int query_imp_over_threshold(void)
+{
+       int ret = 0;
+       mutex_lock(&rt5506_query.mlock);
+       ret = rt5506_query.hs_imp_over;
+       mutex_unlock(&rt5506_query.mlock);
+       return ret;
+}
+#endif
 
 static int set_rt5506_regulator(enum AMP_REG_MODE mode)
 {
@@ -187,6 +201,9 @@ static int rt5506_headset_detect(void *private_data, int on)
 		rt5506_query.hs_qstatus = QUERY_HEADSET;
 		rt5506_query.headsetom = HEADSET_OM_UNDER_DETECT;
 
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+               rt5506_query.hs_imp_over = -EINVAL;
+#endif
 		if(rt5506_query.rt5506_status == STATUS_PLAYBACK) {
 
 			if(high_imp) {
@@ -589,6 +606,17 @@ static void hs_imp_detec_func(struct work_struct *work)
 
 	if(hs->rt5506_status == STATUS_PLAYBACK)
 		hs->rt5506_status = STATUS_SUSPEND;
+
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+       
+       if(hs->hs_qstatus == QUERY_FINISH) {
+
+               if(r_channel > 0x88)
+                       hs->hs_imp_over = 1;
+               else
+                       hs->hs_imp_over = 0;
+       }
+#endif
 
 	unvote_power(&rt5506_query.power_mask, POWER_IMPEDANCE);
 	mutex_unlock(&hs->mlock);

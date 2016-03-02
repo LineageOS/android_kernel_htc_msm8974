@@ -40,7 +40,8 @@
 #define TPA9887_ENABLE_DSP	_IOW(TPA9887_IOCTL_MAGIC, 0x03, unsigned int)
 #define TPA9887_WRITE_L_CONFIG	_IOW(TPA9887_IOCTL_MAGIC, 0x04, unsigned int)
 #define TPA9887_READ_L_CONFIG	_IOW(TPA9887_IOCTL_MAGIC, 0x05, unsigned int)
-#define TPA9887_KERNEL_LOCK    _IOW(TPA9887_IOCTL_MAGIC, 0x06, unsigned int)
+#define TPA9887_KERNEL_LOCK	_IOW(TPA9887_IOCTL_MAGIC, 0x06, unsigned int)
+#define TPA9887_KERNEL_INIT	_IOW(TPA9887_IOCTL_MAGIC, 0x07, unsigned int)
 #define DEBUG (0)
 
 static struct i2c_client *this_client;
@@ -48,6 +49,7 @@ static struct tfa9887_platform_data *pdata;
 struct mutex spk_amp_lock;
 static int tfa9887_opened;
 static int last_spkamp_state;
+static int lock_from_userspace;
 static int dsp_enabled;
 static int tfa9887_i2c_write(char *txData, int length);
 static int tfa9887_i2c_read(char *rxData, int length);
@@ -469,10 +471,34 @@ static long tfa9887_ioctl(struct file *file, unsigned int cmd,
 		len = reg_value[0];
 		
 		pr_debug("TPA9887_KLOCK1 %d\n", reg_value[1]);
-		if (reg_value[1])
-		   mutex_lock(&spk_amp_lock);
-		else
-		   mutex_unlock(&spk_amp_lock);
+		if (reg_value[1]) {
+			mutex_lock(&spk_amp_lock);
+			lock_from_userspace++;
+		} else {
+			lock_from_userspace--;
+			if (lock_from_userspace >= 0) {
+				mutex_unlock(&spk_amp_lock);
+			} else {
+				pr_warn("%s: lock_from_userspace is not equal to zero, should not meet."
+					"don't unlock it again", __func__);
+				lock_from_userspace = 0;
+			}
+		}
+		break;
+
+	case TPA9887_KERNEL_INIT:
+		pr_info("%s: TPA9887_KERNEL_INIT ++ kernel count %d\n",
+			__func__, atomic_read(&(spk_amp_lock.count)));
+		while (lock_from_userspace > 0) {
+			pr_info("%s: TPA9887_KERNEL_INIT lock count from userspace %d != 0, unlock it\n",
+				__func__, lock_from_userspace);
+			lock_from_userspace--;
+			mutex_unlock(&spk_amp_lock);
+		}
+		lock_from_userspace = 0;
+		mutex_init(&spk_amp_lock);
+		pr_info("%s: TPA9887_KERNEL_INIT -- kernel count %d\n",
+			__func__, atomic_read(&(spk_amp_lock.count)));
 		break;
 
 	case ACOUSTIC_AMP_CTRL:
@@ -633,7 +659,9 @@ static int __init tfa9887_init(void)
 {
 	pr_info("%s\n", __func__);
 	mutex_init(&spk_amp_lock);
-        dsp_enabled = 0;
+	dsp_enabled = 0;
+	last_spkamp_state = 0;
+	lock_from_userspace = 0;
 	return i2c_add_driver(&tfa9887_driver);
 }
 

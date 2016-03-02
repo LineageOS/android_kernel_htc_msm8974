@@ -18,15 +18,6 @@
 #include "mdss_dsi.h"
 #include "mdss_mdp.h"
 
-/*
- * mdss_check_dsi_ctrl_status() - Check MDP5 DSI controller status periodically.
- * @work     : dsi controller status data
- * @interval : duration in milliseconds to schedule work queue
- *
- * This function calls check_status API on DSI controller to send the BTA
- * command. If DSI controller fails to acknowledge the BTA command, it sends
- * the PANEL_ALIVE=0 status to HAL layer.
- */
 void mdss_check_dsi_ctrl_status(struct work_struct *work, uint32_t interval)
 {
 	struct dsi_status_data *pstatus_data = NULL;
@@ -87,16 +78,6 @@ void mdss_check_dsi_ctrl_status(struct work_struct *work, uint32_t interval)
 		return;
 	}
 
-	/*
-	 * For the command mode panels, we return pan display
-	 * IOCTL on vsync interrupt. So, after vsync interrupt comes
-	 * and when DMA_P is in progress, if the panel stops responding
-	 * and if we trigger BTA before DMA_P finishes, then the DSI
-	 * FIFO will not be cleared since the DSI data bus control
-	 * doesn't come back to the host after BTA. This may cause the
-	 * display reset not to be proper. Hence, wait for DMA_P done
-	 * for command mode panels before triggering BTA.
-	 */
 	if (ctl->wait_pingpong)
 		ctl->wait_pingpong(ctl, NULL);
 

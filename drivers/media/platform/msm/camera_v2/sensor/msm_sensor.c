@@ -354,7 +354,7 @@ static int32_t msm_sensor_get_dt_vreg_data(struct device_node *of_node,
 			sensordata->cam_vreg[i].op_mode);
 	}
 
-#ifndef CONFIG_MACH_DUMMY
+#ifndef CONFIG_MACH_A11_UL
 	rc = of_property_read_u32_array(of_node, "qcom,cam-vreg-gpios-index",
 		vreg_array, count);
 	if (rc < 0) {
@@ -837,7 +837,11 @@ static int32_t msm_sensor_get_dt_data(struct device_node *of_node,
 	uint16_t *gpio_array = NULL;
 	uint16_t gpio_array_size = 0;
 	uint32_t id_info[3];
-
+	
+#if defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_DUMMY)
+	char *HWver;
+#endif
+	
 	s_ctrl->sensordata = kzalloc(sizeof(
 		struct msm_camera_sensor_board_info),
 		GFP_KERNEL);
@@ -863,6 +867,27 @@ static int32_t msm_sensor_get_dt_data(struct device_node *of_node,
 		pr_err("%s failed %d\n", __func__, __LINE__);
 		goto ERROR1;
 	}
+
+#if defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_DUMMY)
+    
+if(strcmp(sensordata->sensor_name, "ov13850") ==0)
+{
+    HWver = board_HWver();
+    CDBG("%s androidboot.hwversion  %s \n", __func__, HWver);
+    if (strcmp(HWver, "A") == 0)
+    {
+        CDBG("%s CPU is 8974_AA overwrite sensordata->sensor_name\n", __func__);
+        rc = of_property_read_string(of_node, "qcom,sensor-name_2",
+            &sensordata->sensor_name);
+        CDBG("%s qcom,sensor-name_2 %s, rc %d\n", __func__,
+            sensordata->sensor_name, rc);
+        if (rc < 0) {
+            pr_err("%s failed %d\n", __func__, __LINE__);
+            goto ERROR1;
+        }
+    }
+}
+#endif
 
 	rc = of_property_read_u32(of_node, "qcom,sensor-mode",
 		&sensordata->sensor_init_params->modes_supported);
@@ -1191,6 +1216,9 @@ int msm_camera_config_single_ncp6924_vreg(struct device *dev,
 		if (IS_ERR(*reg_ptr)) {
 			pr_err("%s: %s get failed\n", __func__,
 				ncp6924_vreg->reg_name);
+			
+			regulator_put(*reg_ptr);
+			
 			*reg_ptr = NULL;
 			goto vreg_get_fail;
 		}
@@ -1830,7 +1858,7 @@ int32_t msm_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 		cdata->cfg.sensor_info.sensor_mirror_flip=
 			s_ctrl->sensordata->sensor_info->sensor_mirror_flip;
 		memcpy(cdata->cfg.sensor_info.OTP_INFO, s_ctrl->sensordata->sensor_info->OTP_INFO, 5);
-		memcpy(cdata->cfg.sensor_info.fuse_id, s_ctrl->sensordata->sensor_info->fuse_id, 5);
+		memcpy(cdata->cfg.sensor_info.fuse_id, s_ctrl->sensordata->sensor_info->fuse_id, 4);
 #endif
 
 		break;
@@ -1936,7 +1964,8 @@ int32_t msm_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 			break;
 		}
 
-		if (!conf_array.size) {
+		if ((!conf_array.size) ||
+			(conf_array.size > I2C_USER_REG_DATA_MAX )) {
 			pr_err("%s:%d failed\n", __func__, __LINE__);
 			rc = -EFAULT;
 			break;
@@ -2116,7 +2145,8 @@ int32_t msm_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 			break;
 		}
 
-		if (!conf_array.size) {
+		if ((!conf_array.size) ||
+			(conf_array.size > I2C_USER_REG_DATA_MAX )) {
 			pr_err("%s:%d failed\n", __func__, __LINE__);
 			rc = -EFAULT;
 			break;

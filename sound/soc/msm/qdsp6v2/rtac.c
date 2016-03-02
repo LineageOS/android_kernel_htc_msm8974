@@ -152,6 +152,7 @@ struct mutex			rtac_adm_apr_mutex;
 struct mutex			rtac_asm_apr_mutex;
 struct mutex			rtac_voice_mutex;
 struct mutex			rtac_voice_apr_mutex;
+struct mutex			rtac_ioctl_mutex;
 
 int rtac_clear_mapping(uint32_t cal_type)
 {
@@ -1215,7 +1216,6 @@ done:
 	return bytes_returned;
 }
 
-
 void rtac_set_voice_handle(u32 mode, void *handle)
 {
 	pr_debug("%s\n", __func__);
@@ -1434,6 +1434,7 @@ static long rtac_ioctl(struct file *f,
 		goto done;
 	}
 
+	mutex_lock(&rtac_ioctl_mutex);
 	switch (cmd) {
 	case AUDIO_GET_RTAC_ADM_INFO:
 		if (copy_to_user((void *)arg, &rtac_adm_data,
@@ -1490,6 +1491,7 @@ static long rtac_ioctl(struct file *f,
 		pr_err("%s: Invalid IOCTL, command = %d!\n",
 		       __func__, cmd);
 	}
+	mutex_unlock(&rtac_ioctl_mutex);
 done:
 	return result;
 }
@@ -1570,6 +1572,8 @@ static int __init rtac_init(void)
 		kzfree(rtac_asm_buffer);
 		goto nomem;
 	}
+
+	mutex_init(&rtac_ioctl_mutex);
 
 	return misc_register(&rtac_misc);
 nomem:

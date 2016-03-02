@@ -32,10 +32,12 @@
 #include <sound/soc-dpcm.h>
 #include <sound/initval.h>
 
+//htc audio ++
 #undef pr_info
 #undef pr_err
 #define pr_info(fmt, ...) pr_aud_info(fmt, ##__VA_ARGS__)
 #define pr_err(fmt, ...) pr_aud_err(fmt, ##__VA_ARGS__)
+//htc audio --
 
 /* ASoC no host IO hardware.
  * TODO: fine tune these values for all host less transfers.
@@ -78,6 +80,7 @@ int snd_soc_dpcm_can_be_free_stop(struct snd_soc_pcm_runtime *fe,
 }
 EXPORT_SYMBOL_GPL(snd_soc_dpcm_can_be_free_stop);
 
+//htc audio ++
 static void dump_fe_state_by_be(struct snd_soc_pcm_runtime *fe,
 		struct snd_soc_pcm_runtime *be, int stream)
 {
@@ -1183,7 +1186,6 @@ int dpcm_be_dai_startup(struct snd_soc_pcm_runtime *fe, int stream)
 		if (!snd_soc_dpcm_be_can_update(fe, be, stream))
 			continue;
 
-		
 		/* first time the dpcm_params is open ? */
 		if (be->dpcm[stream].users == DPCM_MAX_BE_USERS)
 			dev_err(be->dev, "too many users %s at open - state %d\n",
@@ -1517,7 +1519,9 @@ int dpcm_be_dai_hw_params(struct snd_soc_pcm_runtime *fe, int stream)
 		ret = soc_pcm_hw_params(be_substream, &dpcm_params->hw_params);
 		if (ret < 0) {
 			dev_err(dpcm_params->be->dev, "dpcm: hw_params BE failed %d\n", ret);
+//htc audio ++
 			dump_fe_state_by_be(fe, be, stream);
+//htc audio --
 			goto unwind;
 		}
 
@@ -2692,8 +2696,10 @@ int soc_dpcm_fe_dai_open(struct snd_pcm_substream *fe_substream)
 	if ((ret = dpcm_path_get(fe, stream, &list)) <= 0) {
 		dev_warn(fe->dev, "asoc: %s no valid %s route from source to sink\n",
 			fe->dai_link->name, stream ? "capture" : "playback");
+//htc audio ++
 		if(ret == 0 && list)
 			dpcm_path_put(&list);
+//htc audio --
 		mutex_unlock(&fe->card->dpcm_mutex);
 		return -EINVAL;
 	}

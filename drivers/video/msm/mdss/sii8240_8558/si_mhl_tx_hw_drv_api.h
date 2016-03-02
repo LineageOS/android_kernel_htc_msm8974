@@ -36,6 +36,7 @@ struct cbus_req {
 	uint8_t				reg;
 	uint8_t				reg_data;
 	uint8_t				offset;			/* register offset */
+//	uint8_t				offset_data;	/* Offset of register on CBUS or RCP data */
 	uint8_t				length;			/* Only applicable to write burst */
 	uint8_t				msg_data[16];	/* scratch pad data area. */
 };

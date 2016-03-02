@@ -37,12 +37,6 @@
 
 #define AUDIO_OCMEM_BUF_SIZE (512 * SZ_1K)
 
-/**
- * Exercise OCMEM Dump if audio OCMEM state is
- * one of the following. All other states indicate
- * audio data is not mapped from DDR to OCMEM and
- * therefore no need of dump.
- */
 #define _DO_OCMEM_DUMP_BIT_MASK_\
 		((1 << OCMEM_STATE_MAP_COMPL) |\
 		(1 << OCMEM_STATE_MAP_TRANSITION) |\
@@ -50,10 +44,6 @@
 		(1 << OCMEM_STATE_SHRINK) |\
 		(1 << OCMEM_STATE_GROW))
 
-/**
- * Wait for OCMEM driver to process and respond for
- * ongoing map/unmap request before calling OCMEM dump.
- */
 #define _WAIT_BFR_DUMP_BIT_MASK_\
 		((1 << OCMEM_STATE_MAP_COMPL) |\
 		(1 << OCMEM_STATE_UNMAP_COMPL) |\
@@ -79,7 +69,7 @@
 #define clear_bit_pos(x, y)  (atomic_set(&x, (atomic_read(&x) & (~(1 << y)))))
 #define test_bit_pos(x, y) ((atomic_read(&x)) & (1 << y))
 
-static int enable_ocmem_audio_voice = 1;
+static int enable_ocmem_audio_voice = 0;
 module_param(enable_ocmem_audio_voice, int,
 			S_IRUGO | S_IWUSR | S_IWGRP);
 MODULE_PARM_DESC(enable_ocmem_audio_voice, "control OCMEM usage for audio/voice");
@@ -226,15 +216,6 @@ int get_state_to_process(atomic_t *state)
 
 }
 
-/**
- * audio_ocmem_enable() - Exercise OCMEM for audio
- * @cid:	client id - OCMEM_LP_AUDIO
- *
- * OCMEM gets allocated for audio usecase and the low power
- * segments obtained from the DSP will be moved from/to main
- * memory to OCMEM. Shrink and grow requests will be received
- * and processed accordingly based on the current audio state.
- */
 int audio_ocmem_enable(int cid)
 {
 	int ret;
@@ -246,7 +227,7 @@ int audio_ocmem_enable(int cid)
 	pr_debug("%s, %p\n", __func__, &audio_ocmem_lcl);
 	atomic_set(&audio_ocmem_lcl.audio_state, OCMEM_STATE_DEFAULT);
 	if (audio_ocmem_lcl.lp_memseg_ptr == NULL) {
-		/* Retrieve low power segments */
+		
 		ret = core_get_low_power_segments(
 					&audio_ocmem_lcl.lp_memseg_ptr);
 		if (ret != 0) {
@@ -270,7 +251,7 @@ int audio_ocmem_enable(int cid)
 			(uint32_t)audio_ocmem_lcl.mlist.chunks[j].ddr_paddr,
 			(uint32_t)audio_ocmem_lcl.mlist.chunks[j].size);
 	}
-	/* Non-blocking ocmem allocate (asynchronous) */
+	
 	buf = ocmem_allocate_nb(cid, AUDIO_OCMEM_BUF_SIZE);
 	if (IS_ERR_OR_NULL(buf)) {
 		pr_err("%s: failed: %d\n", __func__, cid);
@@ -309,7 +290,7 @@ int audio_ocmem_enable(int cid)
 	}
 	pr_debug("%s: buf->len: %ld\n", __func__, (audio_ocmem_lcl.buf)->len);
 
-	/* vote for ocmem bus bandwidth */
+	
 	ret = msm_bus_scale_client_update_request(
 				audio_ocmem_lcl.audio_ocmem_bus_client,
 				1);
@@ -511,7 +492,7 @@ int audio_ocmem_enable(int cid)
 			pr_debug("%s: ocmem_free success, state[0x%x]\n",
 				 __func__,
 				 atomic_read(&audio_ocmem_lcl.audio_state));
-		/* Fall through */
+		
 		case OCMEM_STATE_SSR:
 			msm_bus_scale_client_update_request(
 				audio_ocmem_lcl.audio_ocmem_bus_client,
@@ -547,14 +528,6 @@ fail_cmd:
 	return ret;
 }
 
-/**
- * audio_ocmem_disable() - Disable OCMEM for audio
- * @cid:	client id - OCMEM_LP_AUDIO
- *
- * OCMEM gets deallocated for audio usecase. Depending on
- * current audio state, OCMEM will be freed from using audio
- * segments.
- */
 int audio_ocmem_disable(int cid)
 {
 
@@ -600,17 +573,6 @@ static void voice_ocmem_process_workdata(struct work_struct *work)
 	kfree(voice_ocm_work);
 	return;
 }
-/**
- * voice_ocmem_process_req() - disable/enable OCMEM during voice call
- * @cid:	client id - VOICE
- * @enable:	1 - enable
- *		0 - disable
- *
- * This configures OCMEM during start of voice call. If any
- * audio clients are already using OCMEM, they will be evicted
- * out of OCMEM during voice call and get restored after voice
- * call.
- */
 int voice_ocmem_process_req(int cid, bool enable)
 {
 
@@ -645,13 +607,6 @@ int voice_ocmem_process_req(int cid, bool enable)
 	return 0;
 }
 
-/**
- * disable_ocmem_for_voice() - disable OCMEM during voice call
- * @cid:        client id - OCMEM_VOICE
- *
- * This configures OCMEM during start of voice call. If any
- * audio clients are already using OCMEM, they will be evicted
- */
 int disable_ocmem_for_voice(int cid)
 {
 	int ret;
@@ -662,14 +617,6 @@ int disable_ocmem_for_voice(int cid)
 	return ret;
 }
 
-/**
- * enable_ocmem_for_voice() - To enable OCMEM after voice call
- * @cid:	client id - OCMEM_VOICE
- *
- * OCMEM gets re-enabled after OCMEM voice call. If other client
- * is evicted out of OCMEM, that gets restored and remapped in
- * OCMEM after the voice call.
- */
 int enable_ocmem_after_voice(int cid)
 {
 	int ret;
@@ -692,7 +639,7 @@ static void audio_ocmem_process_workdata(struct work_struct *work)
 
 	en = audio_ocm_work->en;
 	mutex_lock(&audio_ocmem_lcl.state_process_lock);
-	/* if previous work waiting for ocmem - signal it to exit */
+	
 	atomic_set(&audio_ocmem_lcl.audio_exit, 1);
 	pr_debug("%s: acquired mutex for %d\n", __func__, en);
 	switch (audio_ocm_work->id) {
@@ -713,14 +660,6 @@ static void audio_ocmem_process_workdata(struct work_struct *work)
 	return;
 }
 
-/**
- * audio_ocmem_process_req() - process audio request to use OCMEM
- * @id:		client id - OCMEM_LP_AUDIO
- * @enable:	enable or disable OCMEM
- *
- * A workqueue gets created and initialized to use OCMEM for
- * audio clients.
- */
 int audio_ocmem_process_req(int id, bool enable)
 {
 	struct audio_ocmem_workdata *workdata = NULL;
@@ -943,7 +882,7 @@ static int ocmem_audio_client_probe(struct platform_device *pdev)
 	audio_ocmem_lcl.ocmem_en = true;
 	audio_ocmem_lcl.audio_ocmem_running = false;
 
-	/* populate platform data */
+	
 	ret = audio_ocmem_platform_data_populate(pdev);
 	if (ret) {
 		dev_err(&pdev->dev, "%s: failed to populate platform data, rc = %d\n",

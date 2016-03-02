@@ -18,10 +18,12 @@
 
 #define CM36686_I2C_NAME "CM36686"
 
+/*Define ALS Command Code*/
 #define ALS_config_cmd		0x00
 #define ALS_high_thd		0x01
 #define ALS_low_thd		0x02
 
+/* Define PS Command Code*/
 #define PS_config		0x03
 #define PS_config_ms		0x04
 #define PS_CANC			0x05
@@ -34,21 +36,26 @@
 #define INT_FLAG		0x0B
 #define CH_ID			0x0C
 
+/*Define Interrupt address*/
+/*#define check_interrupt_add 0x18*/
 
 #define ALS_CALIBRATED		0x6DA5
 #define PS_CALIBRATED		0x5053
 
+/*CM36686*/
+/*for ALS command 00h_L*/
 #define CM36686_ALS_IT_80ms 	(0 << 6)
 #define CM36686_ALS_IT_160ms 	(1 << 6)
 #define CM36686_ALS_IT_320ms 	(2 << 6)
 #define CM36686_ALS_IT_640ms 	(3 << 6)
-#define CM36686_ALS_PERS_1 	(0 << 2) 
+#define CM36686_ALS_PERS_1 	(0 << 2) /* ALS persistence */
 #define CM36686_ALS_PERS_2 	(1 << 2)
 #define CM36686_ALS_PERS_4 	(2 << 2)
 #define CM36686_ALS_PERS_8 	(3 << 2)
-#define CM36686_ALS_INT_EN	(1 << 1) 
-#define CM36686_ALS_SD		(1 << 0) 
+#define CM36686_ALS_INT_EN	(1 << 1) /* 1: Enable interrupt */
+#define CM36686_ALS_SD		(1 << 0) /* 1: Disable ALS */
 
+/*for PS command 03h_L*/
 #define CM36686_PS_DR_1_40 	(0 << 6)
 #define CM36686_PS_DR_1_80 	(1 << 6)
 #define CM36686_PS_DR_1_160 	(2 << 6)
@@ -65,8 +72,9 @@
 #define CM36686_PS_PERS_2 	(1 << 4)
 #define CM36686_PS_PERS_3 	(2 << 4)
 #define CM36686_PS_PERS_4 	(3 << 4)
-#define CM36686_PS_SD		(1 << 0) 
+#define CM36686_PS_SD		(1 << 0) /* 0: Enable PS1, 1: Disable PS1 */
 
+/*for PS command 03h_H*/
 #define CM36686_PS_12BIT		(0 << 3)
 #define CM36686_PS_16BIT         (1 << 3)
 #define CM36686_PS_INT_DIS 	(0 << 0)
@@ -75,6 +83,7 @@
 #define CM36686_PS_INT_BOTH	(3 << 0)
 
 
+/*for PS command 04h_L*/
 #define CM36686_PS_SMART_PRES_DIS	(1 << 4)
 #define CM36686_PS_SMART_PRES_EN	(1 << 4)
 #define CM36686_PS_AUTO	 	(0 << 3)
@@ -82,6 +91,7 @@
 #define CM36686_PS_TRIG_NO	(0 << 2)
 #define CM36686_PS_TRIG_ONCE	(1 << 2)
 
+/*for PS command 04h_H*/
 #define CM36686_PS_MS_LOGIC 	(1 << 6)
 #define CM36686_PS_MS_NORMAL	(0 << 6)
 #define CM36686_PS_LED_50 	(0 << 0)
@@ -110,8 +120,8 @@ struct cm36686_platform_data {
 	uint32_t *levels;
 	uint32_t *correction;
 	uint32_t golden_adc;
-	int (*power)(int, uint8_t);	
-	int (*lpm_power)(int on);	
+	int (*power)(int, uint8_t);	/* power to the chip */
+	int (*lpm_power)(int on);	/* power to the chip */
 	uint32_t cm36686_slave_address;
 	uint32_t ps_thd_set;
 	uint32_t ps_thh_diff;

@@ -1475,7 +1475,7 @@ static ssize_t enable_irda_store(struct device *dev,
 {
 	int irda_en;
 
-	sscanf(buf, "%d", &irda_en);
+	irda_en = simple_strtoul(buf, NULL, 10);
 	if (irda_en == 96) {
 		force_baud_1 = 96;
 		E("%s(): change baud = 9600\n", __func__);
@@ -1510,7 +1510,7 @@ static ssize_t enable_cir_store(struct device *dev,
 	unsigned long flags;
 	int cir_en, ret = 0;
 
-	sscanf(buf, "%d", &cir_en);
+	cir_en = simple_strtoul(buf, NULL, 10);
 	if (cir_en != 1 && cir_en != 3 && cir_en != 0)
 		D("%s: parameter invalid. cir_en = %d", __func__, cir_en);
 
@@ -1564,7 +1564,7 @@ static ssize_t enable_learn_store(struct device *dev,
 	int enable = 0;
 	struct msm_hsl_port *msm_cir_port = htc_cir_port;
 
-	sscanf(buf, "%d", &enable);
+	enable = simple_strtoul(buf, NULL, 10);
 	D("%s trigger cir learn, input = %d.\n",__func__, enable);
 	if ((enable == 1) && (msm_cir_port->cir_learn_en)){
 		gpio_direction_output(msm_cir_port->cir_learn_en, 1);
@@ -1588,7 +1588,7 @@ static ssize_t reset_cir_store(struct device *dev,
 	struct msm_hsl_port *msm_cir_port = htc_cir_port;
 	int reset;
 
-	sscanf(buf, "%d", &reset);
+	reset = simple_strtoul(buf, NULL, 10);
 	D("%s trigger cir reset, input = %d.\n",
 					__func__, reset);
 

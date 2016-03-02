@@ -26,6 +26,7 @@
 #define DRIVER_NAME "voice_svc"
 #define MINOR_NUMBER 1
 #define APR_MAX_RESPONSE 10
+#define TIMEOUT_MS 1000
 
 #define MAX(a, b) ((a) >= (b) ? (a) : (b))
 
@@ -56,6 +57,7 @@ struct apr_response_list {
 
 static struct voice_svc_device *voice_svc_dev;
 static struct class *voice_svc_class;
+
 static bool reg_dummy_sess;
 static void *dummy_q6_mvm;
 static void *dummy_q6_cvs;
@@ -276,7 +278,7 @@ static int voice_svc_dereg(char *svc, void **handle)
 		__func__, svc);
 
 done:
-	return 0;
+	return ret;
 }
 
 static int process_reg_cmd(struct voice_svc_register apr_reg_svc,
@@ -450,10 +452,26 @@ static long voice_svc_ioctl(struct file *file, unsigned int cmd,
 			} else {
 				spin_unlock_irqrestore(&prtd->response_lock,
 							spin_flags);
-				wait_event_interruptible(prtd->response_wait,
-					!list_empty(&prtd->response_queue));
-				pr_debug("%s: Interupt recieved for response",
-					 __func__);
+				pr_debug("%s: wait for a response\n", __func__);
+
+				ret = wait_event_interruptible_timeout(
+					prtd->response_wait,
+					!list_empty(&prtd->response_queue),
+					msecs_to_jiffies(TIMEOUT_MS));
+				if (ret == 0) {
+					pr_debug("%s: Read timeout\n", __func__);
+					ret = -ETIMEDOUT;
+					goto done;
+				} else if (ret > 0 &&
+					!list_empty(&prtd->response_queue)) {
+					pr_debug("%s: Interrupt recieved for response\n",
+						__func__);
+					ret = 0;
+				} else if (ret < 0) {
+					pr_debug("%s: Interrupted by SIGNAL %d\n",
+						__func__, ret);
+					goto done;
+				}
 			}
 		} while(!apr_response);
 		break;
@@ -533,6 +551,7 @@ static int voice_svc_open(struct inode *inode, struct file *file)
 		voice_svc_dummy_reg();
 		reg_dummy_sess = 1;
 	}
+
 	return 0;
 }
 

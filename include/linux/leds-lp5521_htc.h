@@ -32,5 +32,5 @@ struct led_i2c_platform_data {
 void led_behavior(struct i2c_client *client, int val);
 void lp5521_led_current_set_for_key(int brightness_key);
 
-#endif 
+#endif /*_LINUXLP5521-LED_H*/
 

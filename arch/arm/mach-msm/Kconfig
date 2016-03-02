@@ -1520,6 +1520,11 @@ config HTC_HEADSET_PMIC
 	help
 	  Provides support of HTC PMIC headset detection.
 
+config HTC_HEADSET_L_RMT_KEY_DESIGN
+	tristate "Google new feature"
+	depends on HTC_HEADSET_MGR
+	default n
+
 config HTC_HEADSET_8X60
 	tristate "HTC 8X60 headset detection driver"
 	depends on HTC_HEADSET_MGR
@@ -1548,6 +1553,13 @@ config HTC_INSERT_NOTIFY_DELAY
 	help
 	  delay headset insert notify
 
+config HTC_HEADSET_DET_DEBOUNCE
+	tristate "HTC headset detect-pin debounce"
+	depends on HTC_HEADSET_INT_REDETECT
+	default n
+	help
+	  Support headset detect-pin debounce
+
 config TROUT_BATTCHG
 	depends on MACH_TROUT && POWER_SUPPLY
 	default y
@@ -1562,6 +1574,11 @@ config HTC_BATT_8960
         depends on HTC_BATT_CORE
         default n
         bool "HTC battery driver for 8960"
+
+config HTC_BATT_SWOLLEN_WA
+        depends on HTC_BATT_8960
+        default n
+        bool "HTC battery swollen workaround"
 
 config DUTY_CYCLE_LIMIT
 	bool "Duty cycle limit charging support"
@@ -3069,6 +3086,13 @@ config MSM_UARTDM_Core_v14
 	help
 		Select if BLSP based UART Core v.14 or higher is present.
 
+config MSM_COMMON_LOG
+	bool "Use to export symbols for parsing memory dump"
+	help
+	 Use this to export symbols to a memory dump table. This table
+	 can be used by post analysis tools to extract information from
+	 memory when device crashes.
+
 config MSM_BOOT_STATS
 	bool "Use MSM boot stats reporting"
 	help
@@ -3117,6 +3141,14 @@ config KRAIT_REGULATOR
 	 line from the PMIC. This supply line is powered by multiple
 	 regulators running in ganged mode inside the PMIC. Enable
 	 this option to support such configurations.
+
+config KERNEL_TEXT_MPU_PROT
+	bool "Enable xpu protection of kernel r/o sections"
+	help
+	  Enables xpu protection of kernel code and read-only data
+	  sections early in boot. Read access is permitted to
+	  all masters; Write access is only permited to the
+	  secure world.
 
 config HTC_POWER_DEBUG
 	bool "Support htc power debug feature"
@@ -3226,3 +3258,11 @@ config HTC_MONITOR_SUBSYS_SLEEP_TIME
     bool "Monitor the sleep time of sub-system"
     help
         Support to monitor the sleep time of sub-system
+
+config KERNEL_TEXT_MPU_PROT
+        bool "Enable xpu protection of kernel r/o sections"
+        help
+          Enables xpu protection of kernel code and read-only data
+          sections early in boot. Read access is permitted to
+          all masters; Write access is only permited to the
+          secure world.

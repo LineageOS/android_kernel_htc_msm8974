@@ -192,7 +192,7 @@ static int hs_read_aid(void)
 
 static int hs_1wire_query(int type)
 {
-	return 0; 
+	return 0; /*Todo*/
 }
 
 static int hs_1wire_open(void)
@@ -267,11 +267,11 @@ static int hs_1wire_init(void)
 	setup_hs_tty(fp);
 	HS_LOG("Setup HS tty");
 	if (hi->pdata.tx_level_shift_en) {
-		gpio_set_value_cansleep(hi->pdata.tx_level_shift_en, 0); 
+		gpio_set_value_cansleep(hi->pdata.tx_level_shift_en, 0); /*Level shift low enable*/
 		HS_LOG("[HS]set tx_level_shift_en to 0");
 	}
 	if (hi->pdata.uart_sw) {
-		gpio_set_value_cansleep(hi->pdata.uart_sw, 1); 
+		gpio_set_value_cansleep(hi->pdata.uart_sw, 1); /* 1: UART I/O to Audio Jack, 0: UART I/O to others */
 		HS_LOG("[HS]Set uart sw = 1");
 	}
 	hi->aid = 0;
@@ -279,6 +279,11 @@ static int hs_1wire_init(void)
 	writeFile(fp,&all_zero,1);
 	hr_msleep(5);
 	writeFile(fp,&send_data,1);
+//	if (hi->pdata.remote_press) {
+//		while(gpio_get_value(hi->pdata.remote_press) == 1) {
+//			HS_LOG("[HS]Polling remote_press low");
+//		}
+//	}
 	HS_LOG("Send 0x00 0xF5");
 	usleep(300);
 	if (hi->pdata.tx_level_shift_en)
@@ -312,7 +317,7 @@ static void hs_1wire_deinit(void)
 
 static int hs_1wire_report_type(char **string)
 {
-	const int type_num = 3; 
+	const int type_num = 3; /*How many 1-wire accessories supported*/
 	char *hs_type[] = {
 		"headset_mic_1wire",
 		"headset_mic_midtier",
@@ -422,8 +427,9 @@ static void hs_1wire_dtwq(struct htc_hs_1wire_data *dt)
 
 static int htc_headset_1wire_probe(struct platform_device *pdev)
 {
+/*        int ret = 0;*/
 	struct htc_hs_1wire_data *dtinfo;
-	struct htc_headset_1wire_platform_data *pdata;
+	struct htc_headset_1wire_platform_data *pdata;/* = pdev->dev.platform_data;*/
 	HS_LOG("++++++++++++++++++++");
 
 	wake_lock_init(&onewire_open_wake_lock, WAKE_LOCK_SUSPEND, "one_wire_headset");

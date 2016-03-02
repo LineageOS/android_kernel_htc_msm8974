@@ -40,6 +40,8 @@ enum {
 	USB_FUNCTION_PROJECTOR2,
 	USB_FUNCTION_AUDIO_SOURCE, 
 	USB_FUNCTION_PTP, 
+	USB_FUNCTION_MIDI, 
+	USB_FUNCTION_CHARGING, 
 	USB_FUNCTION_AUTOBOT = 30,
 	USB_FUNCTION_RNDIS_IPT = 31,
 };
@@ -121,6 +123,14 @@ static struct usb_string_node usb_string_array[] = {
 	{
 		.usb_function_flag = 1 << USB_FUNCTION_PTP,
 		.name = "ptp",
+	},
+	{
+		.usb_function_flag = 1 << USB_FUNCTION_MIDI,
+		.name = "midi",
+	},
+	{
+		.usb_function_flag = 1 << USB_FUNCTION_CHARGING,
+		.name = "charging",
 	},
 
 };
@@ -373,6 +383,20 @@ int android_usb_function_holder_list_add_tail(struct android_usb_function *f, st
 	return 0;
 }
 
+int android_usb_function_holder_list_add(struct android_usb_function *f, struct list_head *list,struct android_dev *dev)
+{
+	struct android_usb_function_holder *f_holder;
+	f_holder = kzalloc(sizeof(*f_holder), GFP_KERNEL);
+	if (!f_holder) {
+		pr_err("Failed to alloc f_holder\n");
+		return -ENOMEM;
+	}
+	f->android_dev = dev;
+	f_holder->f = f;
+	list_add(&f_holder->enabled_list, list);
+	return 0;
+}
+
 static bool is_mtp_enable(void)
 {
 	unsigned val;
@@ -401,6 +425,7 @@ int android_switch_function(unsigned func)
 	struct android_configuration *conf;
 	struct android_usb_product *product;
 	int product_id = 0, vendor_id = 0;
+	int swap_ums_adb = 0;
 	unsigned val, comm_class = 0;
 
 	mutex_lock(&function_bind_sem);
@@ -426,6 +451,39 @@ int android_switch_function(unsigned func)
 		pr_info("%s: SKIP due the function is the same ,%u\n" , __func__, func);
 		mutex_unlock(&function_bind_sem);
 		return 0;
+	}
+
+	if ((get_radio_flag() & BIT(17)) || (get_debug_flag() & 0x100)) {
+		if (func == (1 << USB_FUNCTION_CHARGING))
+			func = (1 << USB_FUNCTION_UMS);
+		else if (func == (1 << USB_FUNCTION_ADB))
+			func = (1 << USB_FUNCTION_UMS) | (1 << USB_FUNCTION_ADB);
+		pr_info("%s: got radio_flag or debug_flag, change func to %d\n", __func__, func);
+	}
+
+
+	if (get_radio_flag() & BIT(17)) {
+		if ((func & ((1 << USB_FUNCTION_UMS) | (1 << USB_FUNCTION_ADB)))) {
+			if (!(func & (1 << USB_FUNCTION_MTP)))
+				swap_ums_adb = 1;
+		}
+	}
+
+	if ((get_radio_flag() & BIT(17)) && (board_mfg_mode() == 0)) {
+		if (func == ((1 << USB_FUNCTION_MTP) | (1 << USB_FUNCTION_ADB))) { 
+			func |= ((1 << USB_FUNCTION_DIAG) | (1 << USB_FUNCTION_MODEM) | (1 << USB_FUNCTION_RMNET));
+			pr_info("%s: add diag, modem, rment: %d\n", __func__, func);
+		} else if (func == (1 << USB_FUNCTION_MTP)) { 
+			func |= ((1 << USB_FUNCTION_DIAG) | (1 << USB_FUNCTION_MODEM) | (1 << USB_FUNCTION_RMNET));
+			pr_info("%s: add diag, modem, rment: %d\n", __func__, func);
+		} else if (func == ((1 << USB_FUNCTION_UMS) | (1 << USB_FUNCTION_ADB))) { 
+			func |= ((1 << USB_FUNCTION_DIAG) | (1 << USB_FUNCTION_MODEM) | (1 << USB_FUNCTION_RMNET));
+			pr_info("%s: add diag, modem, rment: %d\n", __func__, func);
+		} else if (func == (1 << USB_FUNCTION_UMS)) { 
+			func |= ((1 << USB_FUNCTION_DIAG) | (1 << USB_FUNCTION_MODEM) | (1 << USB_FUNCTION_RMNET));
+			pr_info("%s: add diag, modem, rment: %d\n", __func__, func);
+		} else
+			pr_info("%s: need not to enable diag, modem, rment\n", __func__);
 	}
 	
 	android_disable(dev);
@@ -454,7 +512,10 @@ int android_switch_function(unsigned func)
 		if ((func & (1 << USB_FUNCTION_UMS)) && !strcmp(f->name, "mass_storage")) {
 			if (func == ((1 << USB_FUNCTION_UMS) | (1 << USB_FUNCTION_ADB)))
 				fums = f;
-			else {
+			else if (swap_ums_adb == 1) {
+				if (android_usb_function_holder_list_add(f, &conf->enabled_functions, dev))
+					pr_err("android_switch_function: Cannot add %s\n", f->name);
+			} else {
 				if (android_usb_function_holder_list_add_tail(f, &conf->enabled_functions, dev))
 					pr_err("android_switch_function: Cannot add %s\n", f->name);
 			}
@@ -462,7 +523,10 @@ int android_switch_function(unsigned func)
 		} else if ((func & (1 << USB_FUNCTION_ADB)) && !strcmp(f->name, "adb")) {
 			if (func == ((1 << USB_FUNCTION_UMS) | (1 << USB_FUNCTION_ADB)))
 				fadb = f;
-			else {
+			else if (swap_ums_adb == 1) {
+				if (android_usb_function_holder_list_add(f, &conf->enabled_functions, dev))
+					pr_err("android_switch_function: Cannot add %s\n", f->name);
+			} else {
 				if (android_usb_function_holder_list_add_tail(f, &conf->enabled_functions, dev))
 					pr_err("android_switch_function: Cannot add %s\n", f->name);
 			}
@@ -548,6 +612,16 @@ int android_switch_function(unsigned func)
 		}
 #endif
 		else if ((func & (1 << USB_FUNCTION_AUDIO_SOURCE)) && !strcmp(f->name, "audio_source")) {
+			if (android_usb_function_holder_list_add_tail(f, &conf->enabled_functions, dev))
+				pr_err("android_switch_function: Cannot add %s\n", f->name);
+
+		}
+		else if ((func & (1 << USB_FUNCTION_MIDI)) && !strcmp(f->name, "midi")) {
+			if (android_usb_function_holder_list_add_tail(f, &conf->enabled_functions, dev))
+				pr_err("android_switch_function: Cannot add %s\n", f->name);
+
+		}
+		else if ((func & (1 << USB_FUNCTION_CHARGING)) && !strcmp(f->name, "charging")) {
 			if (android_usb_function_holder_list_add_tail(f, &conf->enabled_functions, dev))
 				pr_err("android_switch_function: Cannot add %s\n", f->name);
 
@@ -770,6 +844,34 @@ static ssize_t show_usb_ac_cable_status(struct device *dev,
 	length = sprintf(buf, "%d",msm_usb_get_connect_type());
 #endif
 	return length;
+}
+
+static int cdrom_unmount;
+static ssize_t show_is_cdrom(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	unsigned length;
+
+	length = sprintf(buf, "%d\n", cdrom_unmount);
+	return length;
+}
+
+static ssize_t store_is_cdrom(struct device *dev, struct device_attribute *attr,
+			const char *buf, size_t count)
+{
+	struct usb_composite_dev *cdev = _android_dev->cdev;
+	int value;
+	sscanf(buf, "%d", &value);
+	cdrom_unmount = value;
+
+	if(value == 1) {
+		printk(KERN_INFO "Trigger unmount uevent after 30 seconds\n");
+		cancel_delayed_work(&cdev->cdusbcmd_vzw_unmount_work);
+		cdev->unmount_cdrom_mask = 1 << 3 | 1 << 4;
+		schedule_delayed_work(&cdev->cdusbcmd_vzw_unmount_work,30 * HZ);
+	}
+
+	return count;
 }
 
 static int usb_disable;
@@ -1085,6 +1187,7 @@ static DEVICE_ATTR(usb_disable, 0664,show_usb_disable_setting, store_usb_disable
 static DEVICE_ATTR(usb_denied, 0444, show_is_usb_denied, NULL);
 static DEVICE_ATTR(os_type, 0444, show_os_type, NULL);
 static DEVICE_ATTR(ats, 0664, show_ats, store_ats);
+static DEVICE_ATTR(cdrom_unmount, 0644, show_is_cdrom, store_is_cdrom);
 
 static __maybe_unused struct attribute *android_htc_usb_attributes[] = {
 	&dev_attr_usb_ac_cable_status.attr,
@@ -1102,6 +1205,7 @@ static __maybe_unused struct attribute *android_htc_usb_attributes[] = {
 	&dev_attr_usb_denied.attr,
 	&dev_attr_os_type.attr,
 	&dev_attr_ats.attr,
+	&dev_attr_cdrom_unmount.attr,
 	NULL
 };
 
@@ -1200,7 +1304,6 @@ static void setup_vendor_info(struct android_dev *dev) {
 	conf = alloc_android_config(dev);
 
 	if (get_radio_flag() & BIT(17)) {
-		ANDROID_USB_ENABLE_FUNC(dev, conf, "mtp");
 		ANDROID_USB_ENABLE_FUNC(dev, conf, "mass_storage");
 		ANDROID_USB_ENABLE_FUNC(dev, conf, "diag");
 		ANDROID_USB_ENABLE_FUNC(dev, conf, "modem");

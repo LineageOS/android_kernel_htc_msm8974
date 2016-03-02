@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -79,7 +79,7 @@
 
 		adsp_mem: adsp_region {
 			linux,contiguous-region;
-			reg = <0 0x3F00000>;
+			reg = <0 0x4100000>;
 			label = "adsp_mem";
 		};
 
@@ -831,6 +831,7 @@
 			    "lpaif_quat_mode_muxsel";
 
 		qcom,audio-routing =
+			"AIF4 VI", "MCLK",
 			"RX_BIAS", "MCLK",
 			"LDO_H", "MCLK",
 			"AIF4 MAD", "MCLK",
@@ -1795,6 +1796,10 @@
 		compatible = "qcom,msm-voice-svc";
 	};
 
+	qcom,msm-voice-svc {
+		compatible = "qcom,msm-voice-svc";
+	};
+
 	qcom,msm-dai-q6 {
 		compatible = "qcom,msm-dai-q6";
 		qcom,msm-dai-q6-sb-0-rx {
@@ -1963,10 +1968,6 @@
 
 	qcom,msm-adsp-sensors {
 		compatible = "qcom,msm-adsp-sensors";
-		qcom,src-id = <11>;
-		qcom,dst-id = <604>;
-		qcom,ab = <32505856>;
-		qcom,ib = <32505856>;
 	};
 
 	qcom,mss@fc880000 {
@@ -2040,6 +2041,7 @@
 		gpios = <&msmgpio 36 0>, <&msmgpio 37 0>, <&msmgpio 38 0>, <&msmgpio 39 0>, <&msmgpio 40 0>;
 		qcom,has-48mhz-xo;
 		qcom,has-pronto-hw;
+		qcom,wcnss-pm = <11 19 1200 1 1 6>;
 	};
 
 	qcom,ocmem@fdd00000 {
@@ -2519,6 +2521,12 @@
 	l2-pmu {
 		compatible = "qcom,l2-pmu";
 		interrupts = <0 1 0>;
+	};
+
+	bimc_sharedmem {
+		compatible = "qcom,sharedmem-uio";
+		reg = <0xfc380000 0x00100000>;
+		reg-names = "bimc";
 	};
 
 	qcom,smdtty {

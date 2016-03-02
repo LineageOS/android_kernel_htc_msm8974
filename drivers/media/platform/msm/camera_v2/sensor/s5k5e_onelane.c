@@ -203,6 +203,10 @@ static int32_t s5k5e_onelane_platform_probe(struct platform_device *pdev)
 	int32_t rc = 0;
 	const struct of_device_id *match;
 	match = of_match_device(s5k5e_onelane_dt_match, &pdev->dev);
+       
+       if(!match)
+               return -ENODEV;
+       
 	rc = msm_sensor_platform_probe(pdev, match->data);
 	return rc;
 }

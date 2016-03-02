@@ -95,28 +95,51 @@ static inline void mark_rodata_ro(void) { }
 extern void tc_init(void);
 #endif
 
+/*
+ * Debug helper: via this flag we know that we are in 'early bootup code'
+ * where only the boot processor is running with IRQ disabled.  This means
+ * two things - IRQ must not be enabled before the flag is cleared and some
+ * operations which are not allowed with IRQ disabled are allowed while the
+ * flag is set.
+ */
 bool early_boot_irqs_disabled __read_mostly;
 
 enum system_states system_state __read_mostly;
 EXPORT_SYMBOL(system_state);
 
+/*
+ * Boot command-line arguments
+ */
 #define MAX_INIT_ARGS CONFIG_INIT_ENV_ARG_LIMIT
 #define MAX_INIT_ENVS CONFIG_INIT_ENV_ARG_LIMIT
 
 #define RAW_SN_LEN	4
 
 extern void time_init(void);
+/* Default late time init is NULL. archs can override this later. */
 void (*__initdata late_time_init)(void);
 extern void softirq_init(void);
 
+/* Untouched command line saved by arch-specific code. */
 char __initdata boot_command_line[COMMAND_LINE_SIZE];
+/* Untouched saved command line (eg. for /proc) */
 char *saved_command_line;
 char *hashed_command_line;
+/* Command line for parameter parsing */
 static char *static_command_line;
 
 static char *execute_command;
 static char *ramdisk_execute_command;
 
+/*
+ * If set, this is an indication to the drivers that reset the underlying
+ * device before going ahead with the initialization otherwise driver might
+ * rely on the BIOS and skip the reset operation.
+ *
+ * This is useful if kernel is booting in an unreliable environment.
+ * For ex. kdump situaiton where previous kernel has crashed, BIOS has been
+ * skipped and devices will be in unknown state.
+ */
 unsigned int reset_devices;
 EXPORT_SYMBOL(reset_devices);
 
@@ -144,6 +167,10 @@ static int __init obsolete_checksetup(char *line)
 		int n = strlen(p->str);
 		if (parameqn(line, p->str, n)) {
 			if (p->early) {
+				/* Already done in parse_early_param?
+				 * (Needs exact match on param part).
+				 * Keep iterating, as we can have early
+				 * params and __setups of same names 8( */
 				if (line[n] == '\0' || line[n] == '=')
 					had_early_param = 1;
 			} else if (!p->setup_func) {
@@ -159,6 +186,10 @@ static int __init obsolete_checksetup(char *line)
 	return had_early_param;
 }
 
+/*
+ * This should be approx 2 Bo*oMips to start (note initial shift), and will
+ * still work even if initially too large, it will just take slightly longer
+ */
 unsigned long loops_per_jiffy = (1<<12);
 
 EXPORT_SYMBOL(loops_per_jiffy);
@@ -182,6 +213,11 @@ static int __init loglevel(char *str)
 {
 	int newlevel;
 
+	/*
+	 * Only update loglevel value when a correct setting was passed,
+	 * to prevent blind crashes (when loglevel being set to 0) that
+	 * are quite hard to debug
+	 */
 	if (get_option(&str, &newlevel)) {
 		console_loglevel = newlevel;
 		return 0;
@@ -192,10 +228,11 @@ static int __init loglevel(char *str)
 
 early_param("loglevel", loglevel);
 
+/* Change NUL term back to "=", to make "param" the whole string. */
 static int __init repair_env_string(char *param, char *val)
 {
 	if (val) {
-		
+		/* param=val or param="val"? */
 		if (val == param+strlen(param)+1)
 			val[-1] = '=';
 		else if (val == param+strlen(param)+2) {
@@ -208,15 +245,19 @@ static int __init repair_env_string(char *param, char *val)
 	return 0;
 }
 
+/*
+ * Unknown boot options get handed to init, unless they look like
+ * unused parameters (modprobe will find them in /proc/cmdline).
+ */
 static int __init unknown_bootoption(char *param, char *val)
 {
 	repair_env_string(param, val);
 
-	
+	/* Handle obsolete-style parameters */
 	if (obsolete_checksetup(param))
 		return 0;
 
-	
+	/* Unused module parameter. */
 	if (strchr(param, '.') && (!val || strchr(param, '.') < val))
 		return 0;
 
@@ -224,7 +265,7 @@ static int __init unknown_bootoption(char *param, char *val)
 		return 0;
 
 	if (val) {
-		
+		/* Environment option */
 		unsigned int i;
 		for (i = 0; envp_init[i]; i++) {
 			if (i == MAX_INIT_ENVS) {
@@ -236,7 +277,7 @@ static int __init unknown_bootoption(char *param, char *val)
 		}
 		envp_init[i] = param;
 	} else {
-		
+		/* Command line option */
 		unsigned int i;
 		for (i = 0; argv_init[i]; i++) {
 			if (i == MAX_INIT_ARGS) {
@@ -254,6 +295,12 @@ static int __init init_setup(char *str)
 	unsigned int i;
 
 	execute_command = str;
+	/*
+	 * In case LILO is going to boot us with default command line,
+	 * it prepends "auto" before the whole cmdline which makes
+	 * the shell think it should execute a script with such name.
+	 * So we ignore all arguments entered _before_ init=... [MJ]
+	 */
 	for (i = 1; i < MAX_INIT_ARGS; i++)
 		argv_init[i] = NULL;
 	return 1;
@@ -265,7 +312,7 @@ static int __init rdinit_setup(char *str)
 	unsigned int i;
 
 	ramdisk_execute_command = str;
-	
+	/* See "auto" comment in init_setup */
 	for (i = 1; i < MAX_INIT_ARGS; i++)
 		argv_init[i] = NULL;
 	return 1;
@@ -287,6 +334,12 @@ static inline void setup_nr_cpu_ids(void) { }
 static inline void smp_prepare_cpus(unsigned int maxcpus) { }
 #endif
 
+/*
+ * We need to store the untouched command line for future reference.
+ * We also need to store the touched command line since the parameter
+ * parsing is performed in place, and we should allow a component to
+ * store reference of name/value for future reference.
+ */
 static void __init setup_command_line(char *command_line)
 {
 	saved_command_line = alloc_bootmem(strlen (boot_command_line)+1);
@@ -338,6 +391,14 @@ static void __init hash_sn(void)
 	}
 }
 
+/*
+ * We need to finalize in a non-__init function or else race conditions
+ * between the root thread and the init thread may cause start_kernel to
+ * be reaped by free_initmem before the root thread has proceeded to
+ * cpu_idle.
+ *
+ * gcc-3.4 accidentally inlines this function, so use noinline.
+ */
 
 static __initdata DECLARE_COMPLETION(kthreadd_done);
 
@@ -347,6 +408,11 @@ static noinline void __init_refok rest_init(void)
 	const struct sched_param param = { .sched_priority = 1 };
 
 	rcu_scheduler_starting();
+	/*
+	 * We need to spawn init first so that it obtains pid 1, however
+	 * the init task will end up wanting to create kthreads, which, if
+	 * we schedule it before we create kthreadd, will OOPS.
+	 */
 	kernel_thread(kernel_init, NULL, CLONE_FS | CLONE_SIGHAND);
 	numa_default_policy();
 	pid = kernel_thread(kthreadd, NULL, CLONE_FS | CLONE_FILES);
@@ -356,12 +422,17 @@ static noinline void __init_refok rest_init(void)
 	sched_setscheduler_nocheck(kthreadd_task, SCHED_FIFO, &param);
 	complete(&kthreadd_done);
 
+	/*
+	 * The boot idle thread must execute schedule()
+	 * at least once to get things moving:
+	 */
 	init_idle_bootup_task(current);
 	schedule_preempt_disabled();
-	
+	/* Call into cpu_idle with preempt disabled */
 	cpu_idle();
 }
 
+/* Check for early params. */
 static int __init do_early_param(char *param, char *val)
 {
 	const struct obs_kernel_param *p;
@@ -376,7 +447,7 @@ static int __init do_early_param(char *param, char *val)
 				       "Malformed early option '%s'\n", param);
 		}
 	}
-	
+	/* We accept everything at this stage. */
 	return 0;
 }
 
@@ -385,6 +456,7 @@ void __init parse_early_options(char *cmdline)
 	parse_args("early options", cmdline, NULL, 0, 0, 0, do_early_param);
 }
 
+/* Arch code calls this early on, or if not, just before other parsing. */
 void __init parse_early_param(void)
 {
 	static __initdata int done = 0;
@@ -393,17 +465,20 @@ void __init parse_early_param(void)
 	if (done)
 		return;
 
-	
+	/* All fall through to do_early_param. */
 	strlcpy(tmp_cmdline, boot_command_line, COMMAND_LINE_SIZE);
 	parse_early_options(tmp_cmdline);
 	done = 1;
 }
 
+/*
+ *	Activate the first processor.
+ */
 
 static void __init boot_cpu_init(void)
 {
 	int cpu = smp_processor_id();
-	
+	/* Mark the boot cpu "present", "online" etc for SMP and UP case */
 	set_cpu_online(cpu, true);
 	set_cpu_active(cpu, true);
 	set_cpu_present(cpu, true);
@@ -418,8 +493,15 @@ void __init __weak thread_info_cache_init(void)
 {
 }
 
+/*
+ * Set up kernel memory allocators
+ */
 static void __init mm_init(void)
 {
+	/*
+	 * page_cgroup requires contiguous pages,
+	 * bigger than MAX_ORDER unless SPARSEMEM.
+	 */
 	page_cgroup_init_flatmem();
 	mem_init();
 	kmem_cache_init();
@@ -433,6 +515,10 @@ asmlinkage void __init start_kernel(void)
 	char * command_line;
 	extern const struct kernel_param __start___param[], __stop___param[];
 
+	/*
+	 * Need to run as early as possible, to initialize the
+	 * lockdep hash:
+	 */
 	lockdep_init();
 	smp_setup_processor_id();
 	debug_objects_early_init();
@@ -442,11 +528,18 @@ asmlinkage void __init start_kernel(void)
 	local_irq_disable();
 	early_boot_irqs_disabled = true;
 
+/*
+ * Interrupts are still disabled. Do necessary setups, then
+ * enable them
+ */
 	tick_init();
 	boot_cpu_init();
 	page_address_init();
 	printk(KERN_NOTICE "%s", linux_banner);
 	setup_arch(&command_line);
+	/*
+	 * Set up the the initial canary ASAP:
+	 */
 	boot_init_stack_canary();
 	mm_init_owner(&init_mm, &init_task);
 	mm_init_cpumask(&init_mm);
@@ -454,7 +547,7 @@ asmlinkage void __init start_kernel(void)
 	hash_sn();
 	setup_nr_cpu_ids();
 	setup_per_cpu_areas();
-	smp_prepare_boot_cpu();	
+	smp_prepare_boot_cpu();	/* arch-specific boot-cpu hooks */
 
 	build_all_zonelists(NULL);
 	page_alloc_init();
@@ -467,6 +560,10 @@ asmlinkage void __init start_kernel(void)
 
 	jump_label_init();
 
+	/*
+	 * These use large bootmem allocations and must precede
+	 * kmem_cache_init()
+	 */
 	setup_log_buf(0);
 	pidhash_init();
 	vfs_caches_init_early();
@@ -474,7 +571,16 @@ asmlinkage void __init start_kernel(void)
 	trap_init();
 	mm_init();
 
+	/*
+	 * Set up the scheduler prior starting any interrupts (such as the
+	 * timer interrupt). Full topology setup happens at smp_init()
+	 * time - but meanwhile we still have a functioning scheduler.
+	 */
 	sched_init();
+	/*
+	 * Disable preemption - early bootup scheduling is extremely
+	 * fragile until we cpu_idle() for the first time.
+	 */
 	preempt_disable();
 	if (!irqs_disabled()) {
 		printk(KERN_WARNING "start_kernel(): bug: interrupts were "
@@ -485,7 +591,7 @@ asmlinkage void __init start_kernel(void)
 	perf_event_init();
 	rcu_init();
 	radix_tree_init();
-	
+	/* init some links before init_ISA_irqs() */
 	early_irq_init();
 	init_IRQ();
 	prio_tree_init();
@@ -502,17 +608,27 @@ asmlinkage void __init start_kernel(void)
 	early_boot_irqs_disabled = false;
 	local_irq_enable();
 
-	
+	/* Interrupts are enabled now so all GFP allocations are safe. */
 	gfp_allowed_mask = __GFP_BITS_MASK;
 
 	kmem_cache_init_late();
 
+	/*
+	 * HACK ALERT! This is early. We're enabling the console before
+	 * we've done PCI setups etc, and console_init() must be aware of
+	 * this. But we do want output early, in case something goes wrong.
+	 */
 	console_init();
 	if (panic_later)
 		panic(panic_later, panic_param);
 
 	lockdep_info();
 
+	/*
+	 * Need to run this when irqs are enabled, because it wants
+	 * to self-test [hard/soft]-irqs on/off lock inversion bugs
+	 * too:
+	 */
 	locking_selftest();
 
 #ifdef CONFIG_BLK_DEV_INITRD
@@ -550,7 +666,7 @@ asmlinkage void __init start_kernel(void)
 	dbg_late_init();
 	vfs_caches_init(totalram_pages);
 	signals_init();
-	
+	/* rootfs populating might need page-writeback */
 	page_writeback_init();
 #ifdef CONFIG_PROC_FS
 	proc_root_init();
@@ -562,15 +678,16 @@ asmlinkage void __init start_kernel(void)
 
 	check_bugs();
 
-	acpi_early_init(); 
+	acpi_early_init(); /* before LAPIC and SMP init */
 	sfi_init_late();
 
 	ftrace_init();
 
-	
+	/* Do the rest non-__init'ed, we're now alive */
 	rest_init();
 }
 
+/* Call all constructor functions linked into the kernel. */
 static void __init do_ctors(void)
 {
 #ifdef CONFIG_CONSTRUCTORS
@@ -698,6 +815,13 @@ static void __init do_initcalls(void)
 		do_initcall_level(level);
 }
 
+/*
+ * Ok, the machine is now initialized. None of the devices
+ * have been touched yet, but the CPU subsystem is up and
+ * running, and memory and process management works.
+ *
+ * Now we can finally start doing some real work..
+ */
 static void __init do_basic_setup(void)
 {
 	cpuset_init_smp();
@@ -724,9 +848,12 @@ static void run_init_process(const char *init_filename)
 	kernel_execve(init_filename, argv_init, envp_init);
 }
 
+/* This is a non __init function. Force it to be noinline otherwise gcc
+ * makes it inline to init() and it becomes part of init.text section
+ */
 static noinline int init_post(void)
 {
-	
+	/* need to finish all async __init code before freeing the memory */
 	async_synchronize_full();
 	free_initmem();
 	mark_rodata_ro();
@@ -742,6 +869,12 @@ static noinline int init_post(void)
 				ramdisk_execute_command);
 	}
 
+	/*
+	 * We try each of these until one succeeds.
+	 *
+	 * The Bourne shell can be used instead of init if we are
+	 * trying to recover a really broken machine.
+	 */
 	if (execute_command) {
 		run_init_process(execute_command);
 		printk(KERN_WARNING "Failed to execute %s.  Attempting "
@@ -758,8 +891,17 @@ static noinline int init_post(void)
 
 static int __init kernel_init(void * unused)
 {
+	/*
+	 * Wait until kthreadd is all set-up.
+	 */
 	wait_for_completion(&kthreadd_done);
+	/*
+	 * init can allocate pages on any node
+	 */
 	set_mems_allowed(node_states[N_HIGH_MEMORY]);
+	/*
+	 * init can run on any cpu.
+	 */
 	set_cpus_allowed_ptr(current, cpu_all_mask);
 
 	cad_pid = task_pid(current);
@@ -774,12 +916,16 @@ static int __init kernel_init(void * unused)
 
 	do_basic_setup();
 
-	
+	/* Open the /dev/console on the rootfs, this should never fail */
 	if (sys_open((const char __user *) "/dev/console", O_RDWR, 0) < 0)
 		printk(KERN_WARNING "Warning: unable to open an initial console.\n");
 
 	(void) sys_dup(0);
 	(void) sys_dup(0);
+	/*
+	 * check if there is an early userspace init.  If yes, let it do all
+	 * the work
+	 */
 
 	if (!ramdisk_execute_command)
 		ramdisk_execute_command = "/init";
@@ -789,6 +935,11 @@ static int __init kernel_init(void * unused)
 		prepare_namespace();
 	}
 
+	/*
+	 * Ok, we have completed the initial bootup, and
+	 * we're essentially up and running. Get rid of the
+	 * initmem segments and start the user-mode stuff..
+	 */
 
 	init_post();
 	return 0;
