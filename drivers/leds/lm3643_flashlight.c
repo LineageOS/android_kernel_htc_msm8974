@@ -27,7 +27,8 @@
 #include <mach/socinfo.h>
 #include <linux/reboot.h>
 
-
+#include <linux/miscdevice.h>
+#include <linux/fs.h>
 
 #define FLT_DBG_LOG(fmt, ...) \
 		printk(KERN_DEBUG "[FLT_FR]LM3643 " fmt, ##__VA_ARGS__)
@@ -66,6 +67,7 @@ static struct mutex lm3643_mutex;
 static int switch_state = 1;
 static int support_dual_flashlight = 1; 
 static int vte_in_use = 0;
+static int dual_brightness = 0;
 
 static int regaddr = 0x00;
 static int regdata = 0x00;
@@ -73,6 +75,65 @@ static int reg_buffered[256] = {0x00};
 
 static int lm3643_i2c_command(uint8_t, uint8_t);
 static int flashlight_turn_off(void);
+int lm3643_flashlight_torch(int, int);
+
+static int vte_flt_open(struct inode *inode, struct file *filp)
+{
+	FLT_INFO_LOG("%s", __func__);
+	return 0;
+}
+
+static int vte_flt_release(struct inode *inode, struct file *filp)
+{
+	FLT_INFO_LOG("%s", __func__);
+	return 0;
+}
+
+static ssize_t vte_flt_read(struct file *file, char __user *buf, size_t count, loff_t *offset)
+{
+	FLT_INFO_LOG("dual_brightness=%u\n", dual_brightness);
+	return snprintf(buf, 9, "%u\n", dual_brightness);
+}
+
+static ssize_t vte_flt_write(struct file *file, const char __user *buf, size_t count, loff_t *offset)
+{
+	unsigned long dual_brt;
+	dual_brt = simple_strtoul(buf, NULL, 10);
+
+	if( dual_brt >= 0 && dual_brt <= 99999999 )
+	{
+		int brt1, brt2;
+		dual_brightness = dual_brt;
+		brt2 = dual_brt%10000;
+		brt1 = (dual_brt-brt2)/10000;
+
+		FLT_INFO_LOG("vte set brightness %d+%d\n", brt1, brt2);
+		if (dual_brt == 0)
+			vte_in_use = 0;
+		else
+			vte_in_use = 1;
+
+		lm3643_flashlight_torch( brt1, brt2 );
+		return count;
+	} else {
+		FLT_INFO_LOG("%s: Input out of range: %lu\n",__func__, dual_brt);
+		return -1;
+	}
+}
+
+static const struct file_operations vte_flt_fops = {
+	.owner	= THIS_MODULE,
+	.read	= vte_flt_read,
+	.write	= vte_flt_write,
+	.open	= vte_flt_open,
+	.release= vte_flt_release,
+};
+
+static struct miscdevice vte_flt_misc_dev = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = "vte_flt",
+	.fops = &vte_flt_fops,
+};
 
 static int uncertain_support_dual_flashlight(void)
 {
@@ -283,6 +344,45 @@ static ssize_t flash_store(
 }
 static DEVICE_ATTR(flash, S_IRUGO | S_IWUSR, NULL, flash_store);
 
+static ssize_t dual_brightness_show(struct device *dev, struct device_attribute *attr,
+		char *buf)
+{
+	FLT_INFO_LOG("dual_brightness=%u\n", dual_brightness);
+	return snprintf(buf, 9, "%u\n", dual_brightness);
+}
+static ssize_t dual_brightness_set(
+		struct device *dev, struct device_attribute *attr,
+		const char *buf, size_t size)
+{
+	int dual_brt;
+	dual_brt = simple_strtoul(buf, NULL, 10);
+
+	if( dual_brt >= 0 && dual_brt <= 99999999 )
+	{
+		int brt1, brt2;
+		dual_brightness = dual_brt;
+		brt2 = dual_brt%10000;
+		brt1 = (dual_brt-brt2)/10000;
+
+		if (dual_brt == 0)
+		{
+			vte_in_use = 0;
+			FLT_INFO_LOG("vte set brightness by HDK 0+0, flashlight turn off\n");
+		}
+		else
+		{
+			vte_in_use = 1;
+			FLT_INFO_LOG("vte set brightness by HDK %d+%d\n", brt1, brt2);
+		}
+		lm3643_flashlight_torch( brt1, brt2 );
+	}
+	else
+		FLT_INFO_LOG("%s: Input out of range\n",__func__);
+
+	return size;
+}
+static DEVICE_ATTR(dual_brightness, S_IRUGO | S_IWUSR, dual_brightness_show, dual_brightness_set);
+
 static int LM3643_I2C_TxData(char *txData, int length)
 {
 	uint8_t loop_i;
@@ -329,7 +429,10 @@ static int lm3643_i2c_command(uint8_t address, uint8_t data)
 static int flashlight_turn_off(void)
 {
 	if (vte_in_use == 1)
+	{
+		FLT_INFO_LOG("turn off failed: vte is now using\n");
 		return 0;
+	}
 	FLT_INFO_LOG("%s\n", __func__);
 	gpio_set_value_cansleep(this_lm3643->strobe, 0);
 	lm3643_i2c_command(0x01, 0x08);
@@ -440,7 +543,7 @@ int lm3643_flashlight_torch (int led1, int led2)
 		if (led1 == 0)
 			lm3643_i2c_command(0x01, 0x0a); 
 		else if (led2 ==0)
-			lm3643_i2c_command(0x01, 0x9); 
+			lm3643_i2c_command(0x01, 0x09); 
 		else
 			lm3643_i2c_command(0x01, 0x0b); 
 	}
@@ -454,6 +557,8 @@ static void fl_lcdev_brightness_set(struct led_classdev *led_cdev,
 	enum flashlight_mode_flags mode;
 
 	vte_in_use = 1;
+	FLT_INFO_LOG("vte set brightness %d\n", brightness);
+
 	if (brightness > 0 && brightness <= LED_HALF) {
 		if (brightness == (LED_HALF - 3))
 			mode = FL_MODE_TORCH_LEVEL_0;
@@ -490,6 +595,7 @@ static void fl_lcdev_brightness_set(struct led_classdev *led_cdev,
 		
 		mode = FL_MODE_OFF;
 		vte_in_use = 0;
+		FLT_INFO_LOG("vte set brightness 0, flashlight turn off\n");
 	}
 	switch (mode) {
 		case FL_MODE_OFF:
@@ -497,7 +603,7 @@ static void fl_lcdev_brightness_set(struct led_classdev *led_cdev,
 		break;
 		
 		case FL_MODE_PRE_FLASH:
-			lm3643_flashlight_flash(125,50);
+			lm3643_flashlight_torch(125,50);
 		break;
 		case FL_MODE_FLASH:
 			lm3643_flashlight_flash(300,300);
@@ -953,7 +1059,11 @@ static int lm3643_probe(struct i2c_client *client,
 	}
 	err = device_create_file(lm3643->fl_lcdev.dev, &dev_attr_flash);
 	if (err < 0) {
-		FLT_ERR_LOG("%s, create max_current sysfs fail\n", __func__);
+		FLT_ERR_LOG("%s, create flash sysfs fail\n", __func__);
+	}
+	err = device_create_file(lm3643->fl_lcdev.dev, &dev_attr_dual_brightness);
+	if (err < 0) {
+		FLT_ERR_LOG("%s, create dual_brightness sysfs fail\n", __func__);
 	}
 
 	if (this_lm3643->enable_FLT_1500mA)
@@ -974,6 +1084,11 @@ static int lm3643_probe(struct i2c_client *client,
 	}
 	else
 		FLT_INFO_LOG("%s no power save pin_2\n", __func__);
+
+	ret = misc_register(&vte_flt_misc_dev);
+	if (ret) {
+		FLT_ERR_LOG("%s: misc device register failed, ret=%d\n", __func__, ret);
+	}
 	FLT_INFO_LOG("%s -\n", __func__);
 	return 0;
 
@@ -999,6 +1114,7 @@ static int lm3643_remove(struct i2c_client *client)
 	struct lm3643_data *lm3643 = i2c_get_clientdata(client);
 	struct lm3643_led_data *led_array =lm3643->led_array;
 
+	misc_deregister(&vte_flt_misc_dev);
 	if (led_array) {
 		int i, parsed_leds = led_array->num_leds;
 		for (i=0; i<parsed_leds; i++) {

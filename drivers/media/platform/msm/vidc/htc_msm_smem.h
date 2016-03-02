@@ -1,5 +1,6 @@
 #include "msm_smem.h"
 
+//copied from ion.c, remember to sync
 struct ion_handle {
 	struct kref ref;
 	struct ion_client *client;

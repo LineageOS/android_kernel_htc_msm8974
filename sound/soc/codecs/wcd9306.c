@@ -40,7 +40,7 @@
 #include "wcd9xxx-common.h"
 
 #include <mach/htc_acoustic_alsa.h>
-#define TAPAN_HPH_PA_SETTLE_COMP_ON 3000
+#define TAPAN_HPH_PA_SETTLE_COMP_ON 5000
 #define TAPAN_HPH_PA_SETTLE_COMP_OFF 13000
 
 #define DAPM_MICBIAS2_EXTERNAL_STANDALONE "MIC BIAS2 External Standalone"
@@ -286,6 +286,9 @@ struct tapan_priv {
 	bool anc_func;
 
 	
+	bool lb_mode;
+
+	
 	u8 intf_type;
 
 	
@@ -299,6 +302,8 @@ struct tapan_priv {
 	int aux_pga_cnt;
 	u8 aux_l_gain;
 	u8 aux_r_gain;
+
+	bool dec_active[NUM_DECIMATORS];
 
 	bool spkr_pa_widget_on;
 
@@ -563,6 +568,43 @@ static int tapan_put_anc_func(struct snd_kcontrol *kcontrol,
 	mutex_unlock(&dapm->codec->mutex);
 	return 0;
 }
+
+static int tapan_loopback_mode_get(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct tapan_priv *tapan = snd_soc_codec_get_drvdata(codec);
+
+	ucontrol->value.integer.value[0] = tapan->lb_mode;
+	dev_dbg(codec->dev, "%s: lb_mode = %d\n",
+		__func__, tapan->lb_mode);
+
+	return 0;
+}
+
+static int tapan_loopback_mode_put(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct tapan_priv *tapan = snd_soc_codec_get_drvdata(codec);
+
+	dev_dbg(codec->dev, "%s: ucontrol->value.integer.value[0] = %ld\n",
+		__func__, ucontrol->value.integer.value[0]);
+
+	switch (ucontrol->value.integer.value[0]) {
+	case 0:
+		tapan->lb_mode = false;
+		break;
+	case 1:
+		tapan->lb_mode = true;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 
 static int tapan_pa_gain_get(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol)
@@ -1100,6 +1142,13 @@ static int tapan_config_compander(struct snd_soc_dapm_widget *w,
 	return 0;
 }
 
+static const char * const tapan_loopback_mode_ctrl_text[] = {
+		"DISABLE", "ENABLE"};
+static const struct soc_enum tapan_loopback_mode_ctl_enum[] = {
+		SOC_ENUM_SINGLE_EXT(2, tapan_loopback_mode_ctrl_text),
+};
+
+
 static const char * const tapan_ear_pa_gain_text[] = {"POS_6_DB", "POS_4P5_DB",
 						      "POS_3_DB", "POS_1P5_DB",
 						      "POS_0_DB", "NEG_2P5_DB",
@@ -1156,6 +1205,26 @@ static const struct soc_enum class_h_dsm_enum =
 static const struct snd_kcontrol_new class_h_dsm_mux =
 	SOC_DAPM_ENUM("CLASS_H_DSM MUX Mux", class_h_dsm_enum);
 
+static const char * const rx1_interpolator_text[] = {
+	"ZERO", "RX1 MIX2"
+};
+
+static const struct soc_enum rx1_interpolator_enum =
+	SOC_ENUM_SINGLE(0, 0, 2, rx1_interpolator_text);
+
+static const struct snd_kcontrol_new rx1_interpolator =
+	SOC_DAPM_ENUM_VIRT("RX1 INTERPOLATOR Mux", rx1_interpolator_enum);
+
+static const char * const rx2_interpolator_text[] = {
+	"ZERO", "RX2 MIX2"
+};
+
+static const struct soc_enum rx2_interpolator_enum =
+	SOC_ENUM_SINGLE(0, 1, 2, rx2_interpolator_text);
+
+static const struct snd_kcontrol_new rx2_interpolator =
+	SOC_DAPM_ENUM_VIRT("RX2 INTERPOLATOR Mux", rx2_interpolator_enum);
+
 static int tapan_hph_impedance_get(struct snd_kcontrol *kcontrol,
 				   struct snd_ctl_elem_value *ucontrol)
 {
@@ -1183,11 +1252,15 @@ static const struct snd_kcontrol_new tapan_common_snd_controls[] = {
 
 	SOC_SINGLE_EXT("MIC_BIAS1_Bypass Cap", TAPAN_A_MICB_1_CTL, 0, 0, 0, htc_micbias_capless_get, htc_micbias_capless),
 	SOC_SINGLE_EXT("MIC_BIAS2_Bypass Cap", TAPAN_A_MICB_2_CTL, 0, 0, 0, htc_micbias_capless_get, htc_micbias_capless),
+	SOC_SINGLE_EXT("MIC_BIAS3_Bypass Cap", TAPAN_A_MICB_3_CTL, 0, 0, 0, htc_micbias_capless_get, htc_micbias_capless),
 	SOC_ENUM_EXT("Mixer_To_Right", mute_and_mixer_control_enum[0],
 		NULL, mixer_to_right_set),
 
 	SOC_ENUM_EXT("EAR PA Gain", tapan_ear_pa_gain_enum[0],
 		tapan_pa_gain_get, tapan_pa_gain_put),
+
+	SOC_ENUM_EXT("LOOPBACK Mode", tapan_loopback_mode_ctl_enum[0],
+		tapan_loopback_mode_get, tapan_loopback_mode_put),
 
 	SOC_SINGLE_TLV("HPHL Volume", TAPAN_A_RX_HPH_L_GAIN, 0, 20, 1,
 		line_gain),
@@ -1225,6 +1298,14 @@ static const struct snd_kcontrol_new tapan_common_snd_controls[] = {
 	SOC_SINGLE_S8_TLV("IIR1 INP3 Volume", TAPAN_A_CDC_IIR1_GAIN_B3_CTL, -84,
 		40, digital_gain),
 	SOC_SINGLE_S8_TLV("IIR1 INP4 Volume", TAPAN_A_CDC_IIR1_GAIN_B4_CTL, -84,
+		40, digital_gain),
+	SOC_SINGLE_S8_TLV("IIR2 INP1 Volume", TAPAN_A_CDC_IIR2_GAIN_B1_CTL, -84,
+		40, digital_gain),
+	SOC_SINGLE_S8_TLV("IIR2 INP2 Volume", TAPAN_A_CDC_IIR2_GAIN_B2_CTL, -84,
+		40, digital_gain),
+	SOC_SINGLE_S8_TLV("IIR2 INP3 Volume", TAPAN_A_CDC_IIR2_GAIN_B3_CTL, -84,
+		40, digital_gain),
+	SOC_SINGLE_S8_TLV("IIR2 INP4 Volume", TAPAN_A_CDC_IIR2_GAIN_B4_CTL, -84,
 		40, digital_gain),
 
 	SOC_ENUM("TX1 HPF cut off", cf_dec1_enum),
@@ -1395,7 +1476,7 @@ static const char * const anc1_fb_mux_text[] = {
 	"ZERO", "EAR_HPH_L", "EAR_LINE_1",
 };
 
-static const char * const iir1_inp1_text[] = {
+static const char * const iir_inp_text[] = {
 	"ZERO", "DEC1", "DEC2", "DEC3", "DEC4",
 	"RX1", "RX2", "RX3", "RX4", "RX5"
 };
@@ -1499,7 +1580,28 @@ static const struct soc_enum anc1_fb_mux_enum =
 	SOC_ENUM_SINGLE(TAPAN_A_CDC_CONN_ANC_B2_CTL, 0, 3, anc1_fb_mux_text);
 
 static const struct soc_enum iir1_inp1_mux_enum =
-	SOC_ENUM_SINGLE(TAPAN_A_CDC_CONN_EQ1_B1_CTL, 0, 10, iir1_inp1_text);
+	SOC_ENUM_SINGLE(TAPAN_A_CDC_CONN_EQ1_B1_CTL, 0, 10, iir_inp_text);
+
+static const struct soc_enum iir1_inp2_mux_enum =
+	SOC_ENUM_SINGLE(TAPAN_A_CDC_CONN_EQ1_B2_CTL, 0, 10, iir_inp_text);
+
+static const struct soc_enum iir1_inp3_mux_enum =
+	SOC_ENUM_SINGLE(TAPAN_A_CDC_CONN_EQ1_B3_CTL, 0, 10, iir_inp_text);
+
+static const struct soc_enum iir1_inp4_mux_enum =
+	SOC_ENUM_SINGLE(TAPAN_A_CDC_CONN_EQ1_B4_CTL, 0, 10, iir_inp_text);
+
+static const struct soc_enum iir2_inp1_mux_enum =
+	SOC_ENUM_SINGLE(TAPAN_A_CDC_CONN_EQ2_B1_CTL, 0, 10, iir_inp_text);
+
+static const struct soc_enum iir2_inp2_mux_enum =
+	SOC_ENUM_SINGLE(TAPAN_A_CDC_CONN_EQ2_B2_CTL, 0, 10, iir_inp_text);
+
+static const struct soc_enum iir2_inp3_mux_enum =
+	SOC_ENUM_SINGLE(TAPAN_A_CDC_CONN_EQ2_B3_CTL, 0, 10, iir_inp_text);
+
+static const struct soc_enum iir2_inp4_mux_enum =
+	SOC_ENUM_SINGLE(TAPAN_A_CDC_CONN_EQ2_B4_CTL, 0, 10, iir_inp_text);
 
 static const struct snd_kcontrol_new rx_mix1_inp1_mux =
 	SOC_DAPM_ENUM("RX1 MIX1 INP1 Mux", rx_mix1_inp1_chain_enum);
@@ -1590,6 +1692,7 @@ static int wcd9306_put_dec_enum(struct snd_kcontrol *kcontrol,
 	u16 tx_mux_ctl_reg;
 	u8 adc_dmic_sel = 0x0;
 	int ret = 0;
+	char *srch = NULL;
 
 	if (ucontrol->value.enumerated.item[0] > e->max - 1)
 		return -EINVAL;
@@ -1609,13 +1712,14 @@ static int wcd9306_put_dec_enum(struct snd_kcontrol *kcontrol,
 		goto out;
 	}
 
-	if ((strpbrk(dec_name, "1234")) == NULL) {
-		pr_err("%s: Invalid decimator = %s\n", __func__, dec_name);
+	srch = strpbrk(dec_name, "1234");
+	if (srch == NULL) {
+		pr_err("%s: Invalid decimator name %s\n", __func__, dec_name);
 		ret =  -EINVAL;
 		goto out;
 	}
+	ret = kstrtouint(srch, 10, &decimator);
 
-	ret = kstrtouint(strpbrk(dec_name, "1234"), 10, &decimator);
 	if (ret < 0) {
 		pr_err("%s: Invalid decimator = %s\n", __func__, dec_name);
 		ret =  -EINVAL;
@@ -1678,6 +1782,27 @@ static const struct snd_kcontrol_new dec4_mux =
 
 static const struct snd_kcontrol_new iir1_inp1_mux =
 	SOC_DAPM_ENUM("IIR1 INP1 Mux", iir1_inp1_mux_enum);
+
+static const struct snd_kcontrol_new iir1_inp2_mux =
+	SOC_DAPM_ENUM("IIR1 INP2 Mux", iir1_inp2_mux_enum);
+
+static const struct snd_kcontrol_new iir1_inp3_mux =
+	SOC_DAPM_ENUM("IIR1 INP3 Mux", iir1_inp3_mux_enum);
+
+static const struct snd_kcontrol_new iir1_inp4_mux =
+	SOC_DAPM_ENUM("IIR1 INP4 Mux", iir1_inp4_mux_enum);
+
+static const struct snd_kcontrol_new iir2_inp1_mux =
+	SOC_DAPM_ENUM("IIR2 INP1 Mux", iir2_inp1_mux_enum);
+
+static const struct snd_kcontrol_new iir2_inp2_mux =
+	SOC_DAPM_ENUM("IIR2 INP2 Mux", iir2_inp2_mux_enum);
+
+static const struct snd_kcontrol_new iir2_inp3_mux =
+	SOC_DAPM_ENUM("IIR2 INP3 Mux", iir2_inp3_mux_enum);
+
+static const struct snd_kcontrol_new iir2_inp4_mux =
+	SOC_DAPM_ENUM("IIR2 INP4 Mux", iir2_inp4_mux_enum);
 
 static const struct snd_kcontrol_new anc1_mux =
 	SOC_DAPM_ENUM("ANC1 MUX Mux", anc1_mux_enum);
@@ -1780,7 +1905,7 @@ static int slim_tx_mixer_put(struct snd_kcontrol *kcontrol,
 			if (wcd9xxx_tx_vport_validation(
 						vtable,
 						port_id,
-						tapan_p->dai)) {
+						tapan_p->dai, NUM_CODEC_DAIS)) {
 				dev_dbg(codec->dev, "%s: TX%u is used by other virtual port\n",
 					__func__, port_id + 1);
 				mutex_unlock(&codec->mutex);
@@ -1982,7 +2107,7 @@ static int tapan_codec_enable_adc(struct snd_soc_dapm_widget *w,
 				1 << init_bit_shift);
 		break;
 	case SND_SOC_DAPM_POST_PMU:
-
+		usleep_range(2000, 2010);
 		snd_soc_update_bits(codec, adc_reg, 1 << init_bit_shift, 0x00);
 
 		break;
@@ -2060,11 +2185,7 @@ static int tapan_codec_enable_lineout(struct snd_soc_dapm_widget *w,
 		dev_dbg(codec->dev, "%s: sleeping 5 ms after %s PA turn on\n",
 				__func__, w->name);
 		/* Wait for CnP time after PA enable */
-#if defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_DUMMY)
-		usleep_range(5000, 5010);
-#else
 		usleep_range(5000, 5100);
-#endif
 		break;
 	case SND_SOC_DAPM_POST_PMD:
 		wcd9xxx_clsh_fsm(codec, &tapan->clsh_d,
@@ -2110,12 +2231,16 @@ static int tapan_codec_enable_dmic(struct snd_soc_dapm_widget *w,
 	s32 *dmic_clk_cnt;
 	unsigned int dmic;
 	int ret;
+	char *srch = NULL;
 
-	if ((strpbrk(w->name, "1234")) == NULL) {
-		pr_err("%s: Invalid decimator = %s\n", __func__, w->name);
-		return  -EINVAL;
+	srch = strpbrk(w->name, "1234");
+	if (srch == NULL) {
+		pr_err("%s: Invalid widget name %s\n", __func__, w->name);
+		return -EINVAL;
 	}
-	ret = kstrtouint(strpbrk(w->name, "1234"), 10, &dmic);
+
+	ret = kstrtouint(srch, 10, &dmic);
+
 	if (ret < 0) {
 		pr_err("%s: Invalid DMIC line on the codec\n", __func__);
 		return -EINVAL;
@@ -2408,6 +2533,7 @@ static void tx_hpf_corner_freq_callback(struct work_struct *work)
 	dev_dbg(codec->dev, "%s(): decimator %u hpf_cut_of_freq 0x%x\n",
 		 __func__, hpf_work->decimator, (unsigned int)hpf_cut_of_freq);
 
+	snd_soc_update_bits(codec, TAPAN_A_TX_1_2_TXFE_CLKDIV, 0x55, 0x55);
 	snd_soc_update_bits(codec, tx_mux_ctl_reg, 0x30, hpf_cut_of_freq << 4);
 }
 
@@ -2421,13 +2547,15 @@ static int tapan_codec_enable_dec(struct snd_soc_dapm_widget *w,
 {
 	struct snd_soc_codec *codec = w->codec;
 	unsigned int decimator;
+	struct tapan_priv *tapan_p = snd_soc_codec_get_drvdata(codec);
 	char *dec_name = NULL;
 	char *widget_name = NULL;
 	char *temp;
-	int ret = 0;
+	int ret = 0, i;
 	u16 dec_reset_reg, tx_vol_ctl_reg, tx_mux_ctl_reg;
 	u8 dec_hpf_cut_of_freq;
 	int offset;
+	char *srch = NULL;
 
 	dev_dbg(codec->dev, "%s %d\n", __func__, event);
 
@@ -2444,13 +2572,14 @@ static int tapan_codec_enable_dec(struct snd_soc_dapm_widget *w,
 		goto out;
 	}
 
-	if ((strpbrk(dec_name, "123456789")) == NULL) {
-		pr_err("%s: Invalid decimator = %s\n", __func__, dec_name);
+	srch = strpbrk(dec_name, "123456789");
+	if (srch == NULL) {
+		pr_err("%s: Invalid decimator name %s\n", __func__, dec_name);
 		ret =  -EINVAL;
 		goto out;
 	}
+	ret = kstrtouint(srch, 10, &decimator);
 
-	ret = kstrtouint(strpbrk(dec_name, "123456789"), 10, &decimator);
 	if (ret < 0) {
 		pr_err("%s: Invalid decimator = %s\n", __func__, dec_name);
 		ret =  -EINVAL;
@@ -2477,6 +2606,10 @@ static int tapan_codec_enable_dec(struct snd_soc_dapm_widget *w,
 
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
+		for (i = 0; i < NUM_DECIMATORS; i++) {
+			if (decimator == i + 1)
+				tapan_p->dec_active[i] = true;
+		}
 
 		
 		snd_soc_update_bits(codec, tx_vol_ctl_reg, 0x01, 0x01);
@@ -2501,13 +2634,17 @@ static int tapan_codec_enable_dec(struct snd_soc_dapm_widget *w,
 
 		
 		snd_soc_update_bits(codec, tx_mux_ctl_reg , 0x08, 0x00);
-
+		snd_soc_update_bits(codec, TAPAN_A_TX_1_2_TXFE_CLKDIV,
+				0x55, 0x44);
 		break;
 
 	case SND_SOC_DAPM_POST_PMU:
 
-		
-		snd_soc_update_bits(codec, tx_vol_ctl_reg, 0x01, 0x00);
+		if (tapan_p->lb_mode) {
+			pr_debug("%s: loopback mode unmute the DEC\n",
+							__func__);
+			snd_soc_update_bits(codec, tx_vol_ctl_reg, 0x01, 0x00);
+		}
 
 		if (tx_hpf_work[decimator - 1].tx_hpf_cut_of_freq !=
 				CF_MIN_3DB_150HZ) {
@@ -2536,7 +2673,10 @@ static int tapan_codec_enable_dec(struct snd_soc_dapm_widget *w,
 		snd_soc_update_bits(codec, tx_mux_ctl_reg, 0x08, 0x08);
 		snd_soc_update_bits(codec, tx_mux_ctl_reg, 0x30,
 			(tx_hpf_work[decimator - 1].tx_hpf_cut_of_freq) << 4);
-
+		for (i = 0; i < NUM_DECIMATORS; i++) {
+			if (decimator == i + 1)
+				tapan_p->dec_active[i] = false;
+		}
 		break;
 	}
 out:
@@ -3120,8 +3260,10 @@ static const struct snd_soc_dapm_route audio_map[] = {
 	{"SPK PA", NULL, "SPK DAC"},
 	{"SPK DAC", NULL, "VDD_SPKDRV"},
 
-	{"RX1 CHAIN", NULL, "RX1 MIX2"},
-	{"RX2 CHAIN", NULL, "RX2 MIX2"},
+	{"RX1 INTERPOLATOR", NULL, "RX1 MIX2"},
+	{"RX1 CHAIN", NULL, "RX1 INTERPOLATOR"},
+	{"RX2 INTERPOLATOR", NULL, "RX2 MIX2"},
+	{"RX2 CHAIN", NULL, "RX2 INTERPOLATOR"},
 	{"CLASS_H_DSM MUX", "RX_HPHL", "RX1 CHAIN"},
 
 	{"LINEOUT1 DAC", NULL, "RX_BIAS"},
@@ -3177,12 +3319,14 @@ static const struct snd_soc_dapm_route audio_map[] = {
 	{"RX1 MIX1 INP1", "RX4", "SLIM RX4"},
 	{"RX1 MIX1 INP1", "RX5", "SLIM RX5"},
 	{"RX1 MIX1 INP1", "IIR1", "IIR1"},
+	{"RX1 MIX1 INP1", "IIR2", "IIR2"},
 	{"RX1 MIX1 INP2", "RX1", "SLIM RX1"},
 	{"RX1 MIX1 INP2", "RX2", "SLIM RX2"},
 	{"RX1 MIX1 INP2", "RX3", "SLIM RX3"},
 	{"RX1 MIX1 INP2", "RX4", "SLIM RX4"},
 	{"RX1 MIX1 INP2", "RX5", "SLIM RX5"},
 	{"RX1 MIX1 INP2", "IIR1", "IIR1"},
+	{"RX1 MIX1 INP2", "IIR2", "IIR2"},
 	{"RX1 MIX1 INP3", "RX1", "SLIM RX1"},
 	{"RX1 MIX1 INP3", "RX2", "SLIM RX2"},
 	{"RX1 MIX1 INP3", "RX3", "SLIM RX3"},
@@ -3194,29 +3338,38 @@ static const struct snd_soc_dapm_route audio_map[] = {
 	{"RX2 MIX1 INP1", "RX4", "SLIM RX4"},
 	{"RX2 MIX1 INP1", "RX5", "SLIM RX5"},
 	{"RX2 MIX1 INP1", "IIR1", "IIR1"},
+	{"RX2 MIX1 INP1", "IIR2", "IIR2"},
 	{"RX2 MIX1 INP2", "RX1", "SLIM RX1"},
 	{"RX2 MIX1 INP2", "RX2", "SLIM RX2"},
 	{"RX2 MIX1 INP2", "RX3", "SLIM RX3"},
 	{"RX2 MIX1 INP2", "RX4", "SLIM RX4"},
 	{"RX2 MIX1 INP2", "RX5", "SLIM RX5"},
 	{"RX2 MIX1 INP2", "IIR1", "IIR1"},
+	{"RX2 MIX1 INP2", "IIR2", "IIR2"},
 	{"RX3 MIX1 INP1", "RX1", "SLIM RX1"},
 	{"RX3 MIX1 INP1", "RX2", "SLIM RX2"},
 	{"RX3 MIX1 INP1", "RX3", "SLIM RX3"},
 	{"RX3 MIX1 INP1", "RX4", "SLIM RX4"},
 	{"RX3 MIX1 INP1", "RX5", "SLIM RX5"},
 	{"RX3 MIX1 INP1", "IIR1", "IIR1"},
+	{"RX3 MIX1 INP1", "IIR2", "IIR2"},
 	{"RX3 MIX1 INP2", "RX1", "SLIM RX1"},
 	{"RX3 MIX1 INP2", "RX2", "SLIM RX2"},
 	{"RX3 MIX1 INP2", "RX3", "SLIM RX3"},
 	{"RX3 MIX1 INP2", "RX4", "SLIM RX4"},
 	{"RX3 MIX1 INP2", "RX5", "SLIM RX5"},
 	{"RX3 MIX1 INP2", "IIR1", "IIR1"},
+	{"RX3 MIX1 INP2", "IIR2", "IIR2"},
 
 	{"RX1 MIX2 INP1", "IIR1", "IIR1"},
 	{"RX1 MIX2 INP2", "IIR1", "IIR1"},
 	{"RX2 MIX2 INP1", "IIR1", "IIR1"},
 	{"RX2 MIX2 INP2", "IIR1", "IIR1"},
+
+	{"RX1 MIX2 INP1", "IIR2", "IIR2"},
+	{"RX1 MIX2 INP2", "IIR2", "IIR2"},
+	{"RX2 MIX2 INP1", "IIR2", "IIR2"},
+	{"RX2 MIX2 INP2", "IIR2", "IIR2"},
 
 	
 	{"DEC1 MUX", "ADC1", "ADC1"},
@@ -3248,10 +3401,6 @@ static const struct snd_soc_dapm_route audio_map[] = {
 	{"LINEOUT1_PA_MIXER", "AUX_PGA_L Switch", "AUX_PGA_Left"},
 	{"LINEOUT2_PA_MIXER", "AUX_PGA_R Switch", "AUX_PGA_Right"},
 
-	{"IIR1", NULL, "IIR1 INP1 MUX"},
-	{"IIR1 INP1 MUX", "DEC1", "DEC1 MUX"},
-	{"IIR1 INP1 MUX", "DEC2", "DEC2 MUX"},
-
 	{"MIC BIAS1 Internal1", NULL, "LDO_H"},
 	{"MIC BIAS1 Internal2", NULL, "LDO_H"},
 	{"MIC BIAS1 External", NULL, "LDO_H"},
@@ -3260,6 +3409,95 @@ static const struct snd_soc_dapm_route audio_map[] = {
 	{"MIC BIAS2 Internal3", NULL, "LDO_H"},
 	{"MIC BIAS2 External", NULL, "LDO_H"},
 	{DAPM_MICBIAS2_EXTERNAL_STANDALONE, NULL, "LDO_H Standalone"},
+
+	
+	{"IIR1", NULL, "IIR1 INP1 MUX"},
+	{"IIR1 INP1 MUX", "DEC1", "DEC1 MUX"},
+	{"IIR1 INP1 MUX", "DEC2", "DEC2 MUX"},
+	{"IIR1 INP1 MUX", "DEC3", "DEC3 MUX"},
+	{"IIR1 INP1 MUX", "DEC4", "DEC4 MUX"},
+	{"IIR1 INP1 MUX", "RX1", "SLIM RX1"},
+	{"IIR1 INP1 MUX", "RX2", "SLIM RX2"},
+	{"IIR1 INP1 MUX", "RX3", "SLIM RX3"},
+	{"IIR1 INP1 MUX", "RX4", "SLIM RX4"},
+	{"IIR1 INP1 MUX", "RX5", "SLIM RX5"},
+
+	{"IIR1", NULL, "IIR1 INP2 MUX"},
+	{"IIR1 INP2 MUX", "DEC1", "DEC1 MUX"},
+	{"IIR1 INP2 MUX", "DEC2", "DEC2 MUX"},
+	{"IIR1 INP2 MUX", "DEC3", "DEC3 MUX"},
+	{"IIR1 INP2 MUX", "DEC4", "DEC4 MUX"},
+	{"IIR1 INP2 MUX", "RX1", "SLIM RX1"},
+	{"IIR1 INP2 MUX", "RX2", "SLIM RX2"},
+	{"IIR1 INP2 MUX", "RX3", "SLIM RX3"},
+	{"IIR1 INP2 MUX", "RX4", "SLIM RX4"},
+	{"IIR1 INP2 MUX", "RX5", "SLIM RX5"},
+
+	{"IIR1", NULL, "IIR1 INP3 MUX"},
+	{"IIR1 INP3 MUX", "DEC1", "DEC1 MUX"},
+	{"IIR1 INP3 MUX", "DEC2", "DEC2 MUX"},
+	{"IIR1 INP3 MUX", "DEC3", "DEC3 MUX"},
+	{"IIR1 INP3 MUX", "DEC4", "DEC4 MUX"},
+	{"IIR1 INP3 MUX", "RX1", "SLIM RX1"},
+	{"IIR1 INP3 MUX", "RX2", "SLIM RX2"},
+	{"IIR1 INP3 MUX", "RX3", "SLIM RX3"},
+	{"IIR1 INP3 MUX", "RX4", "SLIM RX4"},
+	{"IIR1 INP3 MUX", "RX5", "SLIM RX5"},
+
+	{"IIR1", NULL, "IIR1 INP4 MUX"},
+	{"IIR1 INP4 MUX", "DEC1", "DEC1 MUX"},
+	{"IIR1 INP4 MUX", "DEC2", "DEC2 MUX"},
+	{"IIR1 INP4 MUX", "DEC3", "DEC3 MUX"},
+	{"IIR1 INP4 MUX", "DEC4", "DEC4 MUX"},
+	{"IIR1 INP4 MUX", "RX1", "SLIM RX1"},
+	{"IIR1 INP4 MUX", "RX2", "SLIM RX2"},
+	{"IIR1 INP4 MUX", "RX3", "SLIM RX3"},
+	{"IIR1 INP4 MUX", "RX4", "SLIM RX4"},
+	{"IIR1 INP4 MUX", "RX5", "SLIM RX5"},
+
+	{"IIR2", NULL, "IIR2 INP1 MUX"},
+	{"IIR2 INP1 MUX", "DEC1", "DEC1 MUX"},
+	{"IIR2 INP1 MUX", "DEC2", "DEC2 MUX"},
+	{"IIR2 INP1 MUX", "DEC3", "DEC3 MUX"},
+	{"IIR2 INP1 MUX", "DEC4", "DEC4 MUX"},
+	{"IIR2 INP1 MUX", "RX1", "SLIM RX1"},
+	{"IIR2 INP1 MUX", "RX2", "SLIM RX2"},
+	{"IIR2 INP1 MUX", "RX3", "SLIM RX3"},
+	{"IIR2 INP1 MUX", "RX4", "SLIM RX4"},
+	{"IIR2 INP1 MUX", "RX5", "SLIM RX5"},
+
+	{"IIR2", NULL, "IIR2 INP2 MUX"},
+	{"IIR2 INP2 MUX", "DEC1", "DEC1 MUX"},
+	{"IIR2 INP2 MUX", "DEC2", "DEC2 MUX"},
+	{"IIR2 INP2 MUX", "DEC3", "DEC3 MUX"},
+	{"IIR2 INP2 MUX", "DEC4", "DEC4 MUX"},
+	{"IIR2 INP2 MUX", "RX1", "SLIM RX1"},
+	{"IIR2 INP2 MUX", "RX2", "SLIM RX2"},
+	{"IIR2 INP2 MUX", "RX3", "SLIM RX3"},
+	{"IIR2 INP2 MUX", "RX4", "SLIM RX4"},
+	{"IIR2 INP2 MUX", "RX5", "SLIM RX5"},
+
+	{"IIR2", NULL, "IIR2 INP3 MUX"},
+	{"IIR2 INP3 MUX", "DEC1", "DEC1 MUX"},
+	{"IIR2 INP3 MUX", "DEC2", "DEC2 MUX"},
+	{"IIR2 INP3 MUX", "DEC3", "DEC3 MUX"},
+	{"IIR2 INP3 MUX", "DEC4", "DEC4 MUX"},
+	{"IIR2 INP3 MUX", "RX1", "SLIM RX1"},
+	{"IIR2 INP3 MUX", "RX2", "SLIM RX2"},
+	{"IIR2 INP3 MUX", "RX3", "SLIM RX3"},
+	{"IIR2 INP3 MUX", "RX4", "SLIM RX4"},
+	{"IIR2 INP3 MUX", "RX5", "SLIM RX5"},
+
+	{"IIR2", NULL, "IIR2 INP4 MUX"},
+	{"IIR2 INP4 MUX", "DEC1", "DEC1 MUX"},
+	{"IIR2 INP4 MUX", "DEC2", "DEC2 MUX"},
+	{"IIR2 INP4 MUX", "DEC3", "DEC3 MUX"},
+	{"IIR2 INP4 MUX", "DEC4", "DEC4 MUX"},
+	{"IIR2 INP4 MUX", "RX1", "SLIM RX1"},
+	{"IIR2 INP4 MUX", "RX2", "SLIM RX2"},
+	{"IIR2 INP4 MUX", "RX3", "SLIM RX3"},
+	{"IIR2 INP4 MUX", "RX4", "SLIM RX4"},
+	{"IIR2 INP4 MUX", "RX5", "SLIM RX5"},
 };
 
 static const struct snd_soc_dapm_route wcd9302_map[] = {
@@ -3579,7 +3817,7 @@ static int tapan_set_channel_map(struct snd_soc_dai *dai,
 {
 	struct tapan_priv *tapan = snd_soc_codec_get_drvdata(dai->codec);
 	struct wcd9xxx *core = dev_get_drvdata(dai->codec->dev->parent);
-	if (!tx_slot && !rx_slot) {
+	if (!tx_slot || !rx_slot) {
 		pr_err("%s: Invalid\n", __func__);
 		return -EINVAL;
 	}
@@ -3984,6 +4222,48 @@ static int tapan_hw_params(struct snd_pcm_substream *substream,
 	return 0;
 }
 
+int tapan_digital_mute(struct snd_soc_dai *dai, int mute)
+{
+	struct snd_soc_codec *codec = NULL;
+	u16 tx_vol_ctl_reg = 0;
+	u8 decimator = 0, i;
+	struct tapan_priv *tapan_p;
+
+	pr_debug("%s: Digital Mute val = %d\n", __func__, mute);
+
+	if (!dai || !dai->codec) {
+		pr_err("%s: Invalid params\n", __func__);
+		return -EINVAL;
+	}
+	codec = dai->codec;
+	tapan_p = snd_soc_codec_get_drvdata(codec);
+
+	if (dai->id != AIF1_CAP) {
+		dev_dbg(codec->dev, "%s: Not capture use case skip\n",
+		__func__);
+		return 0;
+	}
+
+	mute = (mute) ? 1 : 0;
+	if (!mute) {
+		usleep_range(5000, 5010);
+	}
+
+	for (i = 0; i < NUM_DECIMATORS; i++) {
+		if (tapan_p->dec_active[i])
+			decimator = i + 1;
+		if (decimator && decimator <= NUM_DECIMATORS) {
+			pr_debug("%s: Mute = %d Decimator = %d", __func__,
+					mute, decimator);
+			tx_vol_ctl_reg = TAPAN_A_CDC_TX1_VOL_CTL_CFG +
+				8 * (decimator - 1);
+			snd_soc_update_bits(codec, tx_vol_ctl_reg, 0x01, mute);
+		}
+		decimator = 0;
+	}
+	return 0;
+}
+
 static struct snd_soc_dai_ops tapan_dai_ops = {
 	.startup = tapan_startup,
 	.shutdown = tapan_shutdown,
@@ -3992,6 +4272,7 @@ static struct snd_soc_dai_ops tapan_dai_ops = {
 	.set_fmt = tapan_set_dai_fmt,
 	.set_channel_map = tapan_set_channel_map,
 	.get_channel_map = tapan_get_channel_map,
+	.digital_mute = tapan_digital_mute,
 };
 
 static struct snd_soc_dai_driver tapan9302_dai[] = {
@@ -4243,6 +4524,12 @@ static int tapan_codec_enable_slimrx(struct snd_soc_dapm_widget *w,
 
 	core = dev_get_drvdata(codec->dev->parent);
 
+	if(core == NULL) {
+		dev_err(codec->dev, "%s: core is null\n",
+				__func__);
+		return -EINVAL;
+	}
+
 	dev_dbg(codec->dev, "%s: event called! codec name %s\n",
 		__func__, w->codec->name);
 	dev_dbg(codec->dev, "%s: num_dai %d stream name %s event %d\n",
@@ -4365,11 +4652,12 @@ static int tapan_codec_enable_ear_pa(struct snd_soc_dapm_widget *w,
 		usleep_range(5000, 5010);
 		break;
 	case SND_SOC_DAPM_POST_PMD:
+		usleep_range(5000, 5010);
+		snd_soc_update_bits(codec, TAPAN_A_RX_EAR_EN, 0x40, 0x00);
 		wcd9xxx_clsh_fsm(codec, &tapan_p->clsh_d,
 						 WCD9XXX_CLSH_STATE_EAR,
 						 WCD9XXX_CLSH_REQ_DISABLE,
 						 WCD9XXX_CLSH_EVENT_POST_PA);
-		usleep_range(5000, 5010);
 	}
 	return 0;
 }
@@ -4391,6 +4679,23 @@ static int tapan_codec_ear_dac_event(struct snd_soc_dapm_widget *w,
 		break;
 	}
 
+	return 0;
+}
+
+static int tapan_codec_iir_mux_event(struct snd_soc_dapm_widget *w,
+	struct snd_kcontrol *kcontrol, int event)
+{
+	struct snd_soc_codec *codec = w->codec;
+	pr_debug("%s: event = %d\n", __func__, event);
+
+	switch (event) {
+	case SND_SOC_DAPM_POST_PMU:
+		snd_soc_write(codec, w->reg, snd_soc_read(codec, w->reg));
+		break;
+	case SND_SOC_DAPM_POST_PMD:
+		snd_soc_write(codec, w->reg, snd_soc_read(codec, w->reg));
+		break;
+	}
 	return 0;
 }
 
@@ -4502,6 +4807,23 @@ static int tapan_codec_chargepump_vdd_event(struct snd_soc_dapm_widget *w,
 			}
 		}
 		break;
+	}
+	return 0;
+}
+
+static int tapan_codec_set_iir_gain(struct snd_soc_dapm_widget *w,
+	struct snd_kcontrol *kcontrol, int event)
+{
+	struct snd_soc_codec *codec = w->codec;
+	int value = 0;
+
+	switch (event) {
+	case SND_SOC_DAPM_POST_PMU:
+		value = snd_soc_read(codec, TAPAN_A_CDC_IIR1_GAIN_B1_CTL);
+		snd_soc_write(codec, TAPAN_A_CDC_IIR1_GAIN_B1_CTL, value);
+		break;
+	default:
+		pr_err("%s: event = %d not expected\n", __func__, event);
 	}
 	return 0;
 }
@@ -4658,15 +4980,21 @@ static const struct snd_soc_dapm_widget tapan_common_dapm_widgets[] = {
 	SND_SOC_DAPM_MIXER("RX1 MIX1", SND_SOC_NOPM, 0, 0, NULL, 0),
 	SND_SOC_DAPM_MIXER("RX2 MIX1", SND_SOC_NOPM, 0, 0, NULL, 0),
 
-	SND_SOC_DAPM_MIXER_E("RX1 MIX2", TAPAN_A_CDC_CLK_RX_B1_CTL, 0, 0, NULL,
-		0, tapan_codec_enable_interpolator, SND_SOC_DAPM_PRE_PMU |
-		SND_SOC_DAPM_POST_PMU),
-	SND_SOC_DAPM_MIXER_E("RX2 MIX2", TAPAN_A_CDC_CLK_RX_B1_CTL, 1, 0, NULL,
-		0, tapan_codec_enable_interpolator, SND_SOC_DAPM_PRE_PMU |
-		SND_SOC_DAPM_POST_PMU),
+	SND_SOC_DAPM_MIXER("RX1 MIX2", SND_SOC_NOPM, 0, 0, NULL, 0),
+	SND_SOC_DAPM_MIXER("RX2 MIX2", SND_SOC_NOPM, 0, 0, NULL, 0),
+
 	SND_SOC_DAPM_MIXER_E("RX3 MIX1", TAPAN_A_CDC_CLK_RX_B1_CTL, 2, 0, NULL,
 		0, tapan_codec_enable_interpolator, SND_SOC_DAPM_PRE_PMU |
 		SND_SOC_DAPM_POST_PMU),
+
+	SND_SOC_DAPM_VIRT_MUX_E("RX1 INTERPOLATOR",
+		TAPAN_A_CDC_CLK_RX_B1_CTL, 0, 0,
+		&rx1_interpolator, tapan_codec_enable_interpolator,
+		SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU),
+	SND_SOC_DAPM_VIRT_MUX_E("RX2 INTERPOLATOR",
+		TAPAN_A_CDC_CLK_RX_B1_CTL, 1, 0,
+		&rx2_interpolator, tapan_codec_enable_interpolator,
+		SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU),
 
 	SND_SOC_DAPM_MIXER("RX1 CHAIN", TAPAN_A_CDC_RX1_B6_CTL, 5, 0,
 						NULL, 0),
@@ -4875,8 +5203,42 @@ static const struct snd_soc_dapm_widget tapan_common_dapm_widgets[] = {
 		SND_SOC_DAPM_POST_PMD),
 
 	
-	SND_SOC_DAPM_MUX("IIR1 INP1 MUX", SND_SOC_NOPM, 0, 0, &iir1_inp1_mux),
-	SND_SOC_DAPM_PGA("IIR1", TAPAN_A_CDC_CLK_SD_CTL, 0, 0, NULL, 0),
+	SND_SOC_DAPM_MUX_E("IIR1 INP1 MUX", TAPAN_A_CDC_IIR1_GAIN_B1_CTL, 0, 0,
+		&iir1_inp1_mux, tapan_codec_iir_mux_event,
+		SND_SOC_DAPM_POST_PMU | SND_SOC_DAPM_POST_PMD),
+
+	SND_SOC_DAPM_PGA_E("IIR1", TAPAN_A_CDC_CLK_SD_CTL, 0, 0, NULL, 0,
+		tapan_codec_set_iir_gain, SND_SOC_DAPM_POST_PMU),
+
+	SND_SOC_DAPM_MUX_E("IIR1 INP2 MUX", TAPAN_A_CDC_IIR1_GAIN_B2_CTL, 0, 0,
+		&iir1_inp2_mux, tapan_codec_iir_mux_event,
+		SND_SOC_DAPM_POST_PMU | SND_SOC_DAPM_POST_PMD),
+
+	SND_SOC_DAPM_MUX_E("IIR1 INP3 MUX", TAPAN_A_CDC_IIR1_GAIN_B3_CTL, 0, 0,
+		&iir1_inp3_mux, tapan_codec_iir_mux_event,
+		SND_SOC_DAPM_POST_PMU | SND_SOC_DAPM_POST_PMD),
+
+	SND_SOC_DAPM_MUX_E("IIR1 INP4 MUX", TAPAN_A_CDC_IIR1_GAIN_B4_CTL, 0, 0,
+		&iir1_inp4_mux, tapan_codec_iir_mux_event,
+		SND_SOC_DAPM_POST_PMU | SND_SOC_DAPM_POST_PMD),
+
+	SND_SOC_DAPM_MUX_E("IIR2 INP1 MUX", TAPAN_A_CDC_IIR2_GAIN_B1_CTL, 0, 0,
+		&iir2_inp1_mux, tapan_codec_iir_mux_event,
+		SND_SOC_DAPM_POST_PMU | SND_SOC_DAPM_POST_PMD),
+
+	SND_SOC_DAPM_MUX_E("IIR2 INP2 MUX", TAPAN_A_CDC_IIR2_GAIN_B2_CTL, 0, 0,
+		&iir2_inp2_mux, tapan_codec_iir_mux_event,
+		SND_SOC_DAPM_POST_PMU | SND_SOC_DAPM_POST_PMD),
+
+	SND_SOC_DAPM_MUX_E("IIR2 INP3 MUX", TAPAN_A_CDC_IIR2_GAIN_B3_CTL, 0, 0,
+		&iir2_inp3_mux, tapan_codec_iir_mux_event,
+		SND_SOC_DAPM_POST_PMU | SND_SOC_DAPM_POST_PMD),
+
+	SND_SOC_DAPM_MUX_E("IIR2 INP4 MUX", TAPAN_A_CDC_IIR2_GAIN_B4_CTL, 0, 0,
+		&iir2_inp4_mux, tapan_codec_iir_mux_event,
+		SND_SOC_DAPM_POST_PMU | SND_SOC_DAPM_POST_PMD),
+
+	SND_SOC_DAPM_PGA("IIR2", TAPAN_A_CDC_CLK_SD_CTL, 1, 0, NULL, 0),
 
 	
 	SND_SOC_DAPM_ADC_E("AUX_PGA_Left", NULL, TAPAN_A_RX_AUX_SW_CTL, 7, 0,
@@ -4967,9 +5329,9 @@ static int tapan_handle_pdata(struct tapan_priv *tapan)
 	struct snd_soc_codec *codec = tapan->codec;
 	struct wcd9xxx_pdata *pdata = tapan->resmgr.pdata;
 	int k1, k2, k3, rc = 0;
-	u8 txfe_bypass = 0;
-	u8 txfe_buff = 0;
-	u8 flag = 0;
+	u8 txfe_bypass;
+	u8 txfe_buff;
+	u8 flag;
 	u8 i = 0, j = 0;
 	u8 val_txfe = 0, value = 0;
 	u8 dmic_sample_rate_value = 0;
@@ -4981,9 +5343,11 @@ static int tapan_handle_pdata(struct tapan_priv *tapan)
 		rc = -ENODEV;
 		goto done;
 	}
+
 	txfe_bypass = pdata->amic_settings.txfe_enable;
 	txfe_buff = pdata->amic_settings.txfe_buff;
 	flag = pdata->amic_settings.use_pdata;
+
 	
 	if ((pdata->micbias.ldoh_v > WCD9XXX_LDOH_3P0_V) ||
 	    (pdata->micbias.bias1_cfilt_sel > WCD9XXX_CFILT3_SEL) ||
@@ -5659,7 +6023,9 @@ static int tapan_setup_zdet(struct wcd9xxx_mbhc *mbhc,
 				mux_wait_us + WCD9XXX_USLEEP_RANGE_MARGIN_US);
 		break;
 	case PA_DISABLE:
-		if (!mbhc->hph_pa_dac_state)
+		if (!mbhc->hph_pa_dac_state &&
+			(!(test_bit(MBHC_EVENT_PA_HPHL, &mbhc->event_state) ||
+			test_bit(MBHC_EVENT_PA_HPHR, &mbhc->event_state))))
 			wcd9xxx_enable_static_pa(mbhc, false);
 		wcd9xxx_restore_registers(codec, &tapan->reg_save_restore);
 		break;
@@ -6042,6 +6408,7 @@ static int tapan_codec_probe(struct snd_soc_codec *codec)
 	tapan->aux_r_gain = 0x1F;
 	tapan->ldo_h_users = 0;
 	tapan->micb_2_users = 0;
+	tapan->lb_mode = false;
 	tapan_update_reg_defaults(codec);
 	tapan_update_reg_mclk_rate(wcd9xxx);
 	tapan_codec_init_reg(codec);

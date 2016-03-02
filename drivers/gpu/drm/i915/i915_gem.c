@@ -270,7 +270,7 @@ i915_gem_shmem_pread_fast(struct drm_device *dev,
 			  struct drm_i915_gem_pread *args,
 			  struct drm_file *file)
 {
-	struct address_space *mapping = obj->base.filp->f_path.dentry->d_inode->i_mapping;
+	struct address_space *mapping = file_inode(obj->base.filp)->i_mapping;
 	ssize_t remain;
 	loff_t offset;
 	char __user *user_data;
@@ -383,7 +383,7 @@ i915_gem_shmem_pread_slow(struct drm_device *dev,
 			  struct drm_i915_gem_pread *args,
 			  struct drm_file *file)
 {
-	struct address_space *mapping = obj->base.filp->f_path.dentry->d_inode->i_mapping;
+	struct address_space *mapping = file_inode(obj->base.filp)->i_mapping;
 	char __user *user_data;
 	ssize_t remain;
 	loff_t offset;
@@ -721,7 +721,7 @@ i915_gem_shmem_pwrite_fast(struct drm_device *dev,
 			   struct drm_i915_gem_pwrite *args,
 			   struct drm_file *file)
 {
-	struct address_space *mapping = obj->base.filp->f_path.dentry->d_inode->i_mapping;
+	struct address_space *mapping = file_inode(obj->base.filp)->i_mapping;
 	ssize_t remain;
 	loff_t offset;
 	char __user *user_data;
@@ -790,7 +790,7 @@ i915_gem_shmem_pwrite_slow(struct drm_device *dev,
 			   struct drm_i915_gem_pwrite *args,
 			   struct drm_file *file)
 {
-	struct address_space *mapping = obj->base.filp->f_path.dentry->d_inode->i_mapping;
+	struct address_space *mapping = file_inode(obj->base.filp)->i_mapping;
 	ssize_t remain;
 	loff_t offset;
 	char __user *user_data;
@@ -1393,7 +1393,7 @@ i915_gem_object_get_pages_gtt(struct drm_i915_gem_object *obj,
 	if (obj->pages == NULL)
 		return -ENOMEM;
 
-	inode = obj->base.filp->f_path.dentry->d_inode;
+	inode = file_inode(obj->base.filp);
 	mapping = inode->i_mapping;
 	gfpmask |= mapping_gfp_mask(mapping);
 
@@ -1543,7 +1543,7 @@ i915_gem_object_truncate(struct drm_i915_gem_object *obj)
 	 * To do this we must instruct the shmfs to drop all of its
 	 * backing pages, *now*.
 	 */
-	inode = obj->base.filp->f_path.dentry->d_inode;
+	inode = file_inode(obj->base.filp);
 	shmem_truncate_range(inode, 0, (loff_t)-1);
 
 	obj->madv = __I915_MADV_PURGED;
@@ -3597,7 +3597,7 @@ struct drm_i915_gem_object *i915_gem_alloc_object(struct drm_device *dev,
 		return NULL;
 	}
 
-	mapping = obj->base.filp->f_path.dentry->d_inode->i_mapping;
+	mapping = file_inode(obj->base.filp)->i_mapping;
 	mapping_set_gfp_mask(mapping, GFP_HIGHUSER | __GFP_RECLAIMABLE);
 
 	i915_gem_info_add_obj(dev_priv, size);
@@ -4061,7 +4061,7 @@ void i915_gem_free_all_phys_object(struct drm_device *dev)
 void i915_gem_detach_phys_object(struct drm_device *dev,
 				 struct drm_i915_gem_object *obj)
 {
-	struct address_space *mapping = obj->base.filp->f_path.dentry->d_inode->i_mapping;
+	struct address_space *mapping = file_inode(obj->base.filp)->i_mapping;
 	char *vaddr;
 	int i;
 	int page_count;
@@ -4097,7 +4097,7 @@ i915_gem_attach_phys_object(struct drm_device *dev,
 			    int id,
 			    int align)
 {
-	struct address_space *mapping = obj->base.filp->f_path.dentry->d_inode->i_mapping;
+	struct address_space *mapping = file_inode(obj->base.filp)->i_mapping;
 	drm_i915_private_t *dev_priv = dev->dev_private;
 	int ret = 0;
 	int page_count;

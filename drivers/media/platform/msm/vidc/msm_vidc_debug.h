@@ -19,6 +19,11 @@
 
 #define VIDC_DBG_TAG "msm_vidc: %d: "
 #define REDUCE_KERNEL_ERROR_LOG 1
+/* To enable messages OR these values and
+ * echo the result to debugfs file.
+ *
+ * To enable all messages set debug_level = 0x101F
+ */
 
 enum vidc_msg_prio {
 	VIDC_ERR  = 0x0001,
@@ -49,6 +54,7 @@ extern int msm_fw_debug_mode;
 extern int msm_fw_low_power_mode;
 extern int msm_vp8_low_tier;
 extern int msm_vidc_hw_rsp_timeout;
+extern u32 msm_vidc_firmware_unload_delay;
 
 #define dprintk(__level, __fmt, arg...)	\
 	do { \

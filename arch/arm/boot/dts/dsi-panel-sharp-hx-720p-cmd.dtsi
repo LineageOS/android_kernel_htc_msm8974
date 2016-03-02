@@ -98,9 +98,9 @@
 		qcom,mdss-dsi-default-command-state = "dsi_hs_mode";
 		qcom,mdss-pan-physical-width-dimension = <53>;
 		qcom,mdss-pan-physical-height-dimension = <94>;
-		qcom,mdss-shrink-pwm = <12 79 255>;
 		htc,mdss-camera-blk = <185>;
 		htc,panel-id=<0>;
+		htc,brt-bl-table = <30 12>, <142 79>, <255 255>;
 	};
 };
 

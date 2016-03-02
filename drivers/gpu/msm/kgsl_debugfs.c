@@ -18,6 +18,7 @@
 #include "kgsl_device.h"
 #include "kgsl_sharedmem.h"
 
+/*default log levels is error for everything*/
 #define KGSL_LOG_LEVEL_MAX     7
 
 struct dentry *kgsl_debugfs_dir;
@@ -142,7 +143,7 @@ void kgsl_device_debugfs_init(struct kgsl_device *device)
 	debugfs_create_file("log_level_pwr", 0644, device->d_debugfs, device,
 				&pwr_log_fops);
 
-	
+	/* Create postmortem dump control files */
 
 	pm_d_debugfs = debugfs_create_dir("postmortem", device->d_debugfs);
 
@@ -230,7 +231,7 @@ static int process_mem_print(struct seq_file *s, void *unused)
 		   "gpuaddr", "useraddr", "size", "id", "flags", "type",
 		   "usage", "sglen");
 
-	
+	/* print all entries with a GPU address */
 	spin_lock(&private->mem_lock);
 
 	for (node = rb_first(&private->mem_rb); node; node = rb_next(node)) {
@@ -239,7 +240,7 @@ static int process_mem_print(struct seq_file *s, void *unused)
 	}
 
 
-	
+	/* now print all the unbound entries */
 	while (1) {
 		entry = idr_get_next(&private->mem_idr, &next);
 		if (entry == NULL)
@@ -290,6 +291,17 @@ static const struct file_operations process_mem_fops = {
 };
 
 
+/**
+ * kgsl_process_init_debugfs() - Initialize debugfs for a process
+ * @private: Pointer to process private structure created for the process
+ *
+ * @returns: 0 on success, error code otherwise
+ *
+ * kgsl_process_init_debugfs() is called at the time of creating the
+ * process struct when a process opens kgsl device for the first time.
+ * The function creates the debugfs files for the process. If debugfs is
+ * disabled in the kernel, we ignore that error and return as successful.
+ */
 int
 kgsl_process_init_debugfs(struct kgsl_process_private *private)
 {
@@ -307,6 +319,16 @@ kgsl_process_init_debugfs(struct kgsl_process_private *private)
 	private->debug_root->d_inode->i_uid = proc_d_debugfs->d_inode->i_uid;
 	private->debug_root->d_inode->i_gid = proc_d_debugfs->d_inode->i_gid;
 
+	/*
+	 * debugfs_create_dir() and debugfs_create_file() both
+	 * return -ENODEV if debugfs is disabled in the kernel.
+	 * We make a distinction between these two functions
+	 * failing and debugfs being disabled in the kernel.
+	 * In the first case, we abort process private struct
+	 * creation, in the second we continue without any changes.
+	 * So if debugfs is disabled in kernel, return as
+	 * success.
+	 */
 	dentry = debugfs_create_file("mem", 0444, private->debug_root,
 		(void *) ((unsigned long) private->pid), &process_mem_fops);
 

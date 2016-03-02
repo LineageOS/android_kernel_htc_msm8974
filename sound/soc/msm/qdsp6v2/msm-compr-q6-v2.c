@@ -38,6 +38,7 @@
 #include "audio_ocmem.h"
 #include <sound/tlv.h>
 
+//htc audio ++
 #include <sound/q6adm-v2.h>
 #include <linux/wakelock.h>
 #include <mach/htc_acoustic_alsa.h>
@@ -46,6 +47,7 @@
 #undef pr_err
 #define pr_info(fmt, ...) pr_aud_info(fmt, ##__VA_ARGS__)
 #define pr_err(fmt, ...) pr_aud_err(fmt, ##__VA_ARGS__)
+//htc audio --
 
 #define COMPRE_CAPTURE_NUM_PERIODS	16
 /* Allocate the worst case frame size for compressed audio */
@@ -72,7 +74,9 @@ struct snd_msm {
 };
 static struct snd_msm compressed_audio;
 
+//HTC_AUD ++
 struct wake_lock compr_lpa_wakelock;
+//HTC_AUD --
 
 static struct audio_locks the_locks;
 
@@ -163,7 +167,9 @@ static void compr_event_handler(uint32_t opcode,
 	int buffer_length = 0;
 	int stop_playback = 0;
 
+//HTC_AUD ++
 	wake_lock_timeout(&compr_lpa_wakelock, 3 * HZ);
+//HTC_AUD --
 
 	pr_debug("%s opcode =%08x\n", __func__, opcode);
 	switch (opcode) {
@@ -463,10 +469,12 @@ static int msm_compr_playback_prepare(struct snd_pcm_substream *substream)
 	case SND_AUDIOCODEC_MP3:
 		/* No media format block for mp3 */
 		break;
+//htc audio ++
 	case SND_AUDIOCODEC_PCM:
 		q6asm_media_format_block_pcm_format_support(prtd->audio_client,prtd->samp_rate, \
 		prtd->channel_mode,16);
 		break;
+//htc audio --
 	case SND_AUDIOCODEC_AAC:
 		pr_debug("%s: SND_AUDIOCODEC_AAC\n", __func__);
 		memset(&aac_cfg, 0x0, sizeof(struct asm_aac_cfg));
@@ -502,7 +510,7 @@ static int msm_compr_playback_prepare(struct snd_pcm_substream *substream)
 	}
 
 	if(substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
-		
+		// force the Pause cmd and make the DSP to suspend mode
 		q6asm_cmd_nowait(prtd->audio_client, CMD_PAUSE);
 		q6asm_cmd_nowait(prtd->audio_client, CMD_SUSPEND);
 	}
@@ -658,7 +666,9 @@ static int msm_compr_trigger(struct snd_pcm_substream *substream, int cmd)
 	struct compr_audio *compr = runtime->private_data;
 	struct msm_audio *prtd = &compr->prtd;
 
+//HTC_AUD ++
 	wake_lock_timeout(&compr_lpa_wakelock, 3 * HZ);
+//HTC_AUD --
 
 	pr_debug("%s\n", __func__);
 	switch (cmd) {
@@ -737,8 +747,10 @@ static void populate_codec_list(struct compr_audio *compr,
 	compr->info.compr_cap.codecs[2] = SND_AUDIOCODEC_AC3;
 	compr->info.compr_cap.codecs[3] = SND_AUDIOCODEC_EAC3;
 	compr->info.compr_cap.codecs[4] = SND_AUDIOCODEC_AMRWB;
+//htc audio ++
 	compr->info.compr_cap.codecs[5] = SND_AUDIOCODEC_PCM;
-	
+//htc audio --
+	/* Add new codecs here */
 }
 
 static int msm_compr_open(struct snd_pcm_substream *substream)
@@ -746,8 +758,10 @@ static int msm_compr_open(struct snd_pcm_substream *substream)
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct compr_audio *compr;
 	struct msm_audio *prtd;
+//HTC_AUD ++
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	char *str_name = (char*)rtd->dai_link->stream_name;
+//HTC_AUD --
 	int ret = 0;
 
 	pr_debug("%s\n", __func__);
@@ -846,8 +860,10 @@ static int msm_compr_playback_close(struct snd_pcm_substream *substream)
 	struct snd_soc_pcm_runtime *soc_prtd = substream->private_data;
 	struct compr_audio *compr = runtime->private_data;
 	struct msm_audio *prtd = &compr->prtd;
+//HTC_AUD ++
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	char *str_name = (char*)rtd->dai_link->stream_name;
+//HTC_AUD --
 	int dir = 0;
 
 	pr_info("%s:tunnel %s\n", __func__,str_name);
@@ -960,17 +976,134 @@ static int msm_compr_hw_params(struct snd_pcm_substream *substream,
 				struct snd_pcm_hw_params *params)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
+	struct snd_soc_pcm_runtime *soc_prtd = substream->private_data;
 	struct compr_audio *compr = runtime->private_data;
 	struct msm_audio *prtd = &compr->prtd;
 	struct snd_dma_buffer *dma_buf = &substream->dma_buffer;
 	struct audio_buffer *buf;
 	int dir, ret;
+	uint16_t bits_per_sample = 16;
+//HTC_AUD ++
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	char *str_name = (char*)rtd->dai_link->stream_name;
+//HTC_AUD --
 
+	struct asm_softpause_params softpause = {
+		.enable = SOFT_PAUSE_ENABLE,
+		.period = SOFT_PAUSE_PERIOD,
+		.step = SOFT_PAUSE_STEP,
+		.rampingcurve = SOFT_PAUSE_CURVE_LINEAR,
+	};
+	struct asm_softvolume_params softvol = {
+		.period = SOFT_VOLUME_PERIOD,
+		.step = SOFT_VOLUME_STEP,
+		.rampingcurve = SOFT_VOLUME_CURVE_LINEAR,
+	};
+
+	pr_debug("%s\n", __func__);
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
 		dir = IN;
 	else
 		dir = OUT;
 
+	if (runtime->format == SNDRV_PCM_FORMAT_S24_LE)
+		bits_per_sample = 24;
+
+//HTC_AUD_START
+	if (htc_acoustic_query_feature(HTC_AUD_24BIT)) {
+		pr_info("%s: enable 24 bit Audio in POPP\n",
+			    __func__);
+		bits_per_sample = 24;
+	}
+//HTC_AUD_END
+
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
+
+		if (htc_acoustic_query_feature(HTC_Q6_EFFECT) == 0) { /* POPP */
+			pr_info("%s: change to HTC_POPP_TOPOLOGY\n",
+				    __func__);
+			store_asm_topology(HTC_POPP_TOPOLOGY,prtd->audio_client->session);
+		}
+
+		ret = q6asm_open_write_v2(prtd->audio_client,
+				compr->codec, bits_per_sample);
+
+		if (ret < 0) {
+			pr_err("%s: Session out open failed\n",
+				__func__);
+			return -ENOMEM;
+		}
+		msm_pcm_routing_reg_phy_stream(
+			soc_prtd->dai_link->be_id,
+			prtd->audio_client->perf_mode,
+			prtd->session_id,
+			substream->stream);
+		/* the number of channels are required to call volume api
+		   accoridngly. So, get channels from hw params */
+		if ((params_channels(params) > 0) &&
+		    (params_periods(params) <= runtime->hw.channels_max))
+			prtd->channel_mode = params_channels(params);
+
+		ret = compressed_set_volume(prtd, 0);
+		if (ret < 0)
+			pr_err("%s :compr %s Set Volume failed : %d", __func__, str_name, ret);
+
+		ret = q6asm_set_softpause(prtd->audio_client, &softpause);
+		if (ret < 0)
+			pr_err("%s: compr %s Send SoftPause Param failed ret=%d\n",
+				__func__, str_name,ret);
+		ret = q6asm_set_softvolume(prtd->audio_client, &softvol);
+		if (ret < 0)
+			pr_err("%s: compr %s Send SoftVolume Param failed ret=%d\n",
+				__func__, str_name,ret);
+	} else if (substream->stream == SNDRV_PCM_STREAM_CAPTURE) {
+		if (!msm_compr_capture_codecs(
+			compr->info.codec_param.codec.id)) {
+			/*request codec invalid or not supported,
+			use default compress format*/
+			compr->info.codec_param.codec.id =
+				SND_AUDIOCODEC_AMRWB;
+		}
+		switch (compr->info.codec_param.codec.id) {
+		case SND_AUDIOCODEC_AMRWB:
+			pr_debug("q6asm_open_read(FORMAT_AMRWB)\n");
+			ret = q6asm_open_read(prtd->audio_client,
+				FORMAT_AMRWB);
+			if (ret < 0) {
+				pr_err("%s: compressed Session out open failed\n",
+					__func__);
+				return -ENOMEM;
+			}
+			pr_debug("msm_pcm_routing_reg_phy_stream\n");
+			msm_pcm_routing_reg_phy_stream(
+					soc_prtd->dai_link->be_id,
+					prtd->audio_client->perf_mode,
+					prtd->session_id, substream->stream);
+			break;
+		default:
+			pr_debug("q6asm_open_read_compressed(COMPRESSED_META_DATA_MODE)\n");
+			/*
+			ret = q6asm_open_read_compressed(prtd->audio_client,
+				MAX_NUM_FRAMES_PER_BUFFER,
+				COMPRESSED_META_DATA_MODE);
+			*/
+			ret = -EINVAL;
+			break;
+		}
+
+		if (ret < 0) {
+			pr_err("%s: compressed Session out open failed\n",
+				__func__);
+			return -ENOMEM;
+		}
+	}
+
+	ret = q6asm_set_io_mode(prtd->audio_client,
+					(COMPRESSED_IO | ASYNC_IO_MODE));
+	if (ret < 0) {
+		pr_err("%s: Set IO mode failed\n", __func__);
+		return -ENOMEM;
+	}
 	/* Modifying kernel hardware params based on userspace config */
 	if (params_periods(params) > 0 &&
 		(params_periods(params) != runtime->hw.periods_max)) {
@@ -1023,7 +1156,9 @@ static int msm_compr_ioctl_shared(struct snd_pcm_substream *substream,
 	struct msm_audio *prtd = &compr->prtd;
 	uint64_t timestamp;
 	uint64_t temp;
+//HTC_AUD ++
 	wake_lock_timeout(&compr_lpa_wakelock, 3 * HZ);
+//HTC_AUD --
 
 	switch (cmd) {
 	case SNDRV_COMPRESS_TSTAMP: {
@@ -1216,6 +1351,7 @@ static int msm_compr_ioctl_shared(struct snd_pcm_substream *substream,
 
 		prtd->cmd_interrupt = 0;
 		return rc;
+//HTC_AUD ++
 	case SNDRV_PCM_IOCTL1_ENABLE_EFFECT:
 	{
 		struct param {
@@ -1309,6 +1445,7 @@ static int msm_compr_ioctl_shared(struct snd_pcm_substream *substream,
 		kfree(payload);
 		return rc;
 	}
+//HTC_AUD --
 	default:
 		break;
 	}
@@ -1851,8 +1988,10 @@ static int __init msm_soc_platform_init(void)
 	init_waitqueue_head(&the_locks.read_wait);
 	init_waitqueue_head(&the_locks.flush_wait);
 
+//HTC_AUD ++
 	wake_lock_init(&compr_lpa_wakelock, WAKE_LOCK_SUSPEND,
 				"compr_lpa");
+//HTC_AUD --
 	return platform_driver_register(&msm_compr_driver);
 }
 module_init(msm_soc_platform_init);

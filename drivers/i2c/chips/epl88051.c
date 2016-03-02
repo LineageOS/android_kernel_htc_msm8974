@@ -12,6 +12,7 @@
  *
  */
 
+/** VERSION: 1.02**/
 #include <linux/lightsensor.h>
 #include <linux/hrtimer.h>
 #include <linux/timer.h>
@@ -47,15 +48,19 @@
 #include <mach/board_htc.h>
 
 #define PS_RAW_8BIT
-#define PS_POLLING_MODE         	0				
+//#define outputLUX
+/******************************************************************************
+ * configuration
+ *******************************************************************************/
+#define PS_POLLING_MODE         	0				// 1 is polling mode, 0 is interrupt mode
 
-#ifdef PS_RAW_8BIT 
+#ifdef PS_RAW_8BIT //ices add by 20131230 /*PS_RAW_8BIT*/
 #define PS_LOW_THRESHOLD		7
 #define PS_HIGH_THRESHOLD		13
 #else
 #define PS_LOW_THRESHOLD		2000
 #define PS_HIGH_THRESHOLD		5000
-#endif 
+#endif //ices add by 20131230 /*PS_RAW_8BIT*/
 
 #define LUX_PER_COUNT			700
 #define PS_DELAY			35
@@ -73,10 +78,10 @@ static int hs_count = 0;
 static int start_idx = 0;
 static struct mutex sensor_mutex;
 static int HS_INTT = EPL_INTT_PS_250;
-static int PS_INTT = EPL_INTT_PS_150; 
+static int PS_INTT = EPL_INTT_PS_150; //EPL_INTT_PS_70; //psensor integration time
 int c_gain;
 int dynamic_intt_idx;
-int dynamic_intt_init_idx = 1;	
+int dynamic_intt_init_idx = 1;	//Dynamic init idx
 static int lightsensor_cali;
 uint32_t dynamic_intt_min_unit = 1000;
 uint8_t dynamic_intt_intt;
@@ -92,21 +97,22 @@ static int als_dynamic_intt_intt_num =  sizeof(als_dynamic_intt_intt_value)/size
 static uint32_t adctable[10] = {0};
 static int p_status = 9;
 static int psensor_enabled;
+/*******************************************************************************/
 
 #define TXBYTES			2
 #define RXBYTES			2
 #define PACKAGE_SIZE 		2
 #define I2C_RETRY_COUNT 	10
 
-#define MAX_PS_CH0 30000 
+#define MAX_PS_CH0 30000 //ices add 20140814
 
 typedef struct _epl_raw_data
 {
 	u8 raw_bytes[PACKAGE_SIZE];
 	u16 ps_state;
-    u8 con_sat; 
+    u8 con_sat; //ices add by 20140812
 	u16 ps_raw;
-	u16 ps_ch0_raw; 
+	u16 ps_ch0_raw; //ices add by 20140814
 	u16 als_ch0_raw;
 	u16 als_ch1_raw;
 	u16 als_ch0_raw_now;
@@ -170,11 +176,11 @@ struct epl88051_priv
 	int read_flag;
 	int irq;
 
-	int c_gain_h; 
-	int c_gain_l; 
+	int c_gain_h; // fluorescent (C1)
+	int c_gain_l; // incandescent (C2)
 	int c_gain_saturated;
-	uint32_t lsource_thd_high; 
-	uint32_t lsource_thd_low; 
+	uint32_t lsource_thd_high; //different light source boundary (N) fluorescent (C1)
+	uint32_t lsource_thd_low; //different light source boundary (N) incandescent (C2)
 	int ps_delay;
 
 	uint32_t emmc_als_kadc;
@@ -309,17 +315,18 @@ static void epl88051_restart_work(void)
 	struct epl88051_priv *epld = epl88051_obj;
 	cancel_delayed_work(&polling_work);
 	queue_delayed_work(epld->epl_wq, &polling_work,msecs_to_jiffies(50));
-#if 1 
+#if 1 //ices add by 20140812
     if(epld->mfg_mode != MFG_MODE)
     {
         cancel_delayed_work(&dyna_thd_polling_work);
         queue_delayed_work(epld->epl_wq, &dyna_thd_polling_work,msecs_to_jiffies(POLLING_DELAY));
     }
-#endif  
+#endif  //ices end by 20140812
 }
 
 
 
+/*-------healthy sensor Enable------------------------------------------------------*/
 static void epl88051_hs_enable(struct epl88051_priv *epld, bool interrupt, bool full_enable)
 {
 	int ret;
@@ -356,21 +363,78 @@ static int epl88051_psensor_enable(struct epl88051_priv *epld)
 
 	LOG_INFO("[PS] %s --- Proximity sensor Enable ---\n", __FUNCTION__);
 
+	/*
+	   Interrupt Channel Selection(3-2): ch0(00), ch1(01), ch2(10), ch3(11)
+	   Interrupt Mode Selection(1-0): binary(00), disable(10), active-low(11)
+	 */
 	ret = epl88051_I2C_Write(client, REG_6, W_SINGLE_BYTE, 0x02, EPL_INT_DISABLE | EPL_INT_CH1);
 
+	/*
+	Operation Mode Selection(7-4):
+		0001: PS mode (continuous sensing for PS)
+		1001: PSS mode (single sensing for PS)
+		0110: ALS mode (continuous sensing for ALS)
+		1110: ALSS mode (single sensing for ALS)
+		ADC Resolution Setting(3-2):
+		00: 6 bits ADC resolution setting
+		01: 8 bits ADC resolution setting
+		10: 10 bits ADC resolution setting
+		11: 12 bits ADC resolution setting
+		Gain Setting(1-0):
+		00:High gain
+		01: Middle gain
+		10: Not used
+		11: Low gain
+	*/
 	regdata =  EPL_PS_MODE | EPL_10BIT_ADC | EPL_M_GAIN ;
 	regdata = regdata | (epld->polling_mode_ps == 0 ? EPL_C_SENSING_MODE : EPL_S_SENSING_MODE);
 	ret = epl88051_I2C_Write(client, REG_0, W_SINGLE_BYTE, 0X02, regdata);
 
+	/*
+	Average Cycle(7-5):
+		000 : 1 time sensing average at each ALS/PS measurement
+		001 : 2 times sensing average at each ALS /PS measurement
+		010 : 4 times sensing average at each ALS /PS measurement
+		011 : 8 times sensing average at each ALS /PS measurement
+		100 : 16 times sensing average at each ALS /PS measurement
+		101 : 32 times sensing average at each ALS /PS measurement
+		110 : 64 times sensing average at each ALS /PS measurement
+		111 : 128 times sensing average at each ALS /PS measurement
+	Integration Time(4-0):(us)
+		00000: 4
+		00001: 6
+		00010: 8
+		00011: 10
+		00100: 15
+		00101: 20
+		00110: 25
+		00111: 30
+		01000: 40
+		01001: 55
+		01010: 70
+		01011: 90
+		01100: 110
+		01101: 150
+		01110: 200
+		01111: 250
+		10000: 350
+		10001: 450
+		10010: 550
+	*/
 	regdata = PS_INTT | EPL_SENSING_8_TIME;
 	ret = epl88051_I2C_Write(client, REG_1, W_SINGLE_BYTE, 0X02, regdata);
 
-	
+	/*IR LED voltage mode*/
 	ret = epl88051_I2C_Write(client, REG_9, W_SINGLE_BYTE, 0X02, EPL_IR_MODE_VOLTAGE);
 
-	
+	/*Set P-sensor high/low threshold*/
 	epl88051_set_ps_threshold(epld->ps_threshold_low, epld->ps_threshold_high);
 
+	/*
+	Chip Reset Control(2)
+		0 : the chip reset (exclusive of I2C registers)
+		1 : the chip start to run
+	*/
 	ret = epl88051_I2C_Write(client, REG_8, W_SINGLE_BYTE, 0X02, EPL_C_RESET);
 	ret = epl88051_I2C_Write(client, REG_8, W_SINGLE_BYTE, 0x02, EPL_C_START_RUN);
 
@@ -379,9 +443,9 @@ static int epl88051_psensor_enable(struct epl88051_priv *epld)
 		epl88051_I2C_Write(client, REG_13, R_SINGLE_BYTE, 0x01, 0);
 		epl88051_I2C_Read(client);
 		ps_state= !((gRawData.raw_bytes[0] & 0x04) >> 2);
-		gRawData.con_sat = (gRawData.raw_bytes[0] >> 1) & 0x01; 
-#if 1 
-        
+		gRawData.con_sat = (gRawData.raw_bytes[0] >> 1) & 0x01; //ices add by 20140812
+#if 1 //ices add by 20140814
+        /*read channel 0 raw data*/
         epl88051_I2C_Write(client, REG_14, R_TWO_BYTE, 0x01, 0x00);
 		epl88051_I2C_Read(client);
         gRawData.ps_ch0_raw = (gRawData.raw_bytes[1] << 8) | gRawData.raw_bytes[0];
@@ -389,20 +453,20 @@ static int epl88051_psensor_enable(struct epl88051_priv *epld)
 
 		epl88051_I2C_Write(client, REG_16, R_TWO_BYTE, 0x01, 0x00);
 		epl88051_I2C_Read(client);
-#ifdef PS_RAW_8BIT 
+#ifdef PS_RAW_8BIT //ices add by 20131230 /*PS_RAW_8BIT*/
 		if (gRawData.raw_bytes[1] >= (uint8_t) (epld->emmc_ps_kadc2 & 0xFF))
-			gRawData.ps_raw = gRawData.raw_bytes[1] - (uint8_t) (epld->emmc_ps_kadc2 & 0xFF);  
+			gRawData.ps_raw = gRawData.raw_bytes[1] - (uint8_t) (epld->emmc_ps_kadc2 & 0xFF);  //8bit
 		else
 			gRawData.ps_raw = 0;
 #else
 		if (((gRawData.raw_bytes[1] << 8) | gRawData.raw_bytes[0]) >= (uint8_t) epld->emmc_ps_kadc2)
-			gRawData.ps_raw = ((gRawData.raw_bytes[1] << 8) | gRawData.raw_bytes[0]) - (uint8_t) epld->emmc_ps_kadc2; 
+			gRawData.ps_raw = ((gRawData.raw_bytes[1] << 8) | gRawData.raw_bytes[0]) - (uint8_t) epld->emmc_ps_kadc2; //16bit
 		else
 			gRawData.ps_raw = 0;
-#endif  
+#endif  //ices end by 20131230 /*PS_RAW_8BIT*/
 		LOG_INFO("[PS] %s gRawData.ps_raw=%d\n", __FUNCTION__, gRawData.ps_raw);
 		if (gRawData.ps_state != ps_state) {
-			regdata =  EPL_INT_CH1 | EPL_INT_FRAME_ENABLE;                                              
+			regdata =  EPL_INT_CH1 | EPL_INT_FRAME_ENABLE;                                              ///??????
 			epl88051_I2C_Write(client, REG_6, W_SINGLE_BYTE, 0x02, regdata);
 		} else {
 			regdata =  EPL_INT_CH1 | EPL_INT_ACTIVE_LOW;
@@ -428,18 +492,79 @@ static int epl88051_lsensor_enable(struct epl88051_priv *epld)
 	struct i2c_client *client = epld->client;
 
 	LOG_INFO("[LS] %s --- ALS sensor Enable --- \n", __FUNCTION__);
+	/*
+	Interrupt Channel Selection(3-2): ch0(00), ch1(01), ch2(10), ch3(11)
+	Interrupt Mode Selection(1-0): binary(00), disable(10), active-low(11)
+	*/
 	regdata = EPL_INT_DISABLE;
 	ret = epl88051_I2C_Write(client, REG_6, W_SINGLE_BYTE, 0x02, regdata);
 
+	/*
+	Operation Mode Selection(7-4):
+		0001: PS mode (continuous sensing for PS)
+		1001: PSS mode (single sensing for PS)
+		0110: ALS mode (continuous sensing for ALS)
+		1110: ALSS mode (single sensing for ALS)
+		ADC Resolution Setting(3-2):
+		00: 6 bits ADC resolution setting
+		01: 8 bits ADC resolution setting
+		10: 10 bits ADC resolution setting
+		11: 12 bits ADC resolution setting
+		Gain Setting(1-0):
+		00:High gain
+		01: Middle gain
+		10: Not used
+		11: Low gain
+	*/
 
 	regdata = EPL_S_SENSING_MODE | EPL_ALS_MODE | dynamic_intt_gain | EPL_8BIT_ADC;
 	ret = epl88051_I2C_Write(client, REG_0, W_SINGLE_BYTE, 0X02, regdata);
 
+	/*
+	Average Cycle(7-5):
+		000 : 1 time sensing average at each ALS/PS measurement
+		001 : 2 times sensing average at each ALS /PS measurement
+		010 : 4 times sensing average at each ALS /PS measurement
+		011 : 8 times sensing average at each ALS /PS measurement
+		100 : 16 times sensing average at each ALS /PS measurement
+		101 : 32 times sensing average at each ALS /PS measurement
+		110 : 64 times sensing average at each ALS /PS measurement
+		111 : 128 times sensing average at each ALS /PS measurement
+	Integration Time(4-0):
+		00000: 4
+		00001: 6
+		00010: 8
+		00011: 10
+		00100: 15
+		00101: 20
+		00110: 25
+		00111: 30
+		01000: 40
+		01001: 55
+		01010: 70
+		01011: 90
+		01100: 110
+		01101: 150
+		01110: 200
+		01111: 250
+		10000: 350
+		10001: 450
+		10010: 550
+	*/
 	regdata = dynamic_intt_intt | EPL_SENSING_16_TIME;
 	ret = epl88051_I2C_Write(client, REG_1, W_SINGLE_BYTE, 0X02, regdata);
 
+	/*
+	Go Low Gain Threshold in Auto-Gain Operation for ALS(7-4)
+	Go Mid Gain Threshold in Auto-Gain Operation for ALS(3-0)
+	*/
 	ret = epl88051_I2C_Write(client, REG_10, W_SINGLE_BYTE, 0x02, (EPL_GO_LOW << 4) | EPL_GO_MID);
 
+	/*
+	Chip Reset Control(2)
+		0 : the chip reset (exclusive of I2C registers)
+		1 : the chip start to run
+	*/
 	ret = epl88051_I2C_Write(client,REG_8, W_SINGLE_BYTE, 0X02, EPL_C_RESET);
 	ret = epl88051_I2C_Write(client,REG_8, W_SINGLE_BYTE, 0x02, EPL_C_START_RUN);
 	msleep(ALS_DELAY);
@@ -447,6 +572,12 @@ static int epl88051_lsensor_enable(struct epl88051_priv *epld)
 	return ret;
 }
 
+//====================epl88051_read_ps===============//
+//polling method for proximity sensor detect. Report proximity sensor raw data.
+//Report "ABS_DISTANCE" event to HAL layer.
+//Variable "value" 0 and 1 to represent which distance from psensor to target(human's face..etc).
+//value: 0 represent near.
+//value: 1 represent far.
 static void epl88051_read_ps(void)
 {
 	struct epl88051_priv *epld = epl88051_obj;
@@ -454,7 +585,7 @@ static void epl88051_read_ps(void)
 	int is_ps_mode = 1;
 	uint8_t setting;
 	epld->j_end = jiffies;
-	
+	/*read ps state*/
 	epl88051_I2C_Write(epld->client, REG_13, R_SINGLE_BYTE, 0x01, 0);
 	epl88051_I2C_Read(epld->client);
 	setting = gRawData.raw_bytes[0];
@@ -464,25 +595,25 @@ static void epl88051_read_ps(void)
 	}
 	if(is_ps_mode) {
 		gRawData.ps_state= !((gRawData.raw_bytes[0] & 0x04) >> 2);
-		
-		
+		//FAR: gRawData.ps_state=1
+		//NEAR: gRawData.ps_state=0
 
-		
+		/*read channel 1 raw data*/
 		epl88051_I2C_Write(client, REG_16, R_TWO_BYTE, 0x01, 0x00);
 		epl88051_I2C_Read(client);
-#ifdef PS_RAW_8BIT 
+#ifdef PS_RAW_8BIT //ices add by 20131230 /*PS_RAW_8BIT*/
 		if (gRawData.raw_bytes[1] >= (uint8_t) (epld->emmc_ps_kadc2 & 0xFF))
-			gRawData.ps_raw = gRawData.raw_bytes[1] - (uint8_t) (epld->emmc_ps_kadc2 & 0xFF);  
+			gRawData.ps_raw = gRawData.raw_bytes[1] - (uint8_t) (epld->emmc_ps_kadc2 & 0xFF);  //8bit
 		else
 			gRawData.ps_raw = 0;
 		epl_ps_raw_data = gRawData.raw_bytes[1];
 #else
 		if (((gRawData.raw_bytes[1] << 8) | gRawData.raw_bytes[0]) >= (uint8_t) epld->emmc_ps_kadc2)
-			gRawData.ps_raw = ((gRawData.raw_bytes[1] << 8) | gRawData.raw_bytes[0]) - (uint8_t) epld->emmc_ps_kadc2; 
+			gRawData.ps_raw = ((gRawData.raw_bytes[1] << 8) | gRawData.raw_bytes[0]) - (uint8_t) epld->emmc_ps_kadc2; //16bit
 		else
 			gRawData.ps_raw = 0;
 		epl_ps_raw_data = (gRawData.raw_bytes[1] << 8) | gRawData.raw_bytes[0];
-#endif  
+#endif  //ices end by 20131230 /*PS_RAW_8BIT*/
 	}
 
 	LOG_INFO("[PS] %s proximity %s ps_raw_data: %d\n", __FUNCTION__, gRawData.ps_state ? "FAR" : "NEAR", gRawData.ps_raw);
@@ -504,15 +635,15 @@ static void epl88051_dyna_thd_read_ps(void)
 	struct epl88051_priv *epld = epl88051_obj;
 	struct i2c_client *client = epld->client;
 	uint8_t setting;
-#if 1 
+#if 1 //ices add by 20140812
     bool enable_ps = epld->enable_pflag == 1 && epld->ps_suspend == 0;
 	bool enable_als = epld->enable_lflag == 1 && epld->als_suspend == 0;
 
     LOG_INFO("[%s]: enable_ps=%d, enable_als=%d \r\n", __func__, enable_ps, enable_als);
-#endif 
-	if(enable_ps == 1 && enable_als == 0) 
-	{ 
-		
+#endif //ices end by 20140812
+	if(enable_ps == 1 && enable_als == 0) //ices add by 20140812
+	{ //ices add by 20140812
+		/*read ps state*/
 		epl88051_I2C_Write(epld->client, REG_13, R_SINGLE_BYTE, 0x01, 0);
 		epl88051_I2C_Read(epld->client);
 		setting = gRawData.raw_bytes[0];
@@ -520,42 +651,42 @@ static void epl88051_dyna_thd_read_ps(void)
 			LOG_ERR("read ps data in wrong mode\n");
 		}
 		gRawData.ps_state= !((gRawData.raw_bytes[0] & 0x04) >> 2);
-#if 1 
+#if 1 //ices add by 20140812
 		gRawData.con_sat = (gRawData.raw_bytes[0] >> 1) & 0x01;
-#endif 
+#endif //ices end by 20140812
 
-	}
+	}//ices add by 20140812
 
-	
-	
-	if(enable_ps == 1 && enable_als == 0)
-	{ 
+	//FAR: gRawData.ps_state=1
+	//NEAR: gRawData.ps_state=0
+	if(enable_ps == 1 && enable_als == 0)//ices add by 20140812
+	{ //ices add by 20140812
 
-#if 1 
-		
+#if 1 //ices add by 20140814
+		/*read channel 0 raw data*/
 		epl88051_I2C_Write(client, REG_14, R_TWO_BYTE, 0x01, 0x00);
 		epl88051_I2C_Read(client);
 		gRawData.ps_ch0_raw = (gRawData.raw_bytes[1] << 8) | gRawData.raw_bytes[0];
-#endif 
+#endif //ices end by 20140814
 
-		
+		/*read channel 1 raw data*/
 		epl88051_I2C_Write(client, REG_16, R_TWO_BYTE, 0x01, 0x00);
 		epl88051_I2C_Read(client);
-#ifdef PS_RAW_8BIT 
+#ifdef PS_RAW_8BIT //ices add by 20131230 /*PS_RAW_8BIT*/
 		if (gRawData.raw_bytes[1] >= (uint8_t) (epld->emmc_ps_kadc2 & 0xFF))
-			gRawData.ps_raw = gRawData.raw_bytes[1] - (uint8_t) (epld->emmc_ps_kadc2 & 0xFF);  
+			gRawData.ps_raw = gRawData.raw_bytes[1] - (uint8_t) (epld->emmc_ps_kadc2 & 0xFF);  //8bit
 		else
 			gRawData.ps_raw = 0;
 		epl_ps_raw_data = gRawData.raw_bytes[1];
 #else
 		if (((gRawData.raw_bytes[1] << 8) | gRawData.raw_bytes[0]) >= (uint8_t) epld->emmc_ps_kadc2)
-			gRawData.ps_raw = ((gRawData.raw_bytes[1] << 8) | gRawData.raw_bytes[0]) - (uint8_t) epld->emmc_ps_kadc2; 
+			gRawData.ps_raw = ((gRawData.raw_bytes[1] << 8) | gRawData.raw_bytes[0]) - (uint8_t) epld->emmc_ps_kadc2; //16bit
 		else
 			gRawData.ps_raw = 0;
 		epl_ps_raw_data = (gRawData.raw_bytes[1] << 8) | gRawData.raw_bytes[0];
-#endif  
-	}   
-#if 1 
+#endif  //ices end by 20131230 /*PS_RAW_8BIT*/
+	}   //ices add by 20140812
+#if 1 //ices add by 20140812
 	else
 	{
 #ifdef PS_RAW_8BIT
@@ -564,7 +695,7 @@ static void epl88051_dyna_thd_read_ps(void)
 		epl_ps_raw_data = gRawData.ps_raw + (uint8_t) epld->emmc_ps_kadc2;
 #endif
 	}
-#endif 
+#endif //ices end by 20140812
 
 	LOG_INFO("[PS] %s proximity %s ps_raw_data: %d\n", __FUNCTION__, gRawData.ps_state ? "FAR" : "NEAR", gRawData.ps_raw);
 
@@ -580,8 +711,8 @@ uint32_t raw_convert_to_lux(u16 raw_data)
 {
 	uint32_t lux = 0;
 
-	
-	
+	// 42 = 15 * 2.8
+	// 2.8 is for leverage capella's adc range(a3)
 	if ((gRawData.als_ch1_raw * 42 / als_dynamic_intt_intt_value[dynamic_intt_idx]) > 65535)
 		gRawData.als_raw = 65535;
 	else
@@ -611,11 +742,11 @@ static void epl88051_read_als(void)
 	if (((now_gain >> 3) & 7) != 0x00) {
 		LOG_ERR("read als data in wrong mode %d\n", (now_gain >> 3) & 7);
 	}
-	
+	/*ambient channel*/
 	epl88051_I2C_Write(client, REG_16, R_TWO_BYTE, 0x01, 0x00);
 	epl88051_I2C_Read(client);
 	ch1 = (gRawData.raw_bytes[1] << 8) | gRawData.raw_bytes[0];
-	
+	/*ambient IR channel*/
 	epl88051_I2C_Write(client, REG_14, R_TWO_BYTE, 0x01, 0x00);
 	epl88051_I2C_Read(client);
 	ch0 = (gRawData.raw_bytes[1] << 8) | gRawData.raw_bytes[0];
@@ -624,7 +755,7 @@ static void epl88051_read_als(void)
 		LOG_ERR("read ch0 data is 0 \r\n");
 	}
 
-	luxratio = (long)((ch1*dynamic_intt_min_unit) / (ch0)); 
+	luxratio = (long)((ch1*dynamic_intt_min_unit) / (ch0)); //lux ratio (A=CH1/CH0)
 
 	gRawData.ratio = luxratio;
 
@@ -634,7 +765,7 @@ static void epl88051_read_als(void)
 	} else if (gRawData.ratio < epld->lsource_thd_low || gRawData.ratio == epld->lsource_thd_low) {
 		c_gain = epld->c_gain_l;
 		ratio_flag = 1;
-	} else { 
+	} else { /*mix*/
 		int a = 0, b = 0;
 		a = (epld->c_gain_h - epld->c_gain_l) * dynamic_intt_min_unit / (epld->lsource_thd_high - epld->lsource_thd_low);
 		b = (epld->c_gain_h) - ((a * epld->lsource_thd_high) / dynamic_intt_min_unit );
@@ -667,28 +798,28 @@ static void epl88051_read_als(void)
 				lux_temp = raw_convert_to_lux(gRawData.als_ch0_raw);
 			}
 
-			
+			//LOG_INFO("[LS] %s>>>>>>>>>>>>>>>>>>>>>>>> INTT_MAX_LUX\r\n", __FUNCTION__);
 		} else {
 			gRawData.als_ch1_raw = dynamic_intt_high_thr;
 			lux_temp = raw_convert_to_lux(gRawData.als_ch1_raw);
 			dynamic_intt_idx++;
-			
+			//LOG_INFO("[LS] %s>>>>>>>>>>>>>>>>>>>>>>>> change INTT high: %d, raw: %d \r\n", __FUNCTION__, dynamic_intt_idx, gRawData.als_ch1_raw);
 		}
 	} else if (gRawData.als_ch1_raw < dynamic_intt_low_thr) {
 		if (dynamic_intt_idx == 0) {
 			lux_temp = raw_convert_to_lux(gRawData.als_ch1_raw);
-			
+			//LOG_INFO("[LS] %s>>>>>>>>>>>>>>>>>>>>>>>> INTT_MIN_LUX\r\n", __FUNCTION__);
 		} else {
 			gRawData.als_ch1_raw = dynamic_intt_low_thr;
 			lux_temp = raw_convert_to_lux(gRawData.als_ch1_raw);
 			dynamic_intt_idx--;
-			
+			//LOG_INFO("[LS] %s>>>>>>>>>>>>>>>>>>>>>>>> change INTT low: %d, raw: %d \r\n", __FUNCTION__, dynamic_intt_idx, gRawData.als_ch1_raw);
 		}
 	} else {
 		lux_temp = raw_convert_to_lux(gRawData.als_ch1_raw);
 	}
 	if (!epld->ls_calibrate) {
-		als_step_temp = gRawData.als_raw;
+		als_step_temp = gRawData.als_raw;//ch1;
 		gRawData.als_raw = als_step_temp * epld->als_gadc / epld->als_kadc;
 		if((gRawData.als_raw * epld->als_kadc) < (als_step_temp * epld->als_gadc)) {
 			gRawData.als_raw++;
@@ -704,7 +835,7 @@ static void epl88051_read_als(void)
 			if (*(epld->adc_table + i))
 				break;
 		}
-		if (i == 9) {
+		if (i == 9) {/*avoid  i = 10, because 'cali_table' of size is 10 */
 			gRawData.als_level = i;
 			break;
 		}
@@ -722,7 +853,7 @@ static void epl88051_read_hs(void)
 	struct epl88051_priv *epld = epl88051_obj;
 	struct i2c_client *client = epld->client;
 	u16 data;
-	
+	//    int max_frame = HS_BUFFER_SIZE;
 	int idx = start_idx+hs_count;
 	mutex_lock(&sensor_mutex);
 	epl88051_I2C_Write(client, REG_16, R_EIGHT_BYTE, 0x01, 0x00);
@@ -749,6 +880,13 @@ static void epl88051_read_hs(void)
 	mutex_unlock(&sensor_mutex);
 }
 
+/*
+//====================epl88051_set_ps_threshold===============//
+//low_thd: The value is psensor interrupt low threshold.
+//high_thd:	The value is psensor interrupt hihg threshold.
+//When psensor rawdata > hihg_threshold, interrupt pin will be pulled low.
+//After interrupt occur, psensor rawdata < low_threshold, interrupt pin will be pulled high.
+ */
 static int epl88051_set_ps_threshold(uint16_t low_thd, uint16_t high_thd)
 
 {
@@ -763,7 +901,7 @@ static int epl88051_set_ps_threshold(uint16_t low_thd, uint16_t high_thd)
 	high_thd_l = high_thd & 0xFF;
 	low_thd_h = (low_thd >> 8) & 0xFF;
 	low_thd_l = low_thd & 0xFF;
-#ifdef PS_RAW_8BIT 
+#ifdef PS_RAW_8BIT //ices add by 20131230 /*PS_RAW_8BIT*/
 	LOG_INFO("[PS] %s high_thd_l:%d, low_thd_l:%d\n", __FUNCTION__, high_thd_l, low_thd_l);
 	epl88051_I2C_Write(client,REG_2, W_SINGLE_BYTE, 0x02, 0);
 	epl88051_I2C_Write(client,REG_3, W_SINGLE_BYTE, 0x02, high_thd_l);
@@ -774,24 +912,24 @@ static int epl88051_set_ps_threshold(uint16_t low_thd, uint16_t high_thd)
 	epl88051_I2C_Write(client,REG_3, W_SINGLE_BYTE, 0x02, high_thd_h);
 	epl88051_I2C_Write(client,REG_4, W_SINGLE_BYTE, 0x02, low_thd_l);
 	epl88051_I2C_Write(client,REG_5, W_SINGLE_BYTE, 0x02, low_thd_h);
-#endif 
+#endif //ices end by 20131230 /*PS_RAW_8BIT*/
 	return ret;
 }
 static void epl88051_dyna_thd_polling_work(struct work_struct *work)
 {
 	struct epl88051_priv *epld = epl88051_obj;
-#if 1 
+#if 1 //ices add by 20140812
     bool enable_ps = epld->enable_pflag == 1 && epld->ps_suspend == 0;
 	bool enable_als = epld->enable_lflag == 1 && epld->als_suspend == 0;
     LOG_INFO("[%s]: enable_ps=%d, enable_als=%d \r\n", __FUNCTION__, enable_ps, enable_als);
 	if (psensor_enabled == 1 && enable_ps == 1) {
 #else
     if (psensor_enabled == 1) {
-#endif 
+#endif //ices end by 20140812
 		epl88051_dyna_thd_read_ps();
 		LOG_INFO("[PS] epl_ps_raw_data:%d, min_epl_ps_raw_data:%d\n", epl_ps_raw_data, min_epl_ps_raw_data);
 		if (epl_ps_raw_data != 0) {
-			if ((min_epl_ps_raw_data > epl_ps_raw_data) && gRawData.con_sat == 0 && gRawData.ps_ch0_raw < epld->ps_max_ch0) { 
+			if ((min_epl_ps_raw_data > epl_ps_raw_data) && gRawData.con_sat == 0 && gRawData.ps_ch0_raw < epld->ps_max_ch0) { //ices add by 20140812
 				min_epl_ps_raw_data = epl_ps_raw_data;
 				epld->ps_threshold_low = min_epl_ps_raw_data + TH_ADD;
 				epld->ps_threshold_high = epld->ps_threshold_low + epld->ps_threshold_diff;
@@ -801,10 +939,10 @@ static void epl88051_dyna_thd_polling_work(struct work_struct *work)
 					epld->ps_threshold_high = 255;
 				LOG_INFO("[PS] set low thd:%d  .........................\n", epld->ps_threshold_low);
 
-                if(enable_ps == 1 && enable_als == 0) 
-                { 
+                if(enable_ps == 1 && enable_als == 0) //ices add by 20140812
+                { //ices add by 20140812
 				    epl88051_set_ps_threshold(epld->ps_threshold_low, epld->ps_threshold_high);
-                } 
+                } //ices add by 20140812
 			}
 		}
 		queue_delayed_work(epld->epl_wq, &dyna_thd_polling_work,
@@ -820,7 +958,7 @@ static void epl88051_polling_work(struct work_struct *work)
 	bool enable_als = epld->enable_lflag == 1 && epld->als_suspend == 0;
 	bool enable_hs = epld->enable_hflag == 1 && epld->hs_suspend == 0;
 
-	
+	//LOG_INFO("%s enable_pflag = %d, enable_lflag = %d \n", __FUNCTION__, enable_ps, enable_als);
 
 	cancel_delayed_work(&polling_work);
 	if (enable_als == true) {
@@ -837,11 +975,11 @@ static void epl88051_polling_work(struct work_struct *work)
 		}
 	} else {
 		if (enable_als) {
-			
+			/*enable ALS*/
 			epl88051_lsensor_enable(epld);
-			
+			/*read als*/
 			epl88051_read_als();
-			
+			/*report als event*/
 #ifdef outputLUX
 			input_report_abs(epld->als_input_dev, ABS_MISC, gRawData.als_lux);
 #else
@@ -851,9 +989,9 @@ static void epl88051_polling_work(struct work_struct *work)
 		}
 
 		if (enable_ps) {
-			
+			/*enable psensor*/
 			epl88051_psensor_enable(epld);
-			
+			/*reading psensor if ps is polling mode*/
 			if (epld->polling_mode_ps == 1) {
 				epl88051_read_ps();
 			}
@@ -869,7 +1007,9 @@ static void epl88051_polling_work(struct work_struct *work)
 	}
 
 }
+/*----------------------------------------------------------------------------*/
 
+/*----------------------------------------------------------------------------*/
 static irqreturn_t epl88051_eint_func(int irqNo, void *handle)
 {
 	struct epl88051_priv *epld = (struct epl88051_priv*) handle;
@@ -889,22 +1029,22 @@ static void epl88051_eint_work(struct work_struct *work)
 		epl88051_read_hs();
 		epl88051_hs_enable(epld, true, true);
 	} else if (epld->enable_pflag) {
-		
+		/*check  comparator*/
 		epl88051_I2C_Write(client, REG_13, R_SINGLE_BYTE, 0x01, 0);
 		epl88051_I2C_Read(client);
 		mode = (gRawData.raw_bytes[0] >> 3) & 7;
 
 		if (mode == 0x01 && epld->enable_pflag) {
-			
+			/*read ps*/
 			epl88051_read_ps();
 		} else {
 			LOG_ERR("error: interrupt in ps\n");
 		}
 
-		
+		/*enable interrupt mode, active-low*/
 		epl88051_I2C_Write(client, REG_6, W_SINGLE_BYTE, 0x02, EPL_INT_CH1 | EPL_INT_ACTIVE_LOW);
 
-		
+		/*data unlock*/
 		epl88051_I2C_Write(client, REG_8, W_SINGLE_BYTE, 0x02, EPL_DATA_UNLOCK);
 	}
 
@@ -946,11 +1086,11 @@ static ssize_t ls_adc_show(struct device *dev,
 {
 	int ret;
 	struct epl88051_priv *epld = epl88051_obj;
-	
+	/*Todo: set levels */
 
 	if (epld->enable_lflag == 0 && epld->enable_pflag == 0) {
 		epl88051_lsensor_enable(epld);
-		
+		/*read als*/
 		epl88051_read_als();
 	} else {
 		epld->enable_lflag = 1;
@@ -1006,6 +1146,7 @@ static ssize_t ls_enable_store(struct device *dev,
 
 static DEVICE_ATTR(ls_auto, 0664, ls_enable_show, ls_enable_store);
 
+/*----------------------------------------------------------------------------*/
 static ssize_t epl88051_show_reg(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	ssize_t len = 0;
@@ -1031,6 +1172,7 @@ static ssize_t epl88051_show_reg(struct device *dev, struct device_attribute *at
 	return len;
 }
 static DEVICE_ATTR(elan_reg, 0644, epl88051_show_reg, NULL);
+/*show sensor status ---------------------------------------------------------*/
 static ssize_t epl88051_show_status(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	size_t len = 0;
@@ -1056,6 +1198,7 @@ static ssize_t epl88051_show_status(struct device *dev, struct device_attribute 
 }
 static DEVICE_ATTR(elan_status, 0664, epl88051_show_status, NULL);
 
+/*Setting integration time for ALS mode---------------------------------------*/
 static ssize_t epl88051_store_als_int_time(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
 	int input = 0;
@@ -1068,6 +1211,7 @@ static ssize_t epl88051_store_als_int_time(struct device *dev, struct device_att
 }
 
 static DEVICE_ATTR(als_int_time, 0664, NULL, epl88051_store_als_int_time);
+/*show ps calibration raw data------------------------------------------------*/
 static ssize_t epl88051_show_ps_cal_raw(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct epl88051_priv *obj = epl88051_obj;
@@ -1088,7 +1232,7 @@ static ssize_t epl88051_show_ps_cal_raw(struct device *dev, struct device_attrib
 			epl88051_I2C_Write(obj->client, REG_8, W_SINGLE_BYTE, 0x02, EPL_DATA_LOCK);
 			epl88051_I2C_Write(obj->client, REG_16, R_TWO_BYTE, 0x01, 0x00);
 			epl88051_I2C_Read(obj->client);
-#ifdef PS_RAW_8BIT 
+#ifdef PS_RAW_8BIT //ices add by 20131230 /*PS_RAW_8BIT*/
 			ch1_all = ch1_all + gRawData.raw_bytes[1];
 #else
 			ch1_all = ch1_all + ((gRawData.raw_bytes[1] << 8) | gRawData.raw_bytes[0]);
@@ -1105,6 +1249,7 @@ static ssize_t epl88051_show_ps_cal_raw(struct device *dev, struct device_attrib
 }
 static DEVICE_ATTR(ps_cal_raw, 0664, epl88051_show_ps_cal_raw, NULL);
 
+/*Setting ps integration time ---------------------------------------------------------*/
 static ssize_t epl88051_store_ps_int_time(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
 	LOG_FUN();
@@ -1115,6 +1260,7 @@ static ssize_t epl88051_store_ps_int_time(struct device *dev, struct device_attr
 }
 static DEVICE_ATTR(ps_int_time, 0664, NULL, epl88051_store_ps_int_time);
 
+/*Setting ps H/L threshold ------------------------------------------------------------*/
 static ssize_t epl88051_store_ps_threshold(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
 	struct epl88051_priv *epld = epl88051_obj;
@@ -1126,6 +1272,7 @@ static ssize_t epl88051_store_ps_threshold(struct device *dev, struct device_att
 }
 static DEVICE_ATTR(ps_threshold, 0664, NULL, epl88051_store_ps_threshold);
 
+/*Setting ps polling mode(0: interrupt, 1: polling) ----------------------------------*/
 static ssize_t epl88051_store_ps_polling_mode(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
 	struct epl88051_priv *epld = epl88051_obj;
@@ -1140,7 +1287,7 @@ static ssize_t epl88051_store_ps_polling_mode(struct device *dev, struct device_
 }
 static DEVICE_ATTR(ps_polling_mode, 0664, NULL, epl88051_store_ps_polling_mode);
 
-#if 1 
+#if 1 //ices add by 20140812
 static ssize_t epl88051_store_ps_max_ch0(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
 	struct epl88051_priv *epld = epl88051_obj;
@@ -1153,7 +1300,7 @@ static ssize_t epl88051_store_ps_max_ch0(struct device *dev, struct device_attri
 	return count;
 }
 static DEVICE_ATTR(dyn_max_ps_ch0, 0664, NULL, epl88051_store_ps_max_ch0);
-#endif 
+#endif //ices end by 20140812
 
 static ssize_t epl88051_store_hs_enable(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
@@ -1184,7 +1331,7 @@ static ssize_t epl88051_show_hs_raws(struct device *dev, struct device_attribute
 	u16 *tmp = (u16*)buf;
 	u16 length = hs_count * 1;
 	int byte_count = 2 + length * 2;
-	int i = 0;
+	int i = 0;//, idx=0;
 	int start = 0;
 	mutex_lock(&sensor_mutex);
 	tmp[0] = length;
@@ -1220,20 +1367,20 @@ static ssize_t ps_adc_show(struct device *dev,
 		epl88051_psensor_enable(epl88051);
 		epl88051_dyna_thd_read_ps();
 	} else if (epl88051->enable_pflag == 1 && epl88051->enable_lflag == 0){
-		
+		/*read channel 1 raw data*/
 		epl88051_I2C_Write(epl88051->client, REG_16, R_TWO_BYTE, 0x01, 0x00);
 		epl88051_I2C_Read(epl88051->client);
-#ifdef PS_RAW_8BIT 
+#ifdef PS_RAW_8BIT //ices add by 20131230 /*PS_RAW_8BIT*/
 		if (gRawData.raw_bytes[1] >= (uint8_t) (epl88051->emmc_ps_kadc2 & 0xFF))
-			gRawData.ps_raw = gRawData.raw_bytes[1] - (uint8_t) (epl88051->emmc_ps_kadc2 & 0xFF);  
+			gRawData.ps_raw = gRawData.raw_bytes[1] - (uint8_t) (epl88051->emmc_ps_kadc2 & 0xFF);  //8bit
 		else
 			gRawData.ps_raw = 0;
 #else
 		if (((gRawData.raw_bytes[1]<<8) | gRawData.raw_bytes[0]) >= (uint8_t) epl88051->emmc_ps_kadc2)
-			gRawData.ps_raw = ((gRawData.raw_bytes[1]<<8) | gRawData.raw_bytes[0]) - (uint8_t) epl88051->emmc_ps_kadc2; 
+			gRawData.ps_raw = ((gRawData.raw_bytes[1]<<8) | gRawData.raw_bytes[0]) - (uint8_t) epl88051->emmc_ps_kadc2; //16bit
 		else
 			gRawData.ps_raw = 0;
-#endif  
+#endif  //ices end by 20131230 /*PS_RAW_8BIT*/
 
 	} else {
 		epl88051->enable_pflag = 1;
@@ -1408,7 +1555,7 @@ static long epl88051_als_ioctl(struct file *file, unsigned int cmd, unsigned lon
 	LOG_INFO("[LS] %s als io ctrl cmd %d\n", __FUNCTION__, _IOC_NR(cmd));
 
 	switch(cmd) {
-		
+		/*Get enable lightsensor flag*/
 		case ELAN_EPL6800_IOCTL_GET_LFLAG:
 		case LIGHTSENSOR_IOCTL_GET_ENABLED:
 
@@ -1419,7 +1566,7 @@ static long epl88051_als_ioctl(struct file *file, unsigned int cmd, unsigned lon
 
 			LOG_INFO("[LS] %s elan ambient-light Sensor get lflag %d\n", __FUNCTION__, flag);
 			break;
-			
+			/*Setting lightsensor enable and restart*/
 		case ELAN_EPL6800_IOCTL_ENABLE_LFLAG:
 		case LIGHTSENSOR_IOCTL_ENABLE:
 			LOG_INFO("[LS] %s elan ambient-light IOCTL Sensor set lflag \n", __FUNCTION__);
@@ -1439,7 +1586,7 @@ static long epl88051_als_ioctl(struct file *file, unsigned int cmd, unsigned lon
 
 			LOG_INFO("[LS] %s elan ambient-light Sensor set lflag %d\n", __FUNCTION__, flag);
 			break;
-			
+			/*Get lightsensor raw data*/
 		case ELAN_EPL6800_IOCTL_GETDATA:
 			buf[0] = (unsigned long)gRawData.als_ch1_raw;
 			if (copy_to_user(argp, &buf , sizeof(buf)))
@@ -1467,7 +1614,7 @@ static struct file_operations epl88051_als_fops =
 static struct miscdevice epl88051_als_device =
 {
 	.minor = MISC_DYNAMIC_MINOR,
-	.name = "lightsensor", 
+	.name = "lightsensor", //"elan_als",
 	.fops = &epl88051_als_fops
 };
 
@@ -1503,10 +1650,10 @@ static long epl88051_ps_ioctl(struct file *file, unsigned int cmd, unsigned long
 
 	LOG_INFO("[PS] %s ps io ctrl cmd %d\n", __FUNCTION__, _IOC_NR(cmd));
 
-	
+	//ioctl message handle must define by android sensor library (case by case)
 	switch(cmd) {
-		
-		
+		/*Get enable psensor flag*/
+		//case ELAN_EPL6800_IOCTL_GET_PFLAG:
 		case CAPELLA_CM3602_IOCTL_GET_ENABLED:
 			LOG_INFO("[PS] %s elan Proximity Sensor IOCTL get pflag \n", __FUNCTION__);
 			flag = epld->enable_pflag;
@@ -1515,8 +1662,8 @@ static long epl88051_ps_ioctl(struct file *file, unsigned int cmd, unsigned long
 
 			LOG_INFO("[PS] %s elan Proximity Sensor get pflag %d\n", __FUNCTION__, flag);
 			break;
-		
-		
+		/*Setting psensor enable and restart*/
+		//case ELAN_EPL6800_IOCTL_ENABLE_PFLAG:
 		case CAPELLA_CM3602_IOCTL_ENABLE:
 			LOG_INFO("[PS] %s elan Proximity IOCTL Sensor set pflag \n", __FUNCTION__);
 			if (copy_from_user(&flag, argp, sizeof(flag)))
@@ -1542,8 +1689,8 @@ static long epl88051_ps_ioctl(struct file *file, unsigned int cmd, unsigned long
 				LOG_INFO("[PS] default report FAR ");
 				input_report_abs(epld->ps_input_dev, ABS_DISTANCE, 1);
 				input_sync(epld->ps_input_dev);
-				
-			    
+				//queue_delayed_work(epld->epl_wq, &dyna_thd_polling_work,
+			    //                            msecs_to_jiffies(200)); //ices del by 20140812
 			}
 
 			if (!flag) {
@@ -1552,7 +1699,7 @@ static long epl88051_ps_ioctl(struct file *file, unsigned int cmd, unsigned long
 			}
 			LOG_INFO("[PS] %s elan Proximity Sensor set pflag %d\n", __FUNCTION__, flag);
 			break;
-		
+		/*Get psensor raw data*/
 		case ELAN_EPL6800_IOCTL_GETDATA:
 
 			value = gRawData.ps_raw;
@@ -1581,7 +1728,7 @@ static struct file_operations epl88051_ps_fops =
 static struct miscdevice epl88051_ps_device =
 {
 	.minor = MISC_DYNAMIC_MINOR,
-	.name = "cm3602", 
+	.name = "cm3602", //"elan_ps",
 	.fops = &epl88051_ps_fops
 };
 
@@ -1597,7 +1744,7 @@ static int epl88051_initial_sensor(struct epl88051_priv *epld)
 
 	if (ret < 0)
 		return -EINVAL;
-	
+	/* Setting single mode and disable interrupt mode */
 	epl88051_I2C_Write(client, REG_0, W_SINGLE_BYTE, 0x02, EPL_S_SENSING_MODE);
 	epl88051_I2C_Write(client, REG_6, W_SINGLE_BYTE, 0x02, EPL_INT_DISABLE);
 
@@ -1894,6 +2041,7 @@ static int fb_notifier_callback(struct notifier_block *self,
 		blank = evdata->data;
 		switch (*blank) {
 			case FB_BLANK_UNBLANK:
+//				sensor_lpm_power(0);
 				epld->als_suspend = 0;
 				epld->ps_suspend = 0;
 				epld->hs_suspend = 0;
@@ -1907,6 +2055,7 @@ static int fb_notifier_callback(struct notifier_block *self,
 			case FB_BLANK_VSYNC_SUSPEND:
 			case FB_BLANK_NORMAL:
 				if (epld->enable_pflag == 0) {
+//					sensor_lpm_power(1);
 					epld->als_suspend = 1;
 					epld->hs_suspend = 1;
 					epld->ps_suspend = 1;
@@ -2061,7 +2210,7 @@ static int epl88051_parse_dt(struct device *dev, struct epl88051_priv *pdata)
 
 	pdata->intr_pin = of_get_named_gpio_flags(dt, "epl88051,irq-gpio",
 			0, &pdata->irq_gpio_flags);
-	
+	//pdata->lpm_power = cm3629_sr_lpm;
 
 	return 0;
 
@@ -2129,7 +2278,7 @@ static int epl88051_probe(struct i2c_client *client,const struct i2c_device_id *
 	epld->ps_threshold_low = (uint8_t) ((epld->emmc_ps_kadc2 >> 16) & 0xFF) + (uint8_t) (epld->emmc_ps_kadc2 & 0xFF);
 	epld->ps_threshold_high = epld->ps_threshold_low + epld->ps_threshold_diff;
 	epld->polling_mode_ps = PS_POLLING_MODE;
-    epld->ps_max_ch0 = MAX_PS_CH0;  
+    epld->ps_max_ch0 = MAX_PS_CH0;  //ices add by 20140814
 
 	epl88051_obj = epld;
 
@@ -2140,21 +2289,21 @@ static int epl88051_probe(struct i2c_client *client,const struct i2c_device_id *
 		goto err_create_singlethread_workqueue;
 	}
 
-	
+	/*setup lightsensor*/
 	err = epl88051_setup_lsensor(epld);
 	if (err < 0) {
 		LOG_ERR("epl88051_setup_lsensor error!!\n");
 		goto err_lightsensor_setup;
 	}
 
-	
+	/*setup psensor*/
 	err = epl88051_setup_psensor(epld);
 	if (err < 0) {
 		LOG_ERR("epl88051_setup_psensor error!!\n");
 		goto err_psensor_setup;
 	}
 
-	
+	/*init sensor*/
 	err = epl88051_initial_sensor(epld);
 	if (err < 0) {
 		LOG_ERR("fail to initial sensor (%d)\n", err);
@@ -2162,7 +2311,7 @@ static int epl88051_probe(struct i2c_client *client,const struct i2c_device_id *
 	}
 
 	if (epld->polling_mode_ps == 0) {
-		
+		/*setup interrupt*/
 		err = epl88051_setup_interrupt(epld);
 		if (err < 0) {
 			LOG_ERR("setup error!\n");
@@ -2251,7 +2400,7 @@ static int epl88051_probe(struct i2c_client *client,const struct i2c_device_id *
 	err = device_create_file(epld->ps_dev, &dev_attr_ps_polling_mode);
 	if (err)
 		goto err_create_ps_device;
-#if 1 
+#if 1 //ices add by 20140812
     err = device_create_file(epld->ps_dev, &dev_attr_dyn_max_ps_ch0);
 	if (err)
 		goto err_create_ps_device;
@@ -2303,7 +2452,7 @@ err_sensor_setup:
 	misc_deregister(&epl88051_als_device);
 err_create_singlethread_workqueue:
 i2c_fail:
-	
+	//err_platform_data_null:
 	kfree(epld);
 	return err;
 }
@@ -2314,7 +2463,7 @@ static int epl88051_remove(struct i2c_client *client)
 
 	dev_dbg(&client->dev, "%s: enter.\n", __func__);
 
-	
+	//sysfs_remove_group(&sensor_dev->dev.kobj, &epl88051_attr_group);
 	platform_device_unregister(sensor_dev);
 	input_unregister_device(epld->als_input_dev);
 	input_unregister_device(epld->ps_input_dev);

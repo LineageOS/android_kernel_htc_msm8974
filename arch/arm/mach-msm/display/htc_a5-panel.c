@@ -9,21 +9,19 @@
 #include <mach/debug_display.h>
 #include "../../../../drivers/video/msm/mdss/mdss_dsi.h"
 
-#ifdef CONFIG_HTC_PNPMGR
-extern void set_screen_status(bool onoff);
-#endif
-
 #define PANEL_ID_A5_SHARP_HX           0
 #define PANEL_ID_A5_JDI_NT35521_C3     1
 #define PANEL_ID_A5_TRULY_NT35521      2
 #define PANEL_ID_A5_TRULY_CPT_HX8394D  3
 #define PANEL_ID_A5_TIANMA_HX8394D     4
 
+/* HTC: dsi_power_data overwrite the role of dsi_drv_cm_data
+   in mdss_dsi_ctrl_pdata structure */
 struct dsi_power_data {
-	uint32_t sysrev;
-	struct regulator *vddio;
+	uint32_t sysrev;         /* system revision info */
+	struct regulator *vddio; /* 1.8v */
 	struct regulator *vddpll;
-	struct regulator *vdda;
+	struct regulator *vdda;  /* 1.2v */
 
 	int lcmp5v;
 	int lcmn5v;
@@ -97,6 +95,7 @@ static int tps_65132_add_i2c(struct i2c_client *client)
 	struct i2c_adapter *adapter = client->adapter;
 	int idx;
 
+	/* "Hotplug" the MHL transmitter device onto the 2nd I2C bus  for BB-xM or 4th for pandaboard*/
 	i2c_bus_adapter = adapter;
 	if (i2c_bus_adapter == NULL) {
 		PR_DISP_ERR("%s() failed to get i2c adapter\n", __func__);
@@ -207,6 +206,15 @@ static int htc_a5_regulator_init(struct platform_device *pdev)
 		return PTR_ERR(pwrdata->vddpll);
 	}
 
+/*
+	ret = regulator_set_voltage(pwrdata->vddio, 1800000,
+	        1800000);
+	if (ret) {
+		pr_err("%s: set voltage failed on vddio vreg, rc=%d\n",
+			__func__, ret);
+		return ret;
+	}
+*/
 	pwrdata->vdda = devm_regulator_get(&pdev->dev, "vdda");
 	if (IS_ERR(pwrdata->vdda)) {
 		PR_DISP_ERR("%s: could not get vdda vreg, rc=%ld\n",
@@ -239,6 +247,9 @@ static int htc_a5_regulator_init(struct platform_device *pdev)
 
 static int htc_a5_regulator_deinit(struct platform_device *pdev)
 {
+	/* devm_regulator() will automatically free regulators
+	   while dev detach. */
+	/* nothing */
 	return 0;
 }
 
@@ -277,15 +288,15 @@ int htc_a5_panel_reset(struct mdss_panel_data *pdata, int enable)
 			return 0;
 		}
 
-		if (pdata->panel_info.panel_id == PANEL_ID_A5_SHARP_HX){
+		if (pdata->panel_info.panel_id == PANEL_ID_A5_SHARP_HX){//sharp panel
 			gpio_set_value((ctrl_pdata->rst_gpio), 1);
 			usleep_range(1000,1500);
 			gpio_set_value((ctrl_pdata->rst_gpio), 0);
 			usleep_range(1000,1500);
 			gpio_set_value((ctrl_pdata->rst_gpio), 1);
 			msleep(25);
-		} else if(pdata->panel_info.panel_id == PANEL_ID_A5_TRULY_CPT_HX8394D) {
-
+		} else if(pdata->panel_info.panel_id == PANEL_ID_A5_TRULY_CPT_HX8394D) {//truly_cpt_hx8394d panel
+			/*just after lp11*/
 			usleep_range(1000,1500);
 			gpio_set_value((ctrl_pdata->rst_gpio), 1);
 
@@ -298,8 +309,8 @@ int htc_a5_panel_reset(struct mdss_panel_data *pdata, int enable)
 			gpio_set_value(pwrdata->lcmn5v, 1);
 
 			usleep_range(170000,170500);
-		} else if(pdata->panel_info.panel_id == PANEL_ID_A5_TIANMA_HX8394D) {
-
+		} else if(pdata->panel_info.panel_id == PANEL_ID_A5_TIANMA_HX8394D) {//truly_cpt_hx8394d panel
+			/*just after lp11*/
 			usleep_range(1000,1500);
 			gpio_set_value((ctrl_pdata->rst_gpio), 1);
 
@@ -312,8 +323,8 @@ int htc_a5_panel_reset(struct mdss_panel_data *pdata, int enable)
 			gpio_set_value(pwrdata->lcmn5v, 1);
 
 			usleep_range(150000,150500);
-		} else {
-
+		} else {//jdi & truly_lgd_nt35521 panel
+			/*just after lp11*/
 			usleep_range(40000,40500);
 
 			gpio_set_value((ctrl_pdata->rst_gpio), 1);
@@ -356,7 +367,7 @@ static int htc_a5_panel_power_on(struct mdss_panel_data *pdata, int enable)
 	}
 
 	if (enable) {
-		if (pdata->panel_info.panel_id == PANEL_ID_A5_SHARP_HX){
+		if (pdata->panel_info.panel_id == PANEL_ID_A5_SHARP_HX){//sharp panel
 			ret = regulator_set_optimum_mode(pwrdata->vddio, 100000);
 			if (ret < 0) {
 				PR_DISP_ERR("%s: vddio set opt mode failed.\n",
@@ -378,6 +389,7 @@ static int htc_a5_panel_power_on(struct mdss_panel_data *pdata, int enable)
 				return ret;
 			}
 
+			/*enable 1v8*/
 			ret = regulator_enable(pwrdata->vddio);
 			if (ret) {
 				PR_DISP_ERR("%s: Failed to enable regulator.\n",
@@ -402,6 +414,7 @@ static int htc_a5_panel_power_on(struct mdss_panel_data *pdata, int enable)
 				return ret;
 			}
 
+			/*ENABLE 1V2*/
 			ret = regulator_enable(pwrdata->vdda);
 			if (ret) {
 				PR_DISP_ERR("%s: Failed to enable regulator.\n",
@@ -409,7 +422,7 @@ static int htc_a5_panel_power_on(struct mdss_panel_data *pdata, int enable)
 				return ret;
 			}
 
-		} else if(pdata->panel_info.panel_id == PANEL_ID_A5_TRULY_CPT_HX8394D) {
+		} else if(pdata->panel_info.panel_id == PANEL_ID_A5_TRULY_CPT_HX8394D) {//truly_cpt_hx8394d panel
 			ret = regulator_set_optimum_mode(pwrdata->vddio, 100000);
 			if (ret < 0) {
 				PR_DISP_ERR("%s: vddio set opt mode failed.\n",
@@ -432,6 +445,7 @@ static int htc_a5_panel_power_on(struct mdss_panel_data *pdata, int enable)
 				return ret;
 			}
 
+			/*enable 1v8*/
 			ret = regulator_enable(pwrdata->vddio);
 			if (ret) {
 				PR_DISP_ERR("%s: Failed to enable regulator.\n",
@@ -445,7 +459,7 @@ static int htc_a5_panel_power_on(struct mdss_panel_data *pdata, int enable)
 					__func__);
 				return ret;
 			}
-
+			/*ENABLE 1V2*/
 			ret = regulator_enable(pwrdata->vdda);
 			if (ret) {
 				PR_DISP_ERR("%s: Failed to enable regulator.\n",
@@ -453,7 +467,7 @@ static int htc_a5_panel_power_on(struct mdss_panel_data *pdata, int enable)
 				return ret;
 			}
 
-		} else if(pdata->panel_info.panel_id == PANEL_ID_A5_TIANMA_HX8394D) {
+		} else if(pdata->panel_info.panel_id == PANEL_ID_A5_TIANMA_HX8394D) {//tianma_hx8394d panel
 			ret = regulator_set_optimum_mode(pwrdata->vddio, 100000);
 			if (ret < 0) {
 				PR_DISP_ERR("%s: vddio set opt mode failed.\n",
@@ -475,6 +489,7 @@ static int htc_a5_panel_power_on(struct mdss_panel_data *pdata, int enable)
 				return ret;
 			}
 
+			/*enable 1v8*/
 			ret = regulator_enable(pwrdata->vddio);
 			if (ret) {
 				PR_DISP_ERR("%s: Failed to enable regulator.\n",
@@ -488,7 +503,7 @@ static int htc_a5_panel_power_on(struct mdss_panel_data *pdata, int enable)
 					__func__);
 				return ret;
 			}
-
+			/*ENABLE 1V2*/
 			ret = regulator_enable(pwrdata->vdda);
 			if (ret) {
 				PR_DISP_ERR("%s: Failed to enable regulator.\n",
@@ -496,7 +511,7 @@ static int htc_a5_panel_power_on(struct mdss_panel_data *pdata, int enable)
 				return ret;
 			}
 
-		} else {
+		} else {//jdi & truly_lgd_nt35521 panel
 			ret = regulator_set_optimum_mode(pwrdata->vddio, 100000);
 			if (ret < 0) {
 				PR_DISP_ERR("%s: vddio set opt mode failed.\n",
@@ -519,6 +534,7 @@ static int htc_a5_panel_power_on(struct mdss_panel_data *pdata, int enable)
 				return ret;
 			}
 
+			/*enable 1v8*/
 			ret = regulator_enable(pwrdata->vddio);
 			if (ret) {
 				PR_DISP_ERR("%s: Failed to enable regulator.\n",
@@ -542,7 +558,7 @@ static int htc_a5_panel_power_on(struct mdss_panel_data *pdata, int enable)
 					__func__);
 				return ret;
 			}
-
+			/*ENABLE 1V2*/
 			ret = regulator_enable(pwrdata->vdda);
 			if (ret) {
 				PR_DISP_ERR("%s: Failed to enable regulator.\n",
@@ -553,11 +569,12 @@ static int htc_a5_panel_power_on(struct mdss_panel_data *pdata, int enable)
 
 		gpio_set_value(pwrdata->lcm_bl_en, 1);
 	} else {
-		if(pdata->panel_info.panel_id == PANEL_ID_A5_TRULY_CPT_HX8394D) {
+		if(pdata->panel_info.panel_id == PANEL_ID_A5_TRULY_CPT_HX8394D) {//truly_cpt_hx8394d panel
 			gpio_set_value(pwrdata->lcm_bl_en, 0);
 			usleep_range(2000,2500);
 			htc_a5_panel_reset(pdata, 0);
 
+			/*disable 1v2*/
 			ret = regulator_disable(pwrdata->vdda);
 			if (ret) {
 				PR_DISP_ERR("%s: Failed to disable regulator.\n",
@@ -578,6 +595,7 @@ static int htc_a5_panel_power_on(struct mdss_panel_data *pdata, int enable)
 			gpio_set_value(pwrdata->lcmp5v, 0);
 			usleep_range(10000,10500);
 
+			/*disable 1v8*/
 			ret = regulator_disable(pwrdata->vddio);
 			if (ret) {
 				PR_DISP_ERR("%s: Failed to disable regulator.\n",
@@ -606,11 +624,12 @@ static int htc_a5_panel_power_on(struct mdss_panel_data *pdata, int enable)
 				return ret;
 			}
 
-		} else if(pdata->panel_info.panel_id == PANEL_ID_A5_TIANMA_HX8394D) {
+		} else if(pdata->panel_info.panel_id == PANEL_ID_A5_TIANMA_HX8394D) {//tianma_hx8394d panel
 			gpio_set_value(pwrdata->lcm_bl_en, 0);
 			usleep_range(2000,2500);
 			htc_a5_panel_reset(pdata, 0);
 
+			/*disable 1v2*/
 			ret = regulator_disable(pwrdata->vdda);
 			if (ret) {
 				PR_DISP_ERR("%s: Failed to disable regulator.\n",
@@ -631,6 +650,7 @@ static int htc_a5_panel_power_on(struct mdss_panel_data *pdata, int enable)
 			gpio_set_value(pwrdata->lcmp5v, 0);
 			usleep_range(10000,10500);
 
+			/*disable 1v8*/
 			ret = regulator_disable(pwrdata->vddio);
 			if (ret) {
 				PR_DISP_ERR("%s: Failed to disable regulator.\n",
@@ -664,6 +684,7 @@ static int htc_a5_panel_power_on(struct mdss_panel_data *pdata, int enable)
 			usleep_range(2000,2500);
 			htc_a5_panel_reset(pdata, 0);
 
+			/*disable 1v2*/
 			ret = regulator_disable(pwrdata->vdda);
 			if (ret) {
 				PR_DISP_ERR("%s: Failed to disable regulator.\n",
@@ -684,6 +705,7 @@ static int htc_a5_panel_power_on(struct mdss_panel_data *pdata, int enable)
 			gpio_set_value(pwrdata->lcmp5v, 0);
 			usleep_range(2000,2500);
 
+			/*disable 1v8*/
 			ret = regulator_disable(pwrdata->vddio);
 			if (ret) {
 				PR_DISP_ERR("%s: Failed to disable regulator.\n",
@@ -715,9 +737,6 @@ static int htc_a5_panel_power_on(struct mdss_panel_data *pdata, int enable)
 	}
 	PR_DISP_INFO("%s: en=%d done\n", __func__, enable);
 
-#ifdef CONFIG_HTC_PNPMGR
-       set_screen_status(enable);
-#endif
 	return 0;
 }
 

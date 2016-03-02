@@ -218,7 +218,7 @@ static int htc_nsd_open(struct inode *inode, struct file *file)
 		}
 	}
 	spin_unlock_irqrestore(&audio_nsd_info.lock, flags);
-	return 0;
+	return ret;
 }
 
 static int htc_nsd_release(struct inode *inode, struct file *file)

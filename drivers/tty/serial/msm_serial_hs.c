@@ -122,7 +122,7 @@ enum flush_reason {
 	FLUSH_NONE,
 	FLUSH_DATA_READY,
 	FLUSH_DATA_INVALID,  
-	FLUSH_IGNORE = FLUSH_DATA_INVALID,
+	FLUSH_IGNORE,
 	FLUSH_STOP,
 	FLUSH_SHUTDOWN,
 };
@@ -170,6 +170,7 @@ struct msm_hs_rx {
 	struct tasklet_struct tlet;
 	struct msm_hs_sps_ep_conn_data prod;
 	bool rx_cmd_queued;
+	bool rx_cmd_exec;
 };
 enum buffer_states {
 	NONE_PENDING = 0x0,
@@ -1010,6 +1011,11 @@ unsigned int msm_hs_tx_empty(struct uart_port *uport)
 	unsigned int ret = 0;
 	struct msm_hs_port *msm_uport = UARTDM_TO_MSM(uport);
 
+	if (msm_uport->clk_state == MSM_HS_CLK_PORT_OFF) {
+		MSM_HS_ERR("%s:UART port is closed\n", __func__);
+		return -EPERM;
+	}
+
 	msm_hs_clock_vote(msm_uport);
 	data = msm_hs_read(uport, UART_DM_SR);
 	msm_hs_clock_unvote(msm_uport);
@@ -1065,7 +1071,7 @@ static void msm_hs_stop_rx_locked(struct uart_port *uport)
 	unsigned int data;
 
 	MSM_HS_DBG("In %s():\n", __func__);
-	if (msm_uport->clk_state == MSM_HS_CLK_ON) {
+	if (msm_uport->clk_state != MSM_HS_CLK_OFF) {
 		
 		data = msm_hs_read(uport, UART_DM_DMEN);
 		data &= ~UARTDM_RX_BAM_ENABLE_BMSK;
@@ -1153,6 +1159,12 @@ static void msm_hs_start_rx_locked(struct uart_port *uport)
 
 	if (msm_uport->clk_state != MSM_HS_CLK_ON) {
 		MSM_HS_WARN("%s: Failed.Clocks are OFF\n", __func__);
+		return;
+	}
+	if (rx->rx_cmd_exec) {
+		MSM_HS_DBG("%s: Rx Cmd got executed, wait for rx_tlet\n",
+								 __func__);
+		rx->flush = FLUSH_IGNORE;
 		return;
 	}
 	msm_uport->rx.buffer_pending = 0;
@@ -1271,6 +1283,7 @@ static void msm_serial_hs_rx_tlet(unsigned long tlet_ptr)
 	pdata = pdev->dev.platform_data;
 
 	msm_uport->rx.rx_cmd_queued = false;
+	msm_uport->rx.rx_cmd_exec = false;
 
 	status = msm_hs_read(uport, UART_DM_SR);
 
@@ -1380,6 +1393,7 @@ static void msm_hs_start_tx_locked(struct uart_port *uport )
 
 	if (msm_uport->clk_state != MSM_HS_CLK_ON) {
 		MSM_HS_WARN("%s: Failed.Clocks are OFF\n", __func__);
+		return;
 	}
 	if ((msm_uport->tx.tx_ready_int_en == 0) &&
 		(msm_uport->tx.dma_in_flight == 0))
@@ -1463,6 +1477,7 @@ static void msm_hs_sps_rx_callback(struct sps_event_notify *notify)
 	if (msm_uport->rx.flush == FLUSH_NONE) {
 		spin_lock_irqsave(&uport->lock, flags);
 		msm_uport->rx_count_callback = notify->data.transfer.iovec.size;
+		msm_uport->rx.rx_cmd_exec = true;
 		spin_unlock_irqrestore(&uport->lock, flags);
 		tasklet_schedule(&msm_uport->rx.tlet);
 	}
@@ -1507,6 +1522,10 @@ void msm_hs_set_mctrl(struct uart_port *uport,
 {
 	unsigned long flags;
 	struct msm_hs_port *msm_uport = UARTDM_TO_MSM(uport);
+	if (msm_uport->clk_state == MSM_HS_CLK_PORT_OFF) {
+		MSM_HS_ERR("%s:UART port is closed\n", __func__);
+		return ;
+	}
 
 	msm_hs_clock_vote(msm_uport);
 	spin_lock_irqsave(&uport->lock, flags);
@@ -1779,6 +1798,10 @@ void msm_hs_request_clock_off(struct uart_port *uport) {
 	struct msm_hs_port *msm_uport = UARTDM_TO_MSM(uport);
 	int data;
 
+	if (msm_uport->clk_state == MSM_HS_CLK_PORT_OFF) {
+		MSM_HS_ERR("%s:UART port is closed\n", __func__);
+		return ;
+	}
 	spin_lock_irqsave(&uport->lock, flags);
 	if (msm_uport->clk_state == MSM_HS_CLK_ON) {
 		msm_uport->clk_state = MSM_HS_CLK_REQUEST_OFF;
@@ -1807,6 +1830,11 @@ void msm_hs_request_clock_on(struct uart_port *uport)
 	unsigned long flags;
 	unsigned int data;
 	int ret = 0;
+
+	if (msm_uport->clk_state == MSM_HS_CLK_PORT_OFF) {
+		MSM_HS_ERR("%s:UART port is closed\n", __func__);
+		return ;
+	}
 
 	mutex_lock(&msm_uport->clk_mutex);
 	spin_lock_irqsave(&uport->lock, flags);
@@ -1881,6 +1909,8 @@ void msm_hs_request_clock_on(struct uart_port *uport)
 	case MSM_HS_CLK_ON:
 		break;
 	case MSM_HS_CLK_PORT_OFF:
+		MSM_HS_ERR("%s:Clock ON failed;UART Port is Closed\n",
+								__func__);
 		break;
 	}
 
@@ -2106,6 +2136,7 @@ static int msm_hs_startup(struct uart_port *uport)
 	
 	tx->tx_ready_int_en = 0;
 	tx->dma_in_flight = 0;
+	rx->rx_cmd_exec = false;
 
 	
 	msm_uport->imr_reg |= UARTDM_ISR_CURRENT_CTS_BMSK;
@@ -2537,6 +2568,11 @@ static int __devinit msm_hs_probe(struct platform_device *pdev)
 
 	msm_uport = devm_kzalloc(&pdev->dev, sizeof(struct msm_hs_port),
 			GFP_KERNEL);
+	if (!msm_uport) {
+		MSM_HS_ERR("Memory allocation failed\n");
+		return -ENOMEM;
+	}
+
 	msm_uport->uport.type = PORT_UNKNOWN;
 	uport = &msm_uport->uport;
 	uport->dev = &pdev->dev;
@@ -2592,7 +2628,11 @@ static int __devinit msm_hs_probe(struct platform_device *pdev)
 
 	uport->irq = core_irqres;
 	msm_uport->bam_irq = bam_irqres;
-	pdata->wakeup_irq = wakeup_irqres;
+	
+	if (pdata != NULL) {
+		pdata->wakeup_irq = wakeup_irqres;
+	}
+	
 
 	msm_uport->bus_scale_table = msm_bus_cl_get_pdata(pdev);
 	if (!msm_uport->bus_scale_table) {
@@ -2689,15 +2729,16 @@ static int __devinit msm_hs_probe(struct platform_device *pdev)
 	msm_hs_write(uport, UART_DM_MR2, data);
 	mb();
 
-	msm_uport->clk_state = MSM_HS_CLK_PORT_OFF;
 	hrtimer_init(&msm_uport->clk_off_timer, CLOCK_MONOTONIC,
 		     HRTIMER_MODE_REL);
 	msm_uport->clk_off_timer.function = msm_hs_clk_off_retry;
 	msm_uport->clk_off_delay = ktime_set(0, 1000000);  
 
 	ret = sysfs_create_file(&pdev->dev.kobj, &dev_attr_clock.attr);
-	if (unlikely(ret))
+	if (unlikely(ret)) {
+		MSM_HS_ERR("Probe Failed as sysfs failed\n");
 		goto err_clock;
+	}
 
 	msm_serial_debugfs_init(msm_uport, pdev->id);
 
@@ -2707,6 +2748,7 @@ static int __devinit msm_hs_probe(struct platform_device *pdev)
 	ret = uart_add_one_port(&msm_hs_driver, uport);
 	if (!ret) {
 		msm_hs_clock_unvote(msm_uport);
+		msm_uport->clk_state = MSM_HS_CLK_PORT_OFF;
 		return ret;
 	}
 
@@ -2738,7 +2780,7 @@ static int __init msm_serial_hs_init(void)
 	int ret;
 
 	ipc_msm_hs_log_ctxt = ipc_log_context_create(IPC_MSM_HS_LOG_PAGES,
-							"msm_serial_hs");
+							"msm_serial_hs", 0);
 	if (!ipc_msm_hs_log_ctxt)
 		MSM_HS_WARN("%s: error creating logging context", __func__);
 

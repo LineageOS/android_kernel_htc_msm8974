@@ -17,6 +17,9 @@ the GNU General Public License for more details at http://www.gnu.org/licenses/g
    @file si_mhl_defs.h
  */
 
+//
+// This file contains MHL Specs related definitions.
+//
 /*
  * DEVCAP offsets
  */
@@ -44,7 +47,7 @@ typedef enum
 }DevCapOffset_e;
 
 
-SI_PUSH_STRUCT_PACKING 
+SI_PUSH_STRUCT_PACKING //(
 typedef struct SI_PACK_THIS_STRUCT _MHLDevCap_t
 {
 	uint8_t state;
@@ -70,17 +73,20 @@ typedef union
 	MHLDevCap_t mdc;
 	uint8_t     devcap_cache[DEVCAP_SIZE];
 }MHLDevCap_u,*PMHLDevCap_u;
-SI_POP_STRUCT_PACKING 
+SI_POP_STRUCT_PACKING //)
 
+// Device Power State
 #define MHL_DEV_UNPOWERED		0x00
 #define MHL_DEV_INACTIVE		0x01
 #define MHL_DEV_QUIET			0x03
 #define MHL_DEV_ACTIVE			0x04
 
-#define	MHL_VER_MAJOR		(0x02 << 4)	
-#define	MHL_VER_MINOR		0x01		
+// Version that this chip supports
+#define	MHL_VER_MAJOR		(0x02 << 4)	// bits 4..7
+#define	MHL_VER_MINOR		0x01		// bits 0..3
 #define MHL_VERSION		(MHL_VER_MAJOR | MHL_VER_MINOR)
 
+//Device Category
 #define	MHL_DEV_CATEGORY_OFFSET			DEVCAP_OFFSET_DEV_CAT
 #define	MHL_DEV_CATEGORY_POW_BIT		0x10
 #define	MHL_DEV_CATEGORY_PLIM			0x60
@@ -90,6 +96,7 @@ SI_POP_STRUCT_PACKING
 #define	MHL_DEV_CAT_DONGLE			0x03
 #define	MHL_DEV_CAT_SELF_POWERED_DONGLE		0x13
 
+//Video Link Mode
 #define	MHL_DEV_VID_LINK_SUPPRGB444		0x01
 #define	MHL_DEV_VID_LINK_SUPPYCBCR444		0x02
 #define	MHL_DEV_VID_LINK_SUPPYCBCR422		0x04
@@ -97,10 +104,12 @@ SI_POP_STRUCT_PACKING
 #define	MHL_DEV_VID_LINK_SUPP_ISLANDS		0x10
 #define	MHL_DEV_VID_LINK_SUPP_VGA		0x20
 
+//Audio Link Mode Support
 #define	MHL_DEV_AUD_LINK_2CH			0x01
 #define	MHL_DEV_AUD_LINK_8CH			0x02
 
 
+//Feature Flag in the devcap
 #define	MHL_DEV_FEATURE_FLAG_OFFSET		DEVCAP_OFFSET_FEATURE_FLAG
 #define	MHL_FEATURE_RCP_SUPPORT			0x01
 #define	MHL_FEATURE_RAP_SUPPORT			0x02
@@ -108,13 +117,20 @@ SI_POP_STRUCT_PACKING
 #define MHL_FEATURE_UCP_SEND_SUPPORT		0x08
 #define MHL_FEATURE_UCP_RECV_SUPPORT		0x10
 
+/*
+#define MHL_POWER_SUPPLY_CAPACITY 16 // 160   mA  current
+#define MHL_POWER_SUPPLY_PROVIDED 16 // 160mA 0r  0           for Wolverine.
+#define MHL_HDCP_STATUS           0  // Bits  set dynamically
+*/
 
+// VIDEO TYPES
 #define		MHL_VT_GRAPHICS			0x00
 #define		MHL_VT_PHOTO			0x02
 #define		MHL_VT_CINEMA			0x04
 #define		MHL_VT_GAMES			0x08
 #define		MHL_SUPP_VT			0x80
 
+//Logical Dev Map
 #define	MHL_DEV_LD_DISPLAY			(0x01 << 0)
 #define	MHL_DEV_LD_VIDEO			(0x01 << 1)
 #define	MHL_DEV_LD_AUDIO			(0x01 << 2)
@@ -124,7 +140,8 @@ SI_POP_STRUCT_PACKING
 #define	MHL_DEV_LD_SPEAKER			(0x01 << 6)
 #define	MHL_DEV_LD_GUI				(0x01 << 7)
 
-#define	MHL_BANDWIDTH_LIMIT			22		
+//Bandwidth
+#define	MHL_BANDWIDTH_LIMIT			22		// 225 MHz
 
 
 #define MHL_STATUS_REG_CONNECTED_RDY        0x30
@@ -149,11 +166,12 @@ SI_POP_STRUCT_PACKING
 #define MHL_INT_GRT_WRT                     0x08
 #define MHL2_INT_3D_REQ                     0x10
 
+// On INTR_1 the EDID_CHG is located at BIT 0
 #define	MHL_INT_EDID_CHG			0x02
 
-#define		MHL_INT_AND_STATUS_SIZE		0x33		
+#define		MHL_INT_AND_STATUS_SIZE		0x33		// This contains one nibble each - max offset
 #define		MHL_SCRATCHPAD_SIZE		16
-#define		MHL_MAX_BUFFER_SIZE		MHL_SCRATCHPAD_SIZE	
+#define		MHL_MAX_BUFFER_SIZE		MHL_SCRATCHPAD_SIZE	// manually define highest number
 
 #define HTC_MHL_ADOPTER_ID (367)
 #define SILICON_IMAGE_ADOPTER_ID 322
@@ -289,7 +307,7 @@ enum
 
 // Allow RSEN to stay low this much before reacting.
 // Per specs between 100 to 200 ms
-#define	T_SRC_RSEN_DEGLITCH			(100)	
+#define	T_SRC_RSEN_DEGLITCH			(100)	// (150)
 
 // Wait this much after connection before reacting to RSEN (300-500ms)
 // Per specs between 300 to 500 ms

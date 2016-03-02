@@ -18,8 +18,10 @@
 #define MI380_SENSOR_NAME "mi380"
 DEFINE_MSM_MUTEX(mi380_mut);
 
+/*********************for image adjust********************/
 #define SENSOR_SUCCESS 0
 static struct msm_camera_i2c_client mi380_sensor_i2c_client;
+//static uint32_t mi380_set_exposure_compensation(struct msm_sensor_ctrl_t *s_ctrl, uint32_t level);
 static uint32_t mi380_set_contrast(struct msm_sensor_ctrl_t *s_ctrl, uint32_t level);
 static uint32_t mi380_set_sharpness(struct msm_sensor_ctrl_t *s_ctrl, uint32_t level);
 static uint32_t mi380_set_saturation(struct msm_sensor_ctrl_t *s_ctrl, uint32_t level);
@@ -29,8 +31,8 @@ static uint32_t mi380_SetEffect(struct msm_sensor_ctrl_t *s_ctrl, uint32_t level
 #define CHECK_STATE_TIME 100
 static int just_power_on = 1;
 static int op_mode = 0;
-static struct i2c_client mi380_client_t; 
-static struct i2c_client *mi380_client = &mi380_client_t;
+static struct i2c_client mi380_client_t; //dummy data for legacy compatible
+static struct i2c_client *mi380_client = &mi380_client_t;//dummy data for legacy compatible
 static struct msm_sensor_ctrl_t mi380_s_ctrl;
 enum mi380_width {
 	WORD_LEN,
@@ -121,21 +123,22 @@ static struct msm_camera_i2c_reg_array m_wb_auto[] = {
 	{0x0990, 0x0010},
 	{0x098C, 0x2330},
 	{0x0990, 0xFFF3},
-	
-	{0x098C, 0xA34A},
+	/*Mu lee add for AWB -- prevent be modifed after MWB 0901*/
+	{0x098C, 0xA34A},/*MCU_ADDRESS [AWB_GAIN_MIN_R]*/
 	{0x0990, 0x0059},
-	{0x098C, 0xA34B},
+	{0x098C, 0xA34B},/*MCU_ADDRESS [AWB_GAIN_MAX_R]*/
 	{0x0990, 0x00E6},
-	{0x098C, 0xA34C},
+	{0x098C, 0xA34C},/*CU_ADDRESS [AWB_GAIN_MIN_B]*/
 	{0x0990, 0x0059},
-	{0x098C, 0xA34D},
+	{0x098C, 0xA34D},/*MCU_ADDRESS [AWB_GAIN_MAX_B]*/
 	{0x0990, 0x00E6},
-	{0x098C, 0xA351},
+	{0x098C, 0xA351},/*MCU_ADDRESS [AWB_CCM_POSITION_MIN]*/
 	{0x0990, 0x0000},
-	{0x098C, 0xA352},
+	{0x098C, 0xA352},/*MCU_ADDRESS [AWB_CCM_POSITION_MAX]*/
 	{0x0990, 0x007F},
 };
 
+/*WB : Fluorescent mode*/
 static struct msm_camera_i2c_reg_array m_wb_fluorescent[] = {
 	{0x098C, 0xA353},
 	{0x0990, 0x0043},
@@ -148,6 +151,7 @@ static struct msm_camera_i2c_reg_array m_wb_fluorescent[] = {
 };
 
 
+/*WB : Incandescent mode */
 static struct msm_camera_i2c_reg_array m_wb_incandescent[] = {
 	{0x098C, 0xA353},
 	{0x0990, 0x000B},
@@ -159,6 +163,7 @@ static struct msm_camera_i2c_reg_array m_wb_incandescent[] = {
 	{0x0990, 0x00A0}
 };
 
+/*WB : Daylight mode*/
 static struct msm_camera_i2c_reg_array m_wb_daylight[] = {
 	{0x098C, 0xA353},
 	{0x0990, 0x007F},
@@ -170,6 +175,7 @@ static struct msm_camera_i2c_reg_array m_wb_daylight[] = {
 	{0x0990, 0x0080}
 };
 
+/*WB : Cloudy mode*/
 static struct msm_camera_i2c_reg_array m_wb_cloudy[] = {
 	{0x098C, 0xA353},
 	{0x0990, 0x007F},
@@ -182,11 +188,11 @@ static struct msm_camera_i2c_reg_array m_wb_cloudy[] = {
 };
 
 enum wb_mode{
-	CAMERA_AWB_AUTO = 0,
-	CAMERA_AWB_INDOOR_HOME = 2,
-	CAMERA_AWB_INDOOR_OFFICE = 3,
-	CAMERA_AWB_SUNNY = 5,
-	CAMERA_AWB_CLOUDY = 6,
+	CAMERA_AWB_AUTO = 0,/*auto*/
+	CAMERA_AWB_INDOOR_HOME = 2,/*Fluorescent*/
+	CAMERA_AWB_INDOOR_OFFICE = 3,/*Incandescent*/
+	CAMERA_AWB_SUNNY = 5,/*daylight*/
+	CAMERA_AWB_CLOUDY = 6,/*Cloudy*/
 };
 
 static struct msm_camera_i2c_reg_array contract_setup_tb_m0[] = {
@@ -211,9 +217,9 @@ static struct msm_camera_i2c_reg_array contract_setup_tb_m0[] = {
 	{0x098C, 0xAB45},
 	{0x0990, 0x00D9},
 	{0x098C, 0xAB46},
-	{0x0990, 0x00E1},
+	{0x0990, 0x00E1},/*{0x0990, 0x0000, WORD_LEN, 0},*/
 	{0x098C, 0xAB47},
-	{0x0990, 0x00E8},
+	{0x0990, 0x00E8},/*{0x0990, 0x0000, WORD_LEN, 0},*/
 	{0x098C, 0xAB48},
 	{0x0990, 0x00EE},
 	{0x098C, 0xAB49},
@@ -230,6 +236,7 @@ static struct msm_camera_i2c_reg_array contract_setup_tb_m0[] = {
 	{0x0990, 0x00FF},
 };
 
+/* Contract 1 */
 static struct msm_camera_i2c_reg_array contract_setup_tb_m1[] = {
 	{0x098C, 0xAB3C},
 	{0x0990, 0x0000},
@@ -252,9 +259,9 @@ static struct msm_camera_i2c_reg_array contract_setup_tb_m1[] = {
 	{0x098C, 0xAB45},
 	{0x0990, 0x00D9},
 	{0x098C, 0xAB46},
-	{0x0990, 0x00E1},
+	{0x0990, 0x00E1},/*{0x0990, 0x0000, WORD_LEN, 0},*/
 	{0x098C, 0xAB47},
-	{0x0990, 0x00E8},
+	{0x0990, 0x00E8},/*{0x0990, 0x0000, WORD_LEN, 0},*/
 	{0x098C, 0xAB48},
 	{0x0990, 0x00EE},
 	{0x098C, 0xAB49},
@@ -271,6 +278,7 @@ static struct msm_camera_i2c_reg_array contract_setup_tb_m1[] = {
 	{0x0990, 0x00FF},
 };
 
+/* Contract 2 */
 static struct msm_camera_i2c_reg_array contract_setup_tb_m2[] = {
 	{0x098C, 0xAB3C},
 	{0x0990, 0x0000},
@@ -313,6 +321,7 @@ static struct msm_camera_i2c_reg_array contract_setup_tb_m2[] = {
 
 };
 
+/* Contract 3 */
 static struct msm_camera_i2c_reg_array contract_setup_tb_m3[] = {
 	{0x098C, 0xAB3C},
 	{0x0990, 0x0000},
@@ -341,7 +350,7 @@ static struct msm_camera_i2c_reg_array contract_setup_tb_m3[] = {
 	{0x098C, 0xAB48},
 	{0x0990, 0x00DB},
 	{0x098C, 0xAB49},
-	{0x0990, 0x00E3},
+	{0x0990, 0x00E3},/*{0x0990, 0x0000, WORD_LEN, 0},*/
 	{0x098C, 0xAB4A},
 	{0x0990, 0x00EA},
 	{0x098C, 0xAB4B},
@@ -355,6 +364,7 @@ static struct msm_camera_i2c_reg_array contract_setup_tb_m3[] = {
 
 };
 
+/* Contract 4 */
 static struct msm_camera_i2c_reg_array contract_setup_tb_m4[] = {
 	{0x098C, 0xAB3C},
 	{0x0990, 0x0000},
@@ -383,7 +393,7 @@ static struct msm_camera_i2c_reg_array contract_setup_tb_m4[] = {
 	{0x098C, 0xAB48},
 	{0x0990, 0x00E2},
 	{0x098C, 0xAB49},
-	{0x0990, 0x00E9},
+	{0x0990, 0x00E9},/*{0x0990, 0x0000, WORD_LEN, 0},*/
 	{0x098C, 0xAB4A},
 	{0x0990, 0x00EE},
 	{0x098C, 0xAB4B},
@@ -397,7 +407,53 @@ static struct msm_camera_i2c_reg_array contract_setup_tb_m4[] = {
 
 };
 
+/*
+static uint32_t mi380_set_exposure_compensation(struct msm_sensor_ctrl_t *s_ctrl, uint32_t level)
+{
+    //pr_info("info: mi380_set_exposure_compensation %d", level);
+    switch ((level + 12)/5) // -12 to +12 change to 1 - 4 level
+    {
+        case 0:
+        mi380_i2c_write_reg(0x098C, 0xA24F);
+        mi380_i2c_write_reg(0x0990, 0x001F);
+        mi380_i2c_write_reg(0x098C, 0xAB1F);
+        mi380_i2c_write_reg(0x0990, 0x00CA);
+        break;
 
+        case 1:
+        mi380_i2c_write_reg(0x098C, 0xA24F);
+        mi380_i2c_write_reg(0x0990, 0x0025);
+        mi380_i2c_write_reg(0x098C, 0xAB1F);
+        mi380_i2c_write_reg(0x0990, 0x00C9);
+        break;
+
+        case 2:
+        mi380_i2c_write_reg(0x098C, 0xA24F);
+        mi380_i2c_write_reg(0x0990, 0x0030);
+        mi380_i2c_write_reg(0x098C, 0xAB1F);
+        mi380_i2c_write_reg(0x0990, 0x00C9);
+        break;
+
+        case 3:
+        mi380_i2c_write_reg(0x098C, 0xA24F);
+        mi380_i2c_write_reg(0x0990, 0x0038);
+        mi380_i2c_write_reg(0x098C, 0xAB1F);
+        mi380_i2c_write_reg(0x0990, 0x00C8);
+        break;
+
+        case 4:
+        mi380_i2c_write_reg(0x098C, 0xA24F);
+        mi380_i2c_write_reg(0x0990, 0x004A);
+        mi380_i2c_write_reg(0x098C, 0xAB1F);
+        mi380_i2c_write_reg(0x0990, 0x00C8);
+        break;
+    }
+    return SENSOR_SUCCESS;
+}
+*/
+
+//added by clean for fixing the contrast setting impact image quality issue base on David's test
+//by setting default 5 to level 3
 static int contrast_trans(int level)
 {
        if(level == 0)return 0;
@@ -418,9 +474,9 @@ static uint32_t mi380_set_contrast(struct msm_sensor_ctrl_t *s_ctrl, uint32_t le
 {
     int rc;
     struct msm_camera_i2c_reg_setting conf_array;
-    
+    //pr_info("info: mi380_set_contrast %d ", level);
 
-    switch(contrast_trans(level)) 
+    switch(contrast_trans(level)) //0-10 to 0-4 level
     {
         case 0:
 		conf_array.delay = 5;
@@ -483,9 +539,9 @@ static uint32_t mi380_set_contrast(struct msm_sensor_ctrl_t *s_ctrl, uint32_t le
 }
 static uint32_t mi380_set_sharpness(struct msm_sensor_ctrl_t *s_ctrl, uint32_t level)
 {
-    
+    //pr_info("info: mi380_set_sharpness %d ", level);
 
-    switch(level/8)
+    switch(level/8)// 0-36 to 0-5
     {
         case 0:
             mi380_i2c_write_reg(0x098C, 0xAB22);
@@ -523,9 +579,9 @@ static uint32_t mi380_set_sharpness(struct msm_sensor_ctrl_t *s_ctrl, uint32_t l
 }
 static uint32_t mi380_set_saturation(struct msm_sensor_ctrl_t *s_ctrl, uint32_t level)
 {
-    
+    //pr_info("info: mi380_set_saturation %d ", level);
 
-    switch(level/2) 
+    switch(level/2) // 0-10 -> 0-4
     {
         case 0:
             mi380_i2c_write_reg(0x098C, 0xAB20);
@@ -574,7 +630,7 @@ static uint32_t  mi380_set_wb(struct msm_sensor_ctrl_t *s_ctrl, uint32_t level)
     int rc = 0, k;
     uint16_t check_value = 0;
     struct msm_camera_i2c_reg_setting conf_array;
-    
+    //pr_info("info: mi380_set_wb %d ", level);
 
     switch(level)
     {
@@ -583,16 +639,16 @@ static uint32_t  mi380_set_wb(struct msm_sensor_ctrl_t *s_ctrl, uint32_t level)
             mi380_i2c_write_reg(0x0990, 0x0001);
             mi380_i2c_write_reg(0x098C, 0xA103);
             mi380_i2c_write_reg(0x0990, 0x0005);
-	    for (k = 0; k < CHECK_STATE_TIME; k++) {  
+	    for (k = 0; k < CHECK_STATE_TIME; k++) {  /* retry 100 times */
 		    rc = mi380_i2c_write(mi380_client->addr, 0x098C,
 				    0xA103, WORD_LEN);
 		    rc = mi380_i2c_read_w(mi380_client->addr, 0x0990,
 				    &check_value);
-		    if (check_value == 0x0000) 
+		    if (check_value == 0x0000) /* check state of 0xA103 */
 			    break;
 		    msleep(1);
 	    }
-	    if (k == CHECK_STATE_TIME) 
+	    if (k == CHECK_STATE_TIME) /* time out */
 		    return -EIO;
 	    conf_array.delay = 5;
 	    conf_array.reg_setting = m_wb_auto;
@@ -611,16 +667,16 @@ static uint32_t  mi380_set_wb(struct msm_sensor_ctrl_t *s_ctrl, uint32_t level)
             mi380_i2c_write_reg(0x0990, 0x0000);
             mi380_i2c_write_reg(0x098C, 0xA103);
             mi380_i2c_write_reg(0x0990, 0x0005);
-	    for (k = 0; k < CHECK_STATE_TIME; k++) {  
+	    for (k = 0; k < CHECK_STATE_TIME; k++) {  /* retry 100 times */
 		    rc = mi380_i2c_write(mi380_client->addr, 0x098C,
 				    0xA103, WORD_LEN);
 		    rc = mi380_i2c_read_w(mi380_client->addr, 0x0990,
 				    &check_value);
-		    if (check_value == 0x0000) 
+		    if (check_value == 0x0000) /* check state of 0xA103 */
 			    break;
 		    msleep(1);
 	    }
-	    if (k == CHECK_STATE_TIME) 
+	    if (k == CHECK_STATE_TIME) /* time out */
 		    return -EIO;
 	    conf_array.delay = 5;
 	    conf_array.reg_setting = m_wb_fluorescent;
@@ -639,16 +695,16 @@ static uint32_t  mi380_set_wb(struct msm_sensor_ctrl_t *s_ctrl, uint32_t level)
             mi380_i2c_write_reg(0x0990, 0x0000);
             mi380_i2c_write_reg(0x098C, 0xA103);
             mi380_i2c_write_reg(0x0990, 0x0005);
-	    for (k = 0; k < CHECK_STATE_TIME; k++) {  
+	    for (k = 0; k < CHECK_STATE_TIME; k++) {  /* retry 100 times */
 		    rc = mi380_i2c_write(mi380_client->addr, 0x098C,
 				    0xA103, WORD_LEN);
 		    rc = mi380_i2c_read_w(mi380_client->addr, 0x0990,
 				    &check_value);
-		    if (check_value == 0x0000) 
+		    if (check_value == 0x0000) /* check state of 0xA103 */
 			    break;
 		    msleep(1);
 	    }
-	    if (k == CHECK_STATE_TIME) 
+	    if (k == CHECK_STATE_TIME) /* time out */
 		    return -EIO;
 	    conf_array.delay = 5;
 	    conf_array.reg_setting = m_wb_incandescent;
@@ -667,16 +723,16 @@ static uint32_t  mi380_set_wb(struct msm_sensor_ctrl_t *s_ctrl, uint32_t level)
             mi380_i2c_write_reg(0x0990, 0x0000);
             mi380_i2c_write_reg(0x098C, 0xA103);
             mi380_i2c_write_reg(0x0990, 0x0005);
-	    for (k = 0; k < CHECK_STATE_TIME; k++) {  
+	    for (k = 0; k < CHECK_STATE_TIME; k++) {  /* retry 100 times */
 		    rc = mi380_i2c_write(mi380_client->addr, 0x098C,
 				    0xA103, WORD_LEN);
 		    rc = mi380_i2c_read_w(mi380_client->addr, 0x0990,
 				    &check_value);
-		    if (check_value == 0x0000) 
+		    if (check_value == 0x0000) /* check state of 0xA103 */
 			    break;
 		    msleep(1);
 	    }
-	    if (k == CHECK_STATE_TIME) 
+	    if (k == CHECK_STATE_TIME) /* time out */
 		    return -EIO;
 	    conf_array.delay = 5;
 	    conf_array.reg_setting = m_wb_daylight;
@@ -695,16 +751,16 @@ static uint32_t  mi380_set_wb(struct msm_sensor_ctrl_t *s_ctrl, uint32_t level)
             mi380_i2c_write_reg(0x0990, 0x0000);
             mi380_i2c_write_reg(0x098C, 0xA103);
             mi380_i2c_write_reg(0x0990, 0x0005);
-	    for (k = 0; k < CHECK_STATE_TIME; k++) {  
+	    for (k = 0; k < CHECK_STATE_TIME; k++) {  /* retry 100 times */
 		    rc = mi380_i2c_write(mi380_client->addr, 0x098C,
 				    0xA103, WORD_LEN);
 		    rc = mi380_i2c_read_w(mi380_client->addr, 0x0990,
 				    &check_value);
-		    if (check_value == 0x0000) 
+		    if (check_value == 0x0000) /* check state of 0xA103 */
 			    break;
 		    msleep(1);
 	    }
-	    if (k == CHECK_STATE_TIME) 
+	    if (k == CHECK_STATE_TIME) /* time out */
 		    return -EIO;
 	    conf_array.delay = 5;
 	    conf_array.reg_setting = m_wb_cloudy;
@@ -724,7 +780,7 @@ static uint32_t mi380_SetEffect(struct msm_sensor_ctrl_t *s_ctrl, uint32_t level
 {
     int k, rc;
     uint16_t check_value = 0;
-    
+    //pr_info("info: mi380_SetEffect %d ", level);
     switch(level)
     {
         case CAMERA_EFFECT_NONE:
@@ -784,16 +840,16 @@ static uint32_t mi380_SetEffect(struct msm_sensor_ctrl_t *s_ctrl, uint32_t level
     }
 
 
-	for (k = 0; k < CHECK_STATE_TIME; k++) {  
+	for (k = 0; k < CHECK_STATE_TIME; k++) {  /* retry 100 times */
 		rc = mi380_i2c_write(mi380_client->addr, 0x098C,
 			0xA103, WORD_LEN);
 		rc = mi380_i2c_read_w(mi380_client->addr, 0x0990,
 			&check_value);
-		if (check_value == 0x0000) 
+		if (check_value == 0x0000) /* check state of 0xA103 */
 			break;
 		msleep(1);
 	}
-	if (k == CHECK_STATE_TIME) 
+	if (k == CHECK_STATE_TIME) /* time out */
 		return -EIO;
 
     return SENSOR_SUCCESS;
@@ -804,9 +860,9 @@ static int mi380_set_brightness(struct msm_sensor_ctrl_t *s_ctrl, uint32_t level
 	int rc = 0;
 
 	switch (level) {
-	case -4: 
+	case -4: /* -2 */
 	rc = mi380_i2c_write(mi380_client->addr, 0x098C, 0xA24F, WORD_LEN);
-	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x001F, WORD_LEN);
+	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x001F, WORD_LEN);/*0x001E, WORD_LEN);Mu L 0209 */
 	rc = mi380_i2c_write(mi380_client->addr, 0x098C, 0xAB1F, WORD_LEN);
 	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x00CA, WORD_LEN);
 			if (rc < 0)
@@ -814,7 +870,7 @@ static int mi380_set_brightness(struct msm_sensor_ctrl_t *s_ctrl, uint32_t level
 
 			break;
 
-	case -3: 
+	case -3: /* -1.5 */
 	rc = mi380_i2c_write(mi380_client->addr, 0x098C, 0xA24F, WORD_LEN);
 	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x0025, WORD_LEN);
 	rc = mi380_i2c_write(mi380_client->addr, 0x098C, 0xAB1F, WORD_LEN);
@@ -825,63 +881,63 @@ static int mi380_set_brightness(struct msm_sensor_ctrl_t *s_ctrl, uint32_t level
 		break;
 	case -2:
 	rc = mi380_i2c_write(mi380_client->addr, 0x098C, 0xA24F, WORD_LEN);
-	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x0030, WORD_LEN);
+	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x0030, WORD_LEN);/*0x0028, WORD_LEN);Mu L 0209*/
 	rc = mi380_i2c_write(mi380_client->addr, 0x098C, 0xAB1F, WORD_LEN);
-	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x00C9, WORD_LEN);
+	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x00C9, WORD_LEN);/*0x00C9, WORD_LEN);Mu L 0209*/
 		if (rc < 0)
 			return -EIO;
 
 		break;
 	case -1:
 	rc = mi380_i2c_write(mi380_client->addr, 0x098C, 0xA24F, WORD_LEN);
-	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x0038, WORD_LEN);
+	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x0038, WORD_LEN);/*0x002E, WORD_LEN);Mu L 0209*/
 	rc = mi380_i2c_write(mi380_client->addr, 0x098C, 0xAB1F, WORD_LEN);
-	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x00C8, WORD_LEN);
+	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x00C8, WORD_LEN);/*0x00C9, WORD_LEN);Mu L 0209*/
 		if (rc < 0)
 			return -EIO;
 
 		break;
-	case 0: 
+	case 0: /* default 0 */
 	rc = mi380_i2c_write(mi380_client->addr, 0x098C, 0xA24F, WORD_LEN);
-	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x004A, WORD_LEN);
+	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x004A, WORD_LEN);/*0x004A, WORD_LEN);  //mk0131*/
 	rc = mi380_i2c_write(mi380_client->addr, 0x098C, 0xAB1F, WORD_LEN);
-	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x00C8, WORD_LEN);
+	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x00C8, WORD_LEN);/*0x00C9, WORD_LEN);Mu L 0209*/
 		if (rc < 0)
 			return -EIO;
 
 		break;
 	case 1:
 	rc = mi380_i2c_write(mi380_client->addr, 0x098C, 0xA24F, WORD_LEN);
-	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x0051, WORD_LEN);
+	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x0051, WORD_LEN);/*0x003B, WORD_LEN);Mu L 0209*/
 	rc = mi380_i2c_write(mi380_client->addr, 0x098C, 0xAB1F, WORD_LEN);
 	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x00C8, WORD_LEN);
 		if (rc < 0)
 			return -EIO;
 
 		break;
-	case 2:
+	case 2://CAMERA_BRIGHTNESS_P2
 	rc = mi380_i2c_write(mi380_client->addr, 0x098C, 0xA24F, WORD_LEN);
-	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x0059, WORD_LEN);
+	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x0059, WORD_LEN);/*0x0046, WORD_LEN);Mu L 0209*/
 	rc = mi380_i2c_write(mi380_client->addr, 0x098C, 0xAB1F, WORD_LEN);
-	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x00C7, WORD_LEN);
+	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x00C7, WORD_LEN);/*0x00C8, WORD_LEN); Mu L 0209*/
 		if (rc < 0)
 			return -EIO;
 
 		break;
-	case 3:
+	case 3://CAMERA_BRIGHTNESS_P3: /* 1.5 */
 	rc = mi380_i2c_write(mi380_client->addr, 0x098C, 0xA24F, WORD_LEN);
-	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x005F, WORD_LEN);
+	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x005F, WORD_LEN);/*0x004D, WORD_LEN);Mu L 0209*/
 	rc = mi380_i2c_write(mi380_client->addr, 0x098C, 0xAB1F, WORD_LEN);
-	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x00C7, WORD_LEN);
+	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x00C7, WORD_LEN);/*0x00C8, WORD_LEN); Mu L 0209*/
 		if (rc < 0)
 			return -EIO;
 
 		break;
-	case 4:
+	case 4://CAMERA_BRIGHTNESS_P4: /* 2 */
 	rc = mi380_i2c_write(mi380_client->addr, 0x098C, 0xA24F, WORD_LEN);
-	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x0068, WORD_LEN);
+	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x0068, WORD_LEN);/*0x0054, WORD_LEN);Mu L 0209*/
 	rc = mi380_i2c_write(mi380_client->addr, 0x098C, 0xAB1F, WORD_LEN);
-	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x00C6, WORD_LEN);
+	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x00C6, WORD_LEN);/*0x00C8, WORD_LEN); Mu L 0209*/
 		if (rc < 0)
 			return -EIO;
 
@@ -908,6 +964,7 @@ static int mi380_set_antibanding(struct msm_sensor_ctrl_t *s_ctrl, uint32_t anti
 
 	switch (antibanding_value) {
 	case CAMERA_ANTI_BANDING_50HZ:
+//HTC_START, chris 20120409, sync retry mech from 8x60 to avoid 50Hz banding
 	while ((check_value != 0xE0) && (iRetryCnt-- > 0)) {
 		rc = mi380_i2c_write(mi380_client->addr, 0x098C, 0xA404, WORD_LEN);
 		rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x00C0, WORD_LEN);
@@ -922,6 +979,7 @@ static int mi380_set_antibanding(struct msm_sensor_ctrl_t *s_ctrl, uint32_t anti
 
 	if (check_value != 0xE0)
 		pr_info("%s: check_value: 0x%X, retry failed!\n", __func__, check_value);
+//HTC_END
 		break;
 	case CAMERA_ANTI_BANDING_60HZ:
 	rc = mi380_i2c_write(mi380_client->addr, 0x098C, 0xA404, WORD_LEN);
@@ -930,7 +988,7 @@ static int mi380_set_antibanding(struct msm_sensor_ctrl_t *s_ctrl, uint32_t anti
 				return -EIO;
 
 		break;
-	case CAMERA_ANTI_BANDING_AUTO: 
+	case CAMERA_ANTI_BANDING_AUTO: /*default 60Mhz */
 	rc = mi380_i2c_write(mi380_client->addr, 0x098C, 0xA404, WORD_LEN);
 	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x0080, WORD_LEN);
 			if (rc < 0)
@@ -968,16 +1026,16 @@ static int mi380_set_iso(struct msm_sensor_ctrl_t *s_ctrl, uint32_t iso_value)
 		if (rc < 0)
 			return -EIO;
 
-		for (k = 0; k < CHECK_STATE_TIME; k++) {  
+		for (k = 0; k < CHECK_STATE_TIME; k++) {  /* retry 100 times */
 			rc = mi380_i2c_write(mi380_client->addr, 0x098C,
 				0xA103, WORD_LEN);
 			rc = mi380_i2c_read_w(mi380_client->addr, 0x0990,
 				&check_value);
-			if (check_value == 0x0000) 
+			if (check_value == 0x0000) /* check state of 0xA103 */
 				break;
 			msleep(1);
 		}
-		if (k == CHECK_STATE_TIME) 
+		if (k == CHECK_STATE_TIME) /* time out */
 			return -EIO;
 
 		break;
@@ -989,16 +1047,16 @@ static int mi380_set_iso(struct msm_sensor_ctrl_t *s_ctrl, uint32_t iso_value)
 		if (rc < 0)
 			return -EIO;
 
-		for (k = 0; k < CHECK_STATE_TIME; k++) {  
+		for (k = 0; k < CHECK_STATE_TIME; k++) {  /* retry 100 times */
 			rc = mi380_i2c_write(mi380_client->addr, 0x098C,
 				0xA103, WORD_LEN);
 			rc = mi380_i2c_read_w(mi380_client->addr, 0x0990,
 				&check_value);
-			if (check_value == 0x0000) 
+			if (check_value == 0x0000) /* check state of 0xA103 */
 				break;
 			msleep(1);
 		}
-		if (k == CHECK_STATE_TIME) 
+		if (k == CHECK_STATE_TIME) /* time out */
 			return -EIO;
 
 		break;
@@ -1010,16 +1068,16 @@ static int mi380_set_iso(struct msm_sensor_ctrl_t *s_ctrl, uint32_t iso_value)
 		if (rc < 0)
 			return -EIO;
 
-		for (k = 0; k < CHECK_STATE_TIME; k++) {  
+		for (k = 0; k < CHECK_STATE_TIME; k++) {  /* retry 100 times */
 			rc = mi380_i2c_write(mi380_client->addr, 0x098C,
 				0xA103, WORD_LEN);
 			rc = mi380_i2c_read_w(mi380_client->addr, 0x0990,
 				&check_value);
-			if (check_value == 0x0000) 
+			if (check_value == 0x0000) /* check state of 0xA103 */
 				break;
 			msleep(1);
 		}
-		if (k == CHECK_STATE_TIME) 
+		if (k == CHECK_STATE_TIME) /* time out */
 			return -EIO;
 
 		break;
@@ -1031,16 +1089,16 @@ static int mi380_set_iso(struct msm_sensor_ctrl_t *s_ctrl, uint32_t iso_value)
 		if (rc < 0)
 			return -EIO;
 
-		for (k = 0; k < CHECK_STATE_TIME; k++) {  
+		for (k = 0; k < CHECK_STATE_TIME; k++) {  /* retry 100 times */
 			rc = mi380_i2c_write(mi380_client->addr, 0x098C,
 				0xA103, WORD_LEN);
 			rc = mi380_i2c_read_w(mi380_client->addr, 0x0990,
 				&check_value);
-			if (check_value == 0x0000) 
+			if (check_value == 0x0000) /* check state of 0xA103 */
 				break;
 			msleep(1);
 		}
-		if (k == CHECK_STATE_TIME) 
+		if (k == CHECK_STATE_TIME) /* time out */
 			return -EIO;
 
 		break;
@@ -1052,16 +1110,16 @@ static int mi380_set_iso(struct msm_sensor_ctrl_t *s_ctrl, uint32_t iso_value)
 		if (rc < 0)
 			return -EIO;
 
-		for (k = 0; k < CHECK_STATE_TIME; k++) {  
+		for (k = 0; k < CHECK_STATE_TIME; k++) {  /* retry 100 times */
 			rc = mi380_i2c_write(mi380_client->addr, 0x098C,
 				0xA103, WORD_LEN);
 			rc = mi380_i2c_read_w(mi380_client->addr, 0x0990,
 				&check_value);
-			if (check_value == 0x0000) 
+			if (check_value == 0x0000) /* check state of 0xA103 */
 				break;
 			msleep(1);
 		}
-		if (k == CHECK_STATE_TIME) 
+		if (k == CHECK_STATE_TIME) /* time out */
 			return -EIO;
 
 		break;
@@ -1078,18 +1136,18 @@ static int mi380_detect_sensor_status(void)
 	int rc = 0, k = 0;
 	unsigned short check_value;
 
-	for (k = 0; k < CHECK_STATE_TIME; k++) {	
+	for (k = 0; k < CHECK_STATE_TIME; k++) {	/* retry 100 times */
 		rc = mi380_i2c_write(mi380_client->addr, 0x098C,
 			0xA103, WORD_LEN);
 		rc = mi380_i2c_read_w(mi380_client->addr, 0x0990,
 			&check_value);
-		if (check_value == 0x0000) 
+		if (check_value == 0x0000) /* check state of 0xA103 */
 			break;
 
 		msleep(1);
 	}
 
-	if (k == CHECK_STATE_TIME) 
+	if (k == CHECK_STATE_TIME) /* time out */
 		pr_info("mi380_detect_sensor_status,time out");
 
 	return 0;
@@ -1172,6 +1230,7 @@ static int mi380_set_fps(struct msm_sensor_ctrl_t *s_ctrl, uint32_t level)
 	return 0;
 }
 
+/********************************************************/
 
 struct mi380_reg {
 	struct mi380_i2c_reg_conf *power_up_tbl;
@@ -1217,7 +1276,7 @@ struct msm_sensor_power_setting mi380_power_setting[] = {
 	{
 		.seq_type = SENSOR_GPIO,
 		.seq_val = SENSOR_GPIO_VIO,
-		.config_val = GPIO_OUT_HIGH,
+		.config_val = GPIO_OUT_HIGH,//GPIO_OUT_HIGH,
 		.delay = 4,
 	},
 	{
@@ -1235,7 +1294,7 @@ struct msm_sensor_power_setting mi380_power_setting[] = {
 	{
 		.seq_type = SENSOR_GPIO,
 		.seq_val = SENSOR_GPIO_RESET,
-		.config_val = GPIO_OUT_HIGH,
+		.config_val = GPIO_OUT_HIGH,//GPIO_OUT_LOW,
 		.delay = 2,
 	},
 	{
@@ -1257,7 +1316,7 @@ struct msm_sensor_power_setting mi380_power_down_setting[] = {
 	{
 		.seq_type = SENSOR_GPIO,
 		.seq_val = SENSOR_GPIO_VIO,
-		.config_val = GPIO_OUT_HIGH,
+		.config_val = GPIO_OUT_HIGH,//GPIO_OUT_HIGH,
 		.delay = 1,
 	},
 	{
@@ -1295,26 +1354,26 @@ static struct msm_camera_i2c_reg_conf mi380_stop_settings[] = {
 
 #if 0
 static struct msm_camera_i2c_reg_conf mi380_init_tb1[] = {
-	{0x098C, 0xA11D}, 	
+	{0x098C, 0xA11D}, 	/*MCU_ADDRESS [SEQ_PREVIEW_1_AE]*/
 	{0x0990, 0x0001},
-	{0x098C, 0xA249},
-	{0x0990, 0x0002},
-	{0x098C, 0xA24F}, 	
-	{0x0990, 0x0040},	
-	{0x098C, 0xA24B}, 	
+	{0x098C, 0xA249},//REG= 0x098C, 0xA249    // MCU_ADDRESS [AE_TARGETSTEPSIZE]  //mk0106
+	{0x0990, 0x0002},//REG= 0x0990, 0x0002    // MCU_DATA_0                       //mk0106
+	{0x098C, 0xA24F}, 	/*MCU_ADDRESS [AE_BASETARGET]*/
+	{0x0990, 0x0040},	//{0x0990, 0x0040, WORD_LEN, 0},					   //mk0106
+	{0x098C, 0xA24B}, 	/*MCU_ADDRESS [AE_TARGETMAX]*/
 	{0x0990, 0x0086},
-	{0x098C, 0xA24A}, 	
-	{0x0990, 0x007E},
-	{0x098C, 0xA207},	
+	{0x098C, 0xA24A}, 	/*MCU_ADDRESS [AE_TARGETMIN]*/
+	{0x0990, 0x007E},//{0x0990, 0x006E, WORD_LEN, 0},                             //mk0106
+	{0x098C, 0xA207},	/*MCU_ADDRESS [AE_GATE]*/
 	{0x0990, 0x0002},
-	{0x098C, 0x2257}, 
-	{0x0990, 0x3A98}, 
+	{0x098C, 0x2257}, // MCU_ADDRESS [AE_EXPCOMPCENTER]  REG= 0x098C, 0x2257  //mk0106
+	{0x0990, 0x3A98}, // MCU_DATA_0   REG= 0x0990, 0x3A98                     //mk0106
 	{0x098C, 0xAB1F},
 	{0x0990, 0x00C9},
 	{0x326C, 0x0900},
 	{0x001E, 0x0400},
 	{0x098C, 0xAB22},
-	{0x0990, 0x0005},
+	{0x0990, 0x0005},//mu l 1005 enhance to compensate face beauty 0x0003
 	{0x098C, 0xA404},
 	{0x0990, 0x0010},
 	{0x098C, 0x222D},
@@ -1447,9 +1506,9 @@ static struct msm_camera_i2c_reg_conf mi380_init_tb1[] = {
 
 static struct msm_camera_i2c_reg_conf mi380_init_tb2[] = {
 	{0x098C, 0xA354},
-	{0x0990, 0x0048},
+	{0x0990, 0x0048},//mu l 1003{0x0990, 0x0040, WORD_LEN, 0},//{0x0990, 0x0036, WORD_LEN, 0},//{0x0990, 0x0048, WORD_LEN, 0},   //mk0906
 	{0x098C, 0xAB20},
-	{0x0990, 0x0048},
+	{0x0990, 0x0048},//mu l 1003{0x0990, 0x0040, WORD_LEN, 0},//{0x0990, 0x0036, WORD_LEN, 0},//{0x0990, 0x0048, WORD_LEN, 0},   //mk0906
 	{0x098C, 0xA11F},
 	{0x0990, 0x0001},
 	{0x098C, 0x2306},
@@ -1529,11 +1588,11 @@ static struct msm_camera_i2c_reg_conf mi380_init_tb2[] = {
 	{0x098C, 0xA303},
 	{0x0990, 0x00EF},
 	{0x098C, 0xA366},
-	{0x0990, 0x00A6},
+	{0x0990, 0x00A6},/* A0 Mu c0 Kevin modify for reducing A light yellowish 0427 */
 	{0x098C, 0xA367},
-	{0x0990, 0x0096},
+	{0x0990, 0x0096},/* 96 Mu 73 Kevin modify for reducing A light yellowish 0413 */
 	{0x098C, 0xA368},
-	{0x0990, 0x005C},
+	{0x0990, 0x005C},/* 80 Mu 38 Kevin modify for reducing A light yellowish 0427 */
 #ifndef CONFIG_MSM_CAMERA_8X60
 	{0x098C, 0x2B1B},
 	{0x0990, 0x0000},
@@ -1543,7 +1602,7 @@ static struct msm_camera_i2c_reg_conf mi380_init_tb2[] = {
 	{0x098C, 0x2B2A},
 	{0x0990, 0x1B58},
 	{0x098C, 0xAB37},
-	{0x0990, 0x0001}, 
+	{0x0990, 0x0001}, //{0x0990, 0x0003, WORD_LEN, 0},  //mk0106
 	{0x098C, 0x2B38},
 	{0x0990, 0x157C},
 	{0x098C, 0x2B3A},
@@ -1639,7 +1698,7 @@ static struct msm_camera_i2c_reg_conf mi380_init_tb2[] = {
 	{0x098C, 0x2715},
 	{0x0990, 0x0001},
 	{0x098C, 0x2717},
-	{0x0990, 0x0025},     
+	{0x0990, 0x0025}, /* 0x0024: mirror and flip */  /* 0x0025: mirror */  /* 0x0026: flip */
 	{0x098C, 0x2719},
 	{0x0990, 0x001A},
 	{0x098C, 0x271B},
@@ -1673,7 +1732,7 @@ static struct msm_camera_i2c_reg_conf mi380_init_tb2[] = {
 	{0x098C, 0x272B},
 	{0x0990, 0x0001},
 	{0x098C, 0x272D},
-	{0x0990, 0x0025},     
+	{0x0990, 0x0025}, /* 0x0024: mirror and flip */  /* 0x0025: mirror */  /* 0x0026: flip */
 	{0x098C, 0x272F},
 	{0x0990, 0x001A},
 	{0x098C, 0x2731},
@@ -1696,64 +1755,65 @@ static struct msm_camera_i2c_reg_conf mi380_init_tb2[] = {
 	{0x0990, 0x0002},
 	{0x098C, 0x2757},
 	{0x0990, 0x0002},
-	{0x098C, 0xA20C},
-	{0x0990, 0x000C},
+	{0x098C, 0xA20C},/*Mu add for min frame rate =15fps 0126*/
+	{0x0990, 0x000C},//mk0829 /*Mu add for min frame rate =15fps 0126*/
 };
 
 #define SENSOR_WRITE_DELAY 0xffff
+//static struct msm_camera_i2c_reg_conf mi380_recommend_settings[] = {
 static struct msm_camera_i2c_reg_array mi380_recommend_settings[] = {
-	{0x0018, 0x4028 },
+	{0x0018, 0x4028 },// STANDBY_CONTROL
 	{SENSOR_WRITE_DELAY, 0x10},
 
-	{0x001A, 0x0011 },
+	{0x001A, 0x0011 },// RESET_AND_MISC_CONTROL
 	{SENSOR_WRITE_DELAY, 0x0A},
 
-	{0x001A, 0x0010 },
+	{0x001A, 0x0010 },// RESET_AND_MISC_CONTROL
 	{SENSOR_WRITE_DELAY, 0x0A},
 
-	{0x0018, 0x4028 },
+	{0x0018, 0x4028 },// STANDBY_CONTROL
 	{SENSOR_WRITE_DELAY, 0x12},
 
-	{ 0x098C, 0x02F0	},
-	{ 0x0990, 0x0000	},
-	{ 0x098C, 0x02F2	},
-	{ 0x0990, 0x0210	},
-	{ 0x098C, 0x02F4	},
-	{ 0x0990, 0x001A	},
-	{ 0x098C, 0x2145	},
-	{ 0x0990, 0x02F4	},
-	{ 0x098C, 0xA134	},
-	{ 0x0990, 0x0001	},
+	{ 0x098C, 0x02F0	},// MCU_ADDRESS
+	{ 0x0990, 0x0000	},// MCU_DATA_0
+	{ 0x098C, 0x02F2	},// MCU_ADDRESS
+	{ 0x0990, 0x0210	},// MCU_DATA_0
+	{ 0x098C, 0x02F4	},// MCU_ADDRESS
+	{ 0x0990, 0x001A	},// MCU_DATA_0
+	{ 0x098C, 0x2145	},// MCU_ADDRESS
+	{ 0x0990, 0x02F4	},// MCU_DATA_0
+	{ 0x098C, 0xA134	},// MCU_ADDRESS
+	{ 0x0990, 0x0001	},// MCU_DATA_0
 
-	{ 0x31E0, 0x0001	},
+	{ 0x31E0, 0x0001	},// PIX_DEF_ID
 
-	{0x001A, 0x0010 },
-
-
-	{ 0x3400, 0x7A30	},
-	{ 0x321C, 0x8003	},
-	{ 0x001E, 0x0777	},
-	{ 0x0016, 0x42DF	},
+	{0x001A, 0x0010 },// RESET_AND_MISC_CONTROL
 
 
-	{ 0x0014, 0xB04B	},
-	{ 0x0014, 0xB049	},
+	{ 0x3400, 0x7A30	},// MIPI_CONTROL
+	{ 0x321C, 0x8003	},// OFIFO_CONTROL_STATUS
+	{ 0x001E, 0x0777	},// PAD_SLEW
+	{ 0x0016, 0x42DF	},// CLOCKS_CONTROL
 
-	{ 0x0010, 0x021C	},
-	{ 0x0012, 0x0000	},
-	{ 0x0014, 0x244B	},
+
+	{ 0x0014, 0xB04B	},// PLL_CONTROL
+	{ 0x0014, 0xB049	},// PLL_CONTROL
+
+	{ 0x0010, 0x021C	},//PLL Dividers = 540
+	{ 0x0012, 0x0000	},//PLL P Dividers = 0
+	{ 0x0014, 0x244B	},//PLL control: TEST_BYPASS on = 9291
 	{SENSOR_WRITE_DELAY, 0x03},
 
-	{ 0x0014, 0x304B	},
+	{ 0x0014, 0x304B	},//PLL control: PLL_ENABLE on = 12363
 	{SENSOR_WRITE_DELAY, 0x05},
 
-	{ 0x0014, 0xB04A	},
-	{ 0x3418, 0x003F	},
+	{ 0x0014, 0xB04A	},// PLL_CONTROL
+	{ 0x3418, 0x003F	},// MIPI_TIMING_T_LPX
 	{SENSOR_WRITE_DELAY, 0x01},
 
 	{ 0x3410, 0x0F0F},
 
-	
+	/* Dynamic AE */
 	{0x098C, 0xA11D},
 	{0x0990, 0x0001},
 	{0x098C, 0xA249},
@@ -1768,7 +1828,7 @@ static struct msm_camera_i2c_reg_array mi380_recommend_settings[] = {
 	{0x0990, 0x0002},
 	{0x098C, 0x2257},
 	{0x0990, 0x3A98},
-	
+	/* Micron lens Correction */
 	{0x364E, 0x0330},
 	{0x3650, 0x010B},
 	{0x3652, 0x2312},
@@ -1880,108 +1940,108 @@ static struct msm_camera_i2c_reg_array mi380_recommend_settings[] = {
 	{0x098C, 0xAB22},
 	{0x0990, 0x0005},
 
-	{ 0x98C, 0x2703 },
-	{ 0x990, 0x0280 },
-	{ 0x98C, 0x2705 },
-	{ 0x990, 0x01E0 },
-	{ 0x98C, 0x2707 },
-	{ 0x990, 0x0280 },
-	{ 0x98C, 0x2709 },
-	{ 0x990, 0x01E0 },
-	{ 0x98C, 0x270D },
-	{ 0x990, 0x0000 },
-	{ 0x98C, 0x270F },
-	{ 0x990, 0x0000 },
-	{ 0x98C, 0x2711 },
-	{ 0x990, 0x01E7 },
-	{ 0x98C, 0x2713 },
-	{ 0x990, 0x0287 },
-	{ 0x98C, 0x2715 },
-	{ 0x990, 0x0001 },
-	{ 0x98C, 0x2717 },
-	{ 0x990, 0x0025 },
-	{ 0x98C, 0x2719 },
-	{ 0x990, 0x001A },
-	{ 0x98C, 0x271B },
-	{ 0x990, 0x006B },
-	{ 0x98C, 0x271D },
-	{ 0x990, 0x006B },
-	{ 0x98C, 0x271F },
-	{ 0x990, 0x022A },
-	{ 0x98C, 0x2721 },
-	{ 0x990, 0x034A },
-	{ 0x98C, 0x2723 },
-	{ 0x990, 0x0000 },
-	{ 0x98C, 0x2725 },
-	{ 0x990, 0x0000 },
-	{ 0x98C, 0x2727 },
-	{ 0x990, 0x01E7 },
-	{ 0x98C, 0x2729 },
-	{ 0x990, 0x0287 },
-	{ 0x98C, 0x272B },
-	{ 0x990, 0x0001 },
-	{ 0x98C, 0x272D },
-	{ 0x990, 0x0025 },
-	{ 0x98C, 0x272F },
-	{ 0x990, 0x001A },
-	{ 0x98C, 0x2731 },
-	{ 0x990, 0x006B },
-	{ 0x98C, 0x2733 },
-	{ 0x990, 0x006B },
-	{ 0x98C, 0x2735 },
-	{ 0x990, 0x022a },
-	{ 0x98C, 0x2737 },
-	{ 0x990, 0x034A },
-	{ 0x98C, 0x2739 },
-	{ 0x990, 0x0000 },
-	{ 0x98C, 0x273B },
-	{ 0x990, 0x027F },
-	{ 0x98C, 0x273D },
-	{ 0x990, 0x0000 },
-	{ 0x98C, 0x273F },
-	{ 0x990, 0x01DF },
-	{ 0x98C, 0x2747 },
-	{ 0x990, 0x0000 },
-	{ 0x98C, 0x2749 },
-	{ 0x990, 0x027F },
-	{ 0x98C, 0x274B },
-	{ 0x990, 0x0000 },
-	{ 0x98C, 0x274D },
-	{ 0x990, 0x01DF },
-	{ 0x98C, 0x222D },
-	{ 0x990, 0x008B },
-	{ 0x98C, 0xA408 },
-	{ 0x990, 0x0021 },
-	{ 0x98C, 0xA409 },
-	{ 0x990, 0x0023 },
-	{ 0x98C, 0xA40A },
-	{ 0x990, 0x0028 },
-	{ 0x98C, 0xA40B },
-	{ 0x990, 0x002A },
-	{ 0x98C, 0x2411 },
-	{ 0x990, 0x008B },
-	{ 0x98C, 0x2413 },
-	{ 0x990, 0x00A6 },
-	{ 0x98C, 0x2415 },
-	{ 0x990, 0x008B },
-	{ 0x98C, 0x2417 },
-	{ 0x990, 0x00A6 },
-	{ 0x98C, 0xA404 },
-	{ 0x990, 0x0010 },
-	{ 0x98C, 0xA40D },
-	{ 0x990, 0x0002 },
-	{ 0x98C, 0xA40E },
-	{ 0x990, 0x0003 },
-	{ 0x98C, 0xA410 },
-	{ 0x990, 0x000A },
+	{ 0x98C, 0x2703 },//Output Width (A)
+	{ 0x990, 0x0280 },//	  = 640
+	{ 0x98C, 0x2705 },//Output Height (A)
+	{ 0x990, 0x01E0 },//	  = 480
+	{ 0x98C, 0x2707 },//Output Width (B)
+	{ 0x990, 0x0280 },//	  = 640
+	{ 0x98C, 0x2709 },//Output Height (B)
+	{ 0x990, 0x01E0 },//	  = 480
+	{ 0x98C, 0x270D },//Row Start (A)
+	{ 0x990, 0x0000 },//	  = 0
+	{ 0x98C, 0x270F },//Column Start (A)
+	{ 0x990, 0x0000 },//	  = 0
+	{ 0x98C, 0x2711 },//Row End (A)
+	{ 0x990, 0x01E7 },//	  = 487
+	{ 0x98C, 0x2713 },//Column End (A)
+	{ 0x990, 0x0287 },//	  = 647
+	{ 0x98C, 0x2715 },//Row Speed (A)
+	{ 0x990, 0x0001 },//	  = 1
+	{ 0x98C, 0x2717 },//Read Mode (A)
+	{ 0x990, 0x0025 },//	  = 37
+	{ 0x98C, 0x2719 },//sensor_fine_correction (A)
+	{ 0x990, 0x001A },//	  = 26
+	{ 0x98C, 0x271B },//sensor_fine_IT_min (A)
+	{ 0x990, 0x006B },//	  = 107
+	{ 0x98C, 0x271D },//sensor_fine_IT_max_margin (A)
+	{ 0x990, 0x006B },//	  = 107
+	{ 0x98C, 0x271F },//Frame Lines (A)
+	{ 0x990, 0x022A },//	  = 554
+	{ 0x98C, 0x2721 },//Line Length (A)
+	{ 0x990, 0x034A },//	  = 842
+	{ 0x98C, 0x2723 },//Row Start (B)
+	{ 0x990, 0x0000 },//	  = 0
+	{ 0x98C, 0x2725 },//Column Start (B)
+	{ 0x990, 0x0000 },//	  = 0
+	{ 0x98C, 0x2727 },//Row End (B)
+	{ 0x990, 0x01E7 },//	  = 487
+	{ 0x98C, 0x2729 },//Column End (B)
+	{ 0x990, 0x0287 },//	  = 647
+	{ 0x98C, 0x272B },//Row Speed (B)
+	{ 0x990, 0x0001 },//	  = 1
+	{ 0x98C, 0x272D },//Read Mode (B)
+	{ 0x990, 0x0025 },//	  = 37
+	{ 0x98C, 0x272F },//sensor_fine_correction (B)
+	{ 0x990, 0x001A },//	  = 26
+	{ 0x98C, 0x2731 },//sensor_fine_IT_min (B)
+	{ 0x990, 0x006B },//	  = 107
+	{ 0x98C, 0x2733 },//sensor_fine_IT_max_margin (B)
+	{ 0x990, 0x006B },//	  = 107
+	{ 0x98C, 0x2735 },//Frame Lines (B)
+	{ 0x990, 0x022a },//	  = 554
+	{ 0x98C, 0x2737 },//Line Length (B)
+	{ 0x990, 0x034A },//	  = 842
+	{ 0x98C, 0x2739 },//Crop_X0 (A)
+	{ 0x990, 0x0000 },//	  = 0
+	{ 0x98C, 0x273B },//Crop_X1 (A)
+	{ 0x990, 0x027F },//	  = 639
+	{ 0x98C, 0x273D },//Crop_Y0 (A)
+	{ 0x990, 0x0000 },//	  = 0
+	{ 0x98C, 0x273F },//Crop_Y1 (A)
+	{ 0x990, 0x01DF },//	  = 479
+	{ 0x98C, 0x2747 },//Crop_X0 (B)
+	{ 0x990, 0x0000 },//	  = 0
+	{ 0x98C, 0x2749 },//Crop_X1 (B)
+	{ 0x990, 0x027F },//	  = 639
+	{ 0x98C, 0x274B },//Crop_Y0 (B)
+	{ 0x990, 0x0000 },//	  = 0
+	{ 0x98C, 0x274D },//Crop_Y1 (B)
+	{ 0x990, 0x01DF },//	  = 479
+	{ 0x98C, 0x222D },//R9 Step
+	{ 0x990, 0x008B },//	  = 139
+	{ 0x98C, 0xA408 },//search_f1_50
+	{ 0x990, 0x0021 },//	  = 33 0x21
+	{ 0x98C, 0xA409 },//search_f2_50
+	{ 0x990, 0x0023 },//	  = 35	0x23
+	{ 0x98C, 0xA40A },//search_f1_60
+	{ 0x990, 0x0028 },//	  = 40	0x28
+	{ 0x98C, 0xA40B },//search_f2_60
+	{ 0x990, 0x002A },//	  = 42	0x2A
+	{ 0x98C, 0x2411 },//R9_Step_60 (A)
+	{ 0x990, 0x008B },//	  = 139
+	{ 0x98C, 0x2413 },//R9_Step_50 (A)
+	{ 0x990, 0x00A6 },//	  = 166
+	{ 0x98C, 0x2415 },//R9_Step_60 (B)
+	{ 0x990, 0x008B },//	  = 139
+	{ 0x98C, 0x2417 },//R9_Step_50 (B)
+	{ 0x990, 0x00A6 },//	  = 166
+	{ 0x98C, 0xA404 },//FD Mode
+	{ 0x990, 0x0010 },//	  = 16	0x10
+	{ 0x98C, 0xA40D },//Stat_min
+	{ 0x990, 0x0002 },//	  = 2	0x02
+	{ 0x98C, 0xA40E },//Stat_max
+	{ 0x990, 0x0003 },//	  = 3	  0x03
+	{ 0x98C, 0xA410 },//Min_amplitude
+	{ 0x990, 0x000A },//	  = 10	 0x0A
 
-	
+	//Add following commands for Saturation
 	{0x098C, 0xA354},
 	{0x0990, 0x0048},
 	{0x098C, 0xAB20},
 	{0x0990, 0x0048},
 
-	
+	//Add following commands for Micron AWB and CCMs
 	{0x098C, 0xA11F},
 	{0x0990, 0x0001},
 	{0x098C, 0x2306},
@@ -2067,7 +2127,7 @@ static struct msm_camera_i2c_reg_array mi380_recommend_settings[] = {
 	{0x098C, 0xA368},
 	{0x0990, 0x005C},
 
-	
+	//Add following commands for Gamma Morph brightness setting
 	{0x098C, 0x2B1B},
 	{0x0990, 0x0000},
 	{0x098C, 0x2B28},
@@ -2081,7 +2141,7 @@ static struct msm_camera_i2c_reg_array mi380_recommend_settings[] = {
 	{0x098C, 0x2B3A},
 	{0x0990, 0x1B58},
 
-	
+	// Add following commands for Gamma Table Context A
 	{0x098C, 0xAB3C},
 	{0x0990, 0x0000},
 	{0x098C, 0xAB3D},
@@ -2120,7 +2180,7 @@ static struct msm_camera_i2c_reg_array mi380_recommend_settings[] = {
 	{0x0990, 0x00F9},
 	{0x098C, 0xAB4E},
 	{0x0990, 0x00FF},
-	
+	//Add following commands for Gamma Table Context B
 	{0x098C, 0xAB4F},
 	{0x0990, 0x0000},
 	{0x098C, 0xAB50},
@@ -2162,24 +2222,24 @@ static struct msm_camera_i2c_reg_array mi380_recommend_settings[] = {
 	{0x098C, 0x2755 },
 	{0x0990, 0x0002 },
 
-	
+	//Add following cmmands
 	{0x098C, 0x2757},
 	{0x0990, 0x0002},
 	{0x098C, 0xA20C},
 	{0x0990, 0x000C},
 
-	{0x098C, 0xA103 },
-	{0x0990, 0x0006 },
+	{0x098C, 0xA103 },// MCU_ADDRESS
+	{0x0990, 0x0006 },// MCU_DATA_0
 	{SENSOR_WRITE_DELAY, 0x24},
 
 
 
-	{0x098C, 0xA103 },
-	{0x0990, 0x0005 },
+	{0x098C, 0xA103 },// MCU_ADDRESS
+	{0x0990, 0x0005 },// MCU_DATA_0
 	{SENSOR_WRITE_DELAY, 0x10},
 
-	{ 0x098C, 0xA244},
-	{ 0x0990, 0x00BB},
+	{ 0x098C, 0xA244},// MCU_ADDRESS [AE_DRTFEATURECTRL]
+	{ 0x0990, 0x00BB},// MCU_DATA_0
 };
 #endif
 static struct v4l2_subdev_info mi380_subdev_info[] = {
@@ -2251,7 +2311,7 @@ static struct kobject *android_mi380;
 static int mi380_sysfs_init(void)
 {
 	int ret ;
-	
+	//pr_info("mi380:kobject creat and add\n");
 	android_mi380 = kobject_create_and_add("android_camera2", NULL);
 	if (android_mi380 == NULL) {
 		pr_info("mi380_sysfs_init: subsystem_register " \
@@ -2259,7 +2319,7 @@ static int mi380_sysfs_init(void)
 		ret = -ENOMEM;
 		return ret ;
 	}
-	
+	//pr_info("mi380:sysfs_create_file\n");
 	ret = sysfs_create_file(android_mi380, &dev_attr_sensor.attr);
 	if (ret) {
 		pr_info("mi380_sysfs_init: sysfs_create_file " \
@@ -2282,7 +2342,7 @@ static int32_t mi380_platform_probe(struct platform_device *pdev)
 static int __init mi380_init_module(void)
 {
 	int32_t rc = 0;
-	
+	//pr_info("%s:%d\n", __func__, __LINE__);
 	pr_info("mi380_init_module");
 	rc = platform_driver_probe(&mi380_platform_driver,
 		mi380_platform_probe);
@@ -2308,27 +2368,28 @@ static void __exit mi380_exit_module(void)
 int32_t mi380_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 {
     int32_t status;
-	
-    
+	//struct regulator *vdig, *vana;
+    //pr_info("%s: +\n", __func__);
 
     s_ctrl->power_setting_array.power_setting = mi380_power_setting;
     s_ctrl->power_setting_array.size = ARRAY_SIZE(mi380_power_setting);
     status = msm_sensor_power_up(s_ctrl);
-    
+    //pr_info("%s: -\n", __func__);
     return status;
 }
 
+//For power down sequence, keep reset pin low before Analog power off.
 int32_t mi380_sensor_power_down(struct msm_sensor_ctrl_t *s_ctrl)
 {
     int32_t status;
     int i = 0;
     int j = 0;
     int data_size;
-    
+    //pr_info("%s: +\n", __func__);
     s_ctrl->power_setting_array.power_setting = mi380_power_down_setting;
     s_ctrl->power_setting_array.size = ARRAY_SIZE(mi380_power_down_setting);
 
-    
+    //When release regulator, need the same data pointer from power up sequence.
     for(i = 0; i < s_ctrl->power_setting_array.size;  i++)
     {
         data_size = sizeof(mi380_power_setting[i].data)/sizeof(void *);
@@ -2336,7 +2397,7 @@ int32_t mi380_sensor_power_down(struct msm_sensor_ctrl_t *s_ctrl)
         mi380_power_down_setting[i].data[j] = mi380_power_setting[i].data[j];
     }
     status = msm_sensor_power_down(s_ctrl);
-    
+    //pr_info("%s: -\n", __func__);
     return status;
 }
 
@@ -2348,7 +2409,7 @@ static int mi380_i2c_write(unsigned short saddr,
 
 	switch (width) {
 	case WORD_LEN:{
-			
+			/*pr_info("i2c_write, WORD_LEN, addr = 0x%x, val = 0x%x!\n",waddr, wdata);*/
 
 
             rc =mi380_sensor_i2c_client.i2c_func_tbl->i2c_write(&mi380_sensor_i2c_client,waddr, wdata ,MSM_CAMERA_I2C_WORD_DATA);
@@ -2356,7 +2417,7 @@ static int mi380_i2c_write(unsigned short saddr,
 		break;
 
 	case BYTE_LEN:{
-			
+			/*pr_info("i2c_write, BYTE_LEN, addr = 0x%x, val = 0x%x!\n",waddr, wdata);*/
 
             rc =mi380_sensor_i2c_client.i2c_func_tbl->i2c_write(&mi380_sensor_i2c_client,waddr, wdata ,MSM_CAMERA_I2C_BYTE_DATA);
 		}
@@ -2396,6 +2457,7 @@ static int mi380_i2c_write_table(struct mi380_i2c_reg_conf
 	return rc;
 }
 
+/*read 2 bytes data from sensor via I2C */
 static int32_t mi380_i2c_read_w(unsigned short saddr, unsigned short raddr,
 	unsigned short *rdata)
 {
@@ -2452,7 +2514,7 @@ unsigned short bit, int check_state)
 	unsigned short check_value;
 	unsigned short check_bit;
 	check_bit = 0x0001 << bit;
-	for (k = 0; k < CHECK_STATE_TIME; k++) {
+	for (k = 0; k < CHECK_STATE_TIME; k++) {/* retry 100 times */
 		mi380_i2c_read_w(mi380_client->addr,
 			      raddr, &check_value);
 		if (check_state) {
@@ -2477,19 +2539,19 @@ static inline int resume(void)
 	int k = 0, rc = 0;
 	unsigned short check_value;
 
-	
-	
+	/* enter SW Active mode */
+	/* write 0x0016[5] to 1  */
 	rc = mi380_i2c_read_w(mi380_client->addr, 0x0016, &check_value);
 	if (rc < 0)
 	  return rc;
 
-	
-	
+	//pr_info("%s: mi380: 0x0016 reg value = 0x%x\n", __func__,
+	//	check_value);
 
 	check_value = (check_value|0x0020);
 
-	
-	
+	//pr_info("%s: mi380: Set to 0x0016 reg value = 0x%x\n", __func__,
+	//	check_value);
 
 	rc = mi380_i2c_write(mi380_client->addr, 0x0016, check_value,
 		WORD_LEN);
@@ -2498,19 +2560,19 @@ static inline int resume(void)
 		return rc;
 	}
 
-	
-	
+	/* write 0x0018[0] to 0 */
+	//pr_info("resume, check_value=0x%x", check_value);
 	rc = mi380_i2c_read_w(mi380_client->addr, 0x0018, &check_value);
 	if (rc < 0)
 	  return rc;
 
-	
-	
+	//pr_info("%s: mi380: 0x0018 reg value = 0x%x\n", __func__,
+	//	check_value);
 
 	check_value = (check_value & 0xFFFE);
 
-	
-	
+	//pr_info("%s: mi380: Set to 0x0018 reg value = 0x%x\n", __func__,
+	//	check_value);
 
 	rc = mi380_i2c_write(mi380_client->addr, 0x0018, check_value,
 		WORD_LEN);
@@ -2519,20 +2581,20 @@ static inline int resume(void)
 		return rc;
 	}
 
-	
-	for (k = 0; k < CHECK_STATE_TIME; k++) {
+	/* check 0x0018[14] is 0 */
+	for (k = 0; k < CHECK_STATE_TIME; k++) {/* retry 100 times */
 		mi380_i2c_read_w(mi380_client->addr,
 			  0x0018, &check_value);
 
-		
-		
+		//pr_info("%s: mi380: 0x0018 reg value = 0x%x\n", __func__,
+		//	check_value);
 
-		if (!(check_value & 0x4000)) {
+		if (!(check_value & 0x4000)) {/* check state of 0x0018 */
 			pr_info("%s: (check 0x0018[14] is 0) k=%d\n",
 				__func__, k);
 			break;
 		}
-		msleep(1);	
+		msleep(1);	/*MAX: delay 100ms */
 	}
 	if (k == CHECK_STATE_TIME) {
 		pr_err("%s: check status time out (check 0x0018[14] is 0)\n",
@@ -2540,33 +2602,35 @@ static inline int resume(void)
 		return -EIO;
 	}
 
-	
-	for (k = 0; k < CHECK_STATE_TIME; k++) {
+/* HTC_START sync from previous project */
+	/* check 0x301A[2] is 1 */
+	for (k = 0; k < CHECK_STATE_TIME; k++) {/* retry 100 times */
 		mi380_i2c_read_w(mi380_client->addr,
 			  0x301A, &check_value);
-		if (check_value & 0x0004) {
-			
-			
+		if (check_value & 0x0004) {/* check state of 0x301A */
+			//pr_info("%s: (check 0x301A[2] is 1) k=%d\n",
+			//	__func__, k);
 			break;
 		}
-		msleep(1);	
+		msleep(1);	/*MAX: delay 100ms */
 	}
 	if (k == CHECK_STATE_TIME) {
 		pr_err("%s: check status time out (check 0x301A[2] is 1)\n",
 			__func__);
 		return -EIO;
 	}
+/* HTC_END */
 
-	
-	for (k = 0; k < CHECK_STATE_TIME; k++) {
+	/* check 0x31E0 is 0x003 */
+	for (k = 0; k < CHECK_STATE_TIME; k++) {/* retry 100 times */
 		rc = mi380_i2c_read_w(mi380_client->addr, 0x31E0,
 			&check_value);
-		if (check_value == 0x0003) { 
-			
-			
+		if (check_value == 0x0003) { /* check state of 0x31E0 */
+			//pr_info("%s: (check 0x31E0 is 0x003 ) k=%d\n",
+			//	__func__, k);
 			break;
 		}
-		msleep(1);	
+		msleep(1);	/*MAX: delay 100ms */
 	}
 	if (k == CHECK_STATE_TIME) {
 		pr_err("%s: check status time out (check 0x31E0 is 0x003 )\n",
@@ -2574,7 +2638,7 @@ static inline int resume(void)
 		return -EIO;
 	}
 
-	
+	/* write 0x31E0 to 0x0001 */
 	rc = mi380_i2c_write(mi380_client->addr, 0x31E0, 0x0001,
 	WORD_LEN);
 	if (rc < 0) {
@@ -2592,15 +2656,15 @@ static inline int suspend(void)
 	int k = 0, rc = 0;
 	unsigned short check_value;
 
-	
-	
+	/* enter SW Standby mode */
+	/* write 0x0018[3] to 1 */
 	rc = mi380_i2c_read_w(mi380_client->addr, 0x0018, &check_value);
 	if (rc < 0)
 	  return rc;
 
 	check_value = (check_value|0x0008);
 
-	
+	//pr_info("suspend, check_value=0x%x", check_value);
 
 	rc = mi380_i2c_write(mi380_client->addr, 0x0018, check_value,
 		WORD_LEN);
@@ -2608,17 +2672,17 @@ static inline int suspend(void)
 		pr_err("%s: Enter standy mode fail\n", __func__);
 		return rc;
 	}
-	
+	/* write 0x0018[0] to 1 */
 	rc = mi380_i2c_read_w(mi380_client->addr, 0x0018, &check_value);
 	if (rc < 0)
 	  return rc;
 
 	check_value = (check_value|0x0001);
 
-	
-	
+	//pr_info("%s: mi380: Set to 0x0018 reg value = 0x%x\n", __func__,
+	//	check_value);
 
-	
+	//pr_info("suspend, 2,check_value=0x%x", check_value);
 
 	rc = mi380_i2c_write(mi380_client->addr, 0x0018, check_value,
 		WORD_LEN);
@@ -2627,16 +2691,16 @@ static inline int suspend(void)
 		return rc;
 	}
 
-	
-	for (k = 0; k < CHECK_STATE_TIME; k++) {
+	/* check 0x0018[14] is 1 */
+	for (k = 0; k < CHECK_STATE_TIME; k++) {/* retry 100 times */
 		mi380_i2c_read_w(mi380_client->addr,
 			  0x0018, &check_value);
-		if ((check_value & 0x4000)) { 
-		
-		
+		if ((check_value & 0x4000)) { /* check state of 0x0018 */
+		//	pr_info("%s: ( check 0x0018[14] is 1 ) k=%d\n",
+		//		__func__, k);
 			break;
 		}
-		msleep(1);	
+		msleep(1);	/*MAX: delay 100ms */
 	}
 	if (k == CHECK_STATE_TIME) {
 		pr_err("%s: check status time out\n", __func__);
@@ -2651,8 +2715,8 @@ static int mi380_reg_init(struct msm_sensor_ctrl_t *s_ctrl)
 	int rc = 0, k = 0;
 	unsigned short check_value;
 
-    
-	
+    /* Power Up Start */
+	//pr_info("%s: Power Up Start\n", __func__);
 	rc = mi380_i2c_write(mi380_client->addr,
 					0x0018, 0x4028, WORD_LEN);
 	if (rc < 0)
@@ -2662,10 +2726,12 @@ static int mi380_reg_init(struct msm_sensor_ctrl_t *s_ctrl)
 	if (rc < 0)
 		goto reg_init_fail;
 
-	
+/* HTC_START sync from previous project */
+	/* check 0x301A[2] is 1 */
 	rc = mi380_i2c_check_bit(mi380_client->addr, 0x301A, 2, 1);
 	if (rc < 0)
 		goto reg_init_fail;
+/* HTC_END */
 
 	rc = mi380_i2c_write_table(&mi380_regs.power_up_tbl[0],
 				     mi380_regs.power_up_tbl_size);
@@ -2673,14 +2739,14 @@ static int mi380_reg_init(struct msm_sensor_ctrl_t *s_ctrl)
 		pr_err("%s: Power Up fail\n", __func__);
 		goto reg_init_fail;
 	}
-	
+	// HTC_START 20121219 pg add more delay
     if(suspend_fail_retry_count_2 != SUSPEND_FAIL_RETRY_MAX_2) {
         pr_info("%s: added additional delay count=%d\n", __func__, suspend_fail_retry_count_2);
         mdelay(20);
     }
-    
-	
-	
+    // HTC_END 20121219 add more delay
+	/* RESET and MISC Control */
+	//pr_info("%s: RESET and MISC Control\n", __func__);
 
 	rc = mi380_i2c_write(mi380_client->addr,
 					0x0018, 0x4028, WORD_LEN);
@@ -2691,46 +2757,54 @@ static int mi380_reg_init(struct msm_sensor_ctrl_t *s_ctrl)
 	if (rc < 0)
 		goto reg_init_fail;
 
-	
+/* HTC_START sync from previous project */
+	/* check 0x301A[2] is 1 */
 	rc = mi380_i2c_check_bit(mi380_client->addr, 0x301A, 2, 1);
 	if (rc < 0)
 		goto reg_init_fail;
 
-	
+	/* check 0x31E0[1] is 0, Aptina command BITFIELD= 0x31E0 , 2, 0 // core only tags defects. SOC will correct them. */
 	rc = mi380_i2c_write_bit(mi380_client->addr, 0x31E0, 1, 0);
 	if (rc < 0)
 		goto reg_init_fail;
+/* HTC_END */
 
 	if (g_csi_if) {
-	    
+	    /*RESET_AND_MISC_CONTROL Parallel output port en MIPI*/
 	    rc = mi380_i2c_write_bit(mi380_client->addr, 0x001A, 9, 0);
 	    if (rc < 0)
 	      goto reg_init_fail;
 
-	    
-	    
-	    
-	    
+	    /*MIPI control*/
+	    /* ---------------------------------------------------------------------- */
+	    /* Apply Aptina vendor's suggestion to fix incorrect color issue for MIPI */
+	    /* Set to enter STB(standby) after waiting for EOF(end of frame)          */
 
+	    /*//update in the settings and no write bit here
+	    rc = mi380_i2c_write_bit(mi380_client->addr, 0x3400, 4, 1);
+	    if (rc < 0)
+	      goto reg_init_fail;
+	      */
 
-		
-		for (k = 0; k < CHECK_STATE_TIME; k++) {
+/* HTC_START sync from previous project */
+		/* add retry for writing 0x3400[4] to 1 - ask by optical Steven */
+		for (k = 0; k < CHECK_STATE_TIME; k++) {/* retry 100 times */
 			rc = mi380_i2c_read_w(mi380_client->addr, 0x3400,
 				&check_value);
-			
-			if (check_value & 0x0010) { 
-			
-			
+			//pr_info("%s: mi380: 0x3400 reg value = 0x%4x\n", __func__, check_value);
+			if (check_value & 0x0010) { /* check state of 0x3400[4] */
+			//	pr_info("%s: (check 0x3400[4] is 1 ) k=%d\n",
+			//	__func__, k);
 			break;
 		} else {
 			check_value = (check_value | 0x0010);
-			
+			//pr_info("%s: mi380: Set to 0x3400 reg value = 0x%4x\n", __func__, check_value);
 				rc = mi380_i2c_write(mi380_client->addr, 0x3400,
 				check_value, WORD_LEN);
 			if (rc < 0)
 				goto reg_init_fail;
 		}
-			msleep(1);	
+			msleep(1);	/*MAX: delay 100ms */
 		}
 		if (k == CHECK_STATE_TIME) {
 			pr_err("%s: check status time out (check 0x3400[4] is 1 )\n",
@@ -2739,37 +2813,40 @@ static int mi380_reg_init(struct msm_sensor_ctrl_t *s_ctrl)
 		}
 
 		mdelay(10);
-	    
+/* HTC_END */
+	    /* ---------------------------------------------------------------------- */
 	    rc = mi380_i2c_write_bit(mi380_client->addr, 0x3400, 9, 1);
 	    if (rc < 0)
 	      goto reg_init_fail;
 
-		
-		for (k = 0; k < CHECK_STATE_TIME; k++) {
+/* HTC_START sync from previous project */
+		/* add retry for writing 0x3400[9] to 1 - ask by optical Steven */
+		for (k = 0; k < CHECK_STATE_TIME; k++) {/* retry 100 times */
 			rc = mi380_i2c_read_w(mi380_client->addr, 0x3400,
 				&check_value);
-			
-			if (check_value & 0x0200) { 
-				
-				
+			//pr_info("%s: mi380: 0x3400 reg value = 0x%4x\n", __func__, check_value);
+			if (check_value & 0x0200) { /* check state of 0x3400[9] */
+				//pr_info("%s: (check 0x3400[9] is 1 ) k=%d\n",
+				//	__func__, k);
 				break;
 			} else {
 				check_value = (check_value | 0x0200);
-				
+				//pr_info("%s: mi380: Set to 0x3400 reg value = 0x%4x\n", __func__, check_value);
 				rc = mi380_i2c_write(mi380_client->addr, 0x3400,
 					check_value, WORD_LEN);
 				if (rc < 0)
 					goto reg_init_fail;
 			}
-			msleep(1);	
+			msleep(1);	/*MAX: delay 100ms */
 		}
 		if (k == CHECK_STATE_TIME) {
 			pr_err("%s: check status time out (check 0x3400[9] is 1 )\n",
 				__func__);
 			goto reg_init_fail;
 		}
+/* HTC_END */
 
-	    
+	    /*OFIFO_control_sstatus*/
 	    rc = mi380_i2c_write_bit(mi380_client->addr, 0x321C, 7, 0);
 	    if (rc < 0)
 	      goto reg_init_fail;
@@ -2789,7 +2866,7 @@ static int mi380_reg_init(struct msm_sensor_ctrl_t *s_ctrl)
 	  goto reg_init_fail;
 
 
-	
+	/* PLL Setup Start */
 	rc = mi380_i2c_write(mi380_client->addr, 0x0014, 0xB04B, WORD_LEN);
 	if (rc < 0)
 	  goto reg_init_fail;
@@ -2824,34 +2901,50 @@ static int mi380_reg_init(struct msm_sensor_ctrl_t *s_ctrl)
 	if (rc < 0)
 	  goto reg_init_fail;
 
-	
+	/* write a serial i2c cmd from register_init_tbl of mi380_reg */
 	rc = mi380_i2c_write_table(&mi380_regs.register_init_1[0],
 			mi380_regs.register_init_size_1);
+	/*
+	rc = s_ctrl->sensor_i2c_client->i2c_func_tbl->
+		i2c_write_conf_tbl(s_ctrl->sensor_i2c_client,
+				mi380_init_tb1,
+				ARRAY_SIZE(mi380_init_tb1),
+				MSM_CAMERA_I2C_WORD_DATA);
+				*/
 	if (rc < 0)
 	  goto reg_init_fail;
 
-	
+	/* write 0x3210[3] bit to 1 */
 	rc = mi380_i2c_write_bit(mi380_client->addr, 0x3210, 3, 1);
 	if (rc < 0)
 	  goto reg_init_fail;
 
-	
+	/* write a serial i2c cmd from register_init_tb2 of mi380_reg */
 	rc = mi380_i2c_write_table(&mi380_regs.register_init_2[0],
 			mi380_regs.register_init_size_2);
+	/*
+	rc = s_ctrl->sensor_i2c_client->i2c_func_tbl->
+		i2c_write_conf_tbl(s_ctrl->sensor_i2c_client,
+				mi380_init_tb2,
+				ARRAY_SIZE(mi380_init_tb2),
+				MSM_CAMERA_I2C_WORD_DATA);
+				*/
 	if (rc < 0)
 	  goto reg_init_fail;
 
+	/*the last three commands in the Mode-set up Preview (VGA) /
+	Capture Mode (VGA) */
 	rc = mi380_i2c_write(mi380_client->addr, 0x098C, 0xA103, WORD_LEN);
 	if (rc < 0)
 	  goto reg_init_fail;
 
 	rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x0006, WORD_LEN);
-	for (k = 0; k < CHECK_STATE_TIME; k++) {  
+	for (k = 0; k < CHECK_STATE_TIME; k++) {  /* retry 100 times */
 		rc = mi380_i2c_write(mi380_client->addr, 0x098C, 0xA103,
 			WORD_LEN);
 		rc = mi380_i2c_read_w(mi380_client->addr, 0x0990,
 			&check_value);
-		if (check_value == 0x0000) 
+		if (check_value == 0x0000) /* check state of 0xA103 */
 			break;
 		msleep(1);
 	}
@@ -2866,12 +2959,12 @@ static int mi380_reg_init(struct msm_sensor_ctrl_t *s_ctrl)
 	if (rc < 0)
 	  goto reg_init_fail;
 
-	for (k = 0; k < CHECK_STATE_TIME; k++) {  
+	for (k = 0; k < CHECK_STATE_TIME; k++) {  /* retry 100 times */
 		rc = mi380_i2c_write(mi380_client->addr, 0x098C, 0xA103,
 			WORD_LEN);
 		rc = mi380_i2c_read_w(mi380_client->addr, 0x0990,
 			&check_value);
-		if (check_value == 0x0000) 
+		if (check_value == 0x0000) /* check state of 0xA103 */
 			break;
 		msleep(1);
 	}
@@ -2897,18 +2990,18 @@ int mi380_sensor_open_init(struct msm_sensor_ctrl_t *s_ctrl)
 	int rc = 0;
 	uint16_t check_value = 0;
 
-	
+	//pr_info("%s\n", __func__);
 
 
 	suspend_fail_retry_count_2 = SUSPEND_FAIL_RETRY_MAX_2;
 
 
 probe_suspend_fail_retry_2:
-		
+		//pr_info("%s suspend_fail_retry_count_2=%d\n", __func__, suspend_fail_retry_count_2);
 
-		
+		//mdelay(5);
 
-		
+		/*set initial register*/
 		rc = mi380_reg_init(s_ctrl);
 		if (rc < 0) {
 			pr_err("%s: mi380_reg_init fail\n", __func__);
@@ -2922,19 +3015,19 @@ probe_suspend_fail_retry_2:
 			goto init_fail;
 		}
 
-		
-		
+		/* Do streaming Off */
+		/* write 0x0016[5] to 0  */
 		rc = mi380_i2c_read_w(mi380_client->addr, 0x0016, &check_value);
 		if (rc < 0)
 		  return rc;
 
-		
-		
+		//pr_info("%s: mi380: 0x0016 reg value = 0x%x\n",
+		//	__func__, check_value);
 
 		check_value = (check_value&0xFFDF);
 
-		
-		
+		//pr_info("%s: mi380: Set to 0x0016 reg value = 0x%x\n",
+		//	__func__, check_value);
 
 		rc = mi380_i2c_write(mi380_client->addr, 0x0016,
 			check_value, WORD_LEN);
@@ -2942,15 +3035,15 @@ probe_suspend_fail_retry_2:
 			pr_err("%s: Enter Standby mode fail\n", __func__);
 			return rc;
 		}
-	 
+	 /*power down or standby need to :*/
 
 	just_power_on = 0;
 	goto init_done;
 
 init_fail:
 	pr_info("%s init_fail\n", __func__);
-	
-	
+	/*mi380_probe_init_done(data);*/
+	/*kfree(mi380_ctrl);*/
 	return rc;
 init_done:
 	pr_info("%s init_done\n", __func__);
@@ -2968,30 +3061,32 @@ static int mi380_set_sensor_mode(struct msm_sensor_ctrl_t *s_ctrl, int mode)
 	int rc = 0 , k;
 	uint16_t check_value = 0;
 
-	
+	//pr_info("%s: E\n", __func__);
 
 	switch (mode) {
 	case SENSOR_PREVIEW_MODE:
 		op_mode = SENSOR_PREVIEW_MODE;
-		
+		//pr_info("mi380:sensor set mode: preview\n");
 
 		rc = mi380_i2c_write(mi380_client->addr, 0x098C, 0xA103,
 			WORD_LEN);
 		if (rc < 0)
 			return rc;
 
+		/*rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x0001,
+		WORD_LEN);*/
 		rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x0002,
 		WORD_LEN);
 		if (rc < 0)
 			return rc;
 
-		for (k = 0; k < CHECK_STATE_TIME; k++) {  
+		for (k = 0; k < CHECK_STATE_TIME; k++) {  /* retry 100 times */
 			rc = mi380_i2c_write(mi380_client->addr, 0x098C,
 				0xA104,	WORD_LEN);
 			rc = mi380_i2c_read_w(mi380_client->addr, 0x0990,
 				&check_value);
-			
-			if (check_value == 0x0003) 
+			//pr_info("check_value=%d", check_value);
+			if (check_value == 0x0003) /* check state of 0xA103 */
 				break;
 			msleep(1);
 		}
@@ -3000,31 +3095,33 @@ static int mi380_set_sensor_mode(struct msm_sensor_ctrl_t *s_ctrl, int mode)
 			return -EIO;
 		}
 
-		
-		
+		/*prevent preview image segmentation*/
+		//msleep(150);
 
 		break;
 	case SENSOR_SNAPSHOT_MODE:
 		op_mode = SENSOR_SNAPSHOT_MODE;
-		
-		
+		/*sinfo->kpi_sensor_start = ktime_to_ns(ktime_get());*/
+		//pr_info("mi380:sensor set mode: snapshot\n");
 
 		rc = mi380_i2c_write(mi380_client->addr, 0x098C, 0xA103,
 			WORD_LEN);
 		if (rc < 0)
 			return rc;
 
+		/* rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x0002,
+		WORD_LEN); */
 		rc = mi380_i2c_write(mi380_client->addr, 0x0990, 0x0001,
 		WORD_LEN);
 		if (rc < 0)
 			return rc;
 
-		for (k = 0; k < CHECK_STATE_TIME; k++) {
+		for (k = 0; k < CHECK_STATE_TIME; k++) {/* retry 100 times */
 			rc = mi380_i2c_write(mi380_client->addr, 0x098C,
 				0xA104, WORD_LEN);
 			rc = mi380_i2c_read_w(mi380_client->addr, 0x0990,
 				&check_value);
-			if (check_value == 0x0003)
+			if (check_value == 0x0003)/* check state of 0xA103 */
 				break;
 			msleep(1);
 		}
@@ -3038,7 +3135,7 @@ static int mi380_set_sensor_mode(struct msm_sensor_ctrl_t *s_ctrl, int mode)
 		return -EINVAL;
 	}
 
-	
+	//pr_info("%s: X\n", __func__);
 	return rc;
 }
 
@@ -3049,8 +3146,8 @@ int32_t mi380_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 	long rc = 0;
 	int32_t i = 0;
 	mutex_lock(s_ctrl->msm_sensor_mutex);
-	
-	
+	//pr_info("%s:%d %s cfgtype = %d\n", __func__, __LINE__,
+	//	s_ctrl->sensordata->sensor_name, cdata->cfgtype);
 	switch (cdata->cfgtype) {
 	case CFG_GET_SENSOR_INFO:
 		memcpy(cdata->cfg.sensor_info.sensor_name,
@@ -3061,10 +3158,10 @@ int32_t mi380_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 		for (i = 0; i < SUB_MODULE_MAX; i++)
 			cdata->cfg.sensor_info.subdev_id[i] =
 				s_ctrl->sensordata->sensor_info->subdev_id[i];
-		
-		
-		
-		
+		//pr_info("%s:%d sensor name %s\n", __func__, __LINE__,
+		//	cdata->cfg.sensor_info.sensor_name);
+		//pr_info("%s:%d session id %d\n", __func__, __LINE__,
+		//	cdata->cfg.sensor_info.session_id);
 		for (i = 0; i < SUB_MODULE_MAX; i++)
 			pr_info("%s:%d subdev_id[%d] %d\n", __func__, __LINE__, i,
 				cdata->cfg.sensor_info.subdev_id[i]);
@@ -3073,7 +3170,7 @@ int32_t mi380_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 	case CFG_SET_INIT_SETTING:
 #if 0
 		{
-		
+		/* Write Recommend settings */
 		struct msm_camera_i2c_reg_setting conf_array;
 		conf_array.delay = 5;
 		conf_array.reg_setting = mi380_recommend_settings;
@@ -3086,7 +3183,20 @@ int32_t mi380_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 		}
 #endif
 		mi380_sensor_open_init(s_ctrl);
-		mi380_set_fps(s_ctrl, 1015);
+		mi380_set_fps(s_ctrl, 1015);//sync from zara setting
+		/* //debug code for sync with zara
+		mi380_SetEffect(s_ctrl, 0);
+		mi380_set_sharpness(s_ctrl, 16);
+		mi380_set_saturation(s_ctrl, 4);
+		mi380_set_antibanding(s_ctrl, 1);
+		mi380_set_fps(s_ctrl, 1015);//sync from zara setting
+		mi380_set_brightness(s_ctrl, 0);
+		mi380_set_wb(s_ctrl, 0);
+		mi380_set_brightness(s_ctrl, 3);
+		mi380_set_iso(s_ctrl, 0);
+		mi380_set_brightness(s_ctrl, 3);
+		mi380_set_wb(s_ctrl, 0);
+		*/
 		break;
 	case CFG_SET_RESOLUTION:
 		if (copy_from_user(&op_mode,
@@ -3095,31 +3205,38 @@ int32_t mi380_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 			rc = -EFAULT;
 			break;
 		}
-		
+		//pr_info("%s: CFG_SET_RESOLUTION %d\n", __func__, op_mode);
 		mi380_set_sensor_mode(s_ctrl, op_mode);
 		break;
 	case CFG_SET_STOP_STREAM:
-		
+		//pr_err("%s, sensor stop stream!!", __func__);
 		rc = s_ctrl->sensor_i2c_client->i2c_func_tbl->
 			i2c_write_conf_tbl(s_ctrl->sensor_i2c_client,
 			mi380_stop_settings,
 			ARRAY_SIZE(mi380_stop_settings),
 			MSM_CAMERA_I2C_WORD_DATA);
-		
-		
-		
+		//rc = suspend();  /*enter STB mode to garantee MIPI status keep on LP11*/
+		//if (rc < 0)
+		//	pr_err("%s: suspend fail\n", __func__);
 		break;
 
 	case CFG_SET_START_STREAM:
-		
-		
-		
-		
+		//rc = resume();  /*enter STB mode to garantee MIPI status keep on LP11*/
+		//if (rc < 0)
+		//	pr_err("%s: resume fail\n", __func__);
+		//pr_info("%s, sensor start stream!!", __func__);
 		rc = s_ctrl->sensor_i2c_client->i2c_func_tbl->
 			i2c_write_conf_tbl(s_ctrl->sensor_i2c_client,
 			mi380_start_settings,
 			ARRAY_SIZE(mi380_start_settings),
 			MSM_CAMERA_I2C_WORD_DATA);
+		/* //debug code for sync with zara
+		mi380_set_sharpness(s_ctrl, 16);
+		mi380_set_brightness(s_ctrl, 0);
+		mi380_set_wb(s_ctrl, 0);
+		mi380_set_brightness(s_ctrl, 0);
+		mi380_set_wb(s_ctrl, 0);
+		*/
 		break;
 	case CFG_GET_SENSOR_INIT_PARAMS:
 		cdata->cfg.sensor_init_params =
@@ -3141,17 +3258,17 @@ int32_t mi380_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 			rc = -EFAULT;
 			break;
 		}
-		
+		/* Update sensor slave address */
 		if (sensor_slave_info.slave_addr) {
 			s_ctrl->sensor_i2c_client->cci_client->sid =
 				sensor_slave_info.slave_addr >> 1;
 		}
 
-		
+		/* Update sensor address type */
 		s_ctrl->sensor_i2c_client->addr_type =
 			sensor_slave_info.addr_type;
 
-		
+		/* Update power up / down sequence */
 		s_ctrl->power_setting_array =
 			sensor_slave_info.power_setting_array;
 		power_setting_array = &s_ctrl->power_setting_array;
@@ -3464,7 +3581,7 @@ int32_t mi380_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 
 		if (!stop_setting->size) {
 			pr_err("%s:%d failed\n", __func__, __LINE__);
-			stop_setting->reg_setting = NULL; 
+			stop_setting->reg_setting = NULL; /* HTC sungfeng 20131017 */
 			rc = -EFAULT;
 			break;
 		}
@@ -3490,7 +3607,7 @@ int32_t mi380_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 	}
 #ifdef CONFIG_RAWCHIPII
 	case CFG_RAWCHIPII_SETTING:
-		if (s_ctrl->sensordata->htc_image != 1) 
+		if (s_ctrl->sensordata->htc_image != 1) //no rawchip2, just bypass
 			break;
 
 		{
@@ -3517,7 +3634,7 @@ int32_t mi380_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 	}
 
 	case CFG_RAWCHIPII_STOP:
-		if (s_ctrl->sensordata->htc_image != 1) 
+		if (s_ctrl->sensordata->htc_image != 1) //no rawchip2, just bypass
 			break;
 
 		if(YushanII_Get_reloadInfo() == 0){
@@ -3528,6 +3645,7 @@ int32_t mi380_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 		break;
 #endif
 
+/* HTC_START Harvey 20130628 - Porting read OTP*/
 	case CFG_I2C_IOCTL_R_OTP:
 		if (s_ctrl->func_tbl->sensor_i2c_read_fuseid == NULL) {
 			rc = -EFAULT;
@@ -3535,6 +3653,7 @@ int32_t mi380_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 		}
 		rc = s_ctrl->func_tbl->sensor_i2c_read_fuseid(cdata, s_ctrl);
 	break;
+/* HTC_END*/
 	case CFG_SET_SATURATION: {
 		int32_t sv;
 		if (copy_from_user(&sv, (void *)cdata->cfg.setting,
@@ -3543,7 +3662,7 @@ int32_t mi380_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 			rc = -EFAULT;
 			break;
 		}
-		
+		//pr_info("%s: Saturation Value is %d", __func__, sv);
 		mi380_set_saturation(s_ctrl, sv);
 		break;
 	}
@@ -3555,7 +3674,7 @@ int32_t mi380_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 		        rc = -EFAULT;
 		        break;
 		}
-		
+		//pr_info("%s: Contrast Value is %d", __func__, sv);
 		mi380_set_contrast(s_ctrl, sv);
 		break;
 	}
@@ -3567,7 +3686,7 @@ int32_t mi380_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 			rc = -EFAULT;
 			break;
 		}
-		
+		//pr_info("%s: Sharpness Value is %d", __func__, sv);
 		mi380_set_sharpness(s_ctrl, sv);
 		break;
 	}
@@ -3579,7 +3698,7 @@ int32_t mi380_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 			rc = -EFAULT;
 			break;
 		}
-		
+		//pr_info("%s: ISO Value is %d", __func__, sv);
 		mi380_set_iso(s_ctrl, sv);
 
 		break;
@@ -3592,8 +3711,8 @@ int32_t mi380_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 			rc = -EFAULT;
 			break;
 		}
-		
-		
+		//pr_info("%s: Exposure Value is %d", __func__, sv);
+		//mi380_set_exposure_compensation(s_ctrl, sv);
 		mi380_set_brightness(s_ctrl, sv);
 		break;
 	}
@@ -3605,10 +3724,24 @@ int32_t mi380_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 			rc = -EFAULT;
 			break;
 		}
-		
+		//pr_info("%s: Effect Value is %d", __func__, sv);
 		mi380_SetEffect(s_ctrl, sv);
 		break;
 	}
+	/*
+	case CFG_SET_BRIGHTNESS: {
+		int32_t sv;
+		if (copy_from_user(&sv, (void *)cdata->cfg.setting,
+			 sizeof(int32_t))) {
+			pr_err("%s:%d failed\n", __func__, __LINE__);
+			rc = -EFAULT;
+			break;
+		}
+		pr_info("%s: brightness is %d", __func__, sv);
+		mi380_set_brightness(s_ctrl, sv);
+		break;
+	}
+	*/
 	case CFG_SET_ANTIBANDING: {
 		int32_t sv;
 		if (copy_from_user(&sv, (void *)cdata->cfg.setting,
@@ -3617,7 +3750,7 @@ int32_t mi380_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 			rc = -EFAULT;
 			break;
 		}
-		
+		//pr_info("%s: Antibanding is %d", __func__, sv);
 		mi380_set_antibanding(s_ctrl, sv);
 		break;
 	}
@@ -3629,7 +3762,7 @@ int32_t mi380_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 			rc = -EFAULT;
 			break;
 		}
-		
+		//pr_info("%s: Bestshot Value is %d", __func__, sv);
 
 		break;
 	}
@@ -3641,7 +3774,7 @@ int32_t mi380_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 			rc = -EFAULT;
 			break;
 		}
-		
+		//pr_info("%s: WB Value is %d", __func__, sv);
 		mi380_set_wb(s_ctrl, sv);
 		break;
 	}
@@ -3685,7 +3818,7 @@ int32_t mi380_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 
 		break;
 	case CFG_SET_INIT_SETTING:
-		
+		/* Write Recommend settings */
 		pr_err("%s, sensor write init setting!!", __func__);
 		rc = s_ctrl->sensor_i2c_client->i2c_func_tbl->
 			i2c_write_conf_tbl(s_ctrl->sensor_i2c_client,
@@ -3731,17 +3864,17 @@ int32_t mi380_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 			rc = -EFAULT;
 			break;
 		}
-		
+		/* Update sensor slave address */
 		if (sensor_slave_info.slave_addr) {
-		
-		
+		//	s_ctrl->sensor_i2c_client->cci_client->sid =
+		//		sensor_slave_info.slave_addr >> 1;
 		}
 
-		
+		/* Update sensor address type */
 		s_ctrl->sensor_i2c_client->addr_type =
 			sensor_slave_info.addr_type;
 
-		
+		/* Update power up / down sequence */
 		s_ctrl->power_setting_array =
 			sensor_slave_info.power_setting_array;
 		power_setting_array = &s_ctrl->power_setting_array;

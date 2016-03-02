@@ -38,11 +38,6 @@ static uint32_t interval = STATUS_CHECK_INTERVAL_MS;
 static uint32_t dsi_status_disable = DSI_STATUS_CHECK_DISABLE;
 struct dsi_status_data *pstatus_data;
 
-/*
- * check_dsi_ctrl_status() - Reads MFD structure and
- * calls platform specific DSI ctrl Status function.
- * @work  : dsi controller status data
- */
 static void check_dsi_ctrl_status(struct work_struct *work)
 {
 	struct dsi_status_data *pdsi_status = NULL;
@@ -63,17 +58,6 @@ static void check_dsi_ctrl_status(struct work_struct *work)
 	pdsi_status->mfd->mdp.check_dsi_status(work, interval);
 }
 
-/*
- * fb_event_callback() - Call back function for the fb_register_client()
- *			 notifying events
- * @self  : notifier block
- * @event : The event that was triggered
- * @data  : Of type struct fb_event
- *
- * This function listens for FB_BLANK_UNBLANK and FB_BLANK_POWERDOWN events
- * from frame buffer. DSI status check work is either scheduled again after
- * PANEL_STATUS_CHECK_INTERVAL or cancelled based on the event.
- */
 static int fb_event_callback(struct notifier_block *self,
 				unsigned long event, void *data)
 {

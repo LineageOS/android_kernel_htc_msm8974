@@ -414,6 +414,7 @@ static int v4l2_open(struct inode *inode, struct file *filp)
 		mutex_unlock(&videodev_lock);
 		return -ENODEV;
 	}
+	pr_info("%s filp %p, open %p\n", __func__, filp, vdev->fops->open); /* HTC_ADD */
 	/* and increase the device refcount */
 	video_get(vdev);
 	mutex_unlock(&videodev_lock);
@@ -443,6 +444,7 @@ static int v4l2_release(struct inode *inode, struct file *filp)
 	struct video_device *vdev = video_devdata(filp);
 	int ret = 0;
 
+	pr_info("%s file %p, release %p\n", __func__, filp, vdev->fops->release); /* HTC_ADD */
 	if (vdev->fops->release) {
 		if (vdev->lock)
 			mutex_lock(vdev->lock);

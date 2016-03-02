@@ -677,6 +677,9 @@ int msm_camera_get_dt_gpio_set_tbl(struct device_node *of_node,
 		if (val_array[i] >= gpio_array_size) {
 			pr_err("%s gpio set tbl index %d invalid\n",
 				__func__, val_array[i]);
+			
+			kfree(val_array);
+			
 			return -EINVAL;
 		}
 		gconf->cam_gpio_set_tbl[i].gpio = gpio_array[val_array[i]];

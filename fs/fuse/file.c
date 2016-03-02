@@ -621,14 +621,15 @@ static int fuse_readpages_fill(void *_data, struct page *page)
 			return -ENOMEM;
 		}
 
+		lock_page(newpage);
 		err = replace_page_cache_page(oldpage, newpage, GFP_KERNEL);
 		if (err) {
+			unlock_page(newpage);
 			__free_page(newpage);
 			page_cache_release(oldpage);
 			return err;
 		}
 
-		lock_page(newpage);
 		put_page(newpage);
 
 		lru_cache_add_file(newpage);

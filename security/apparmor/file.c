@@ -108,7 +108,7 @@ int aa_audit_file(struct aa_profile *profile, struct file_perms *perms,
 	int type = AUDIT_APPARMOR_AUTO;
 	struct common_audit_data sa;
 	struct apparmor_audit_data aad = {0,};
-	COMMON_AUDIT_DATA_INIT(&sa, NONE);
+	sa.type = LSM_AUDIT_DATA_NONE;
 	sa.aad = &aad;
 	aad.op = op,
 	aad.fs.request = request;
@@ -447,8 +447,8 @@ int aa_file_perm(int op, struct aa_profile *profile, struct file *file,
 		 u32 request)
 {
 	struct path_cond cond = {
-		.uid = file->f_path.dentry->d_inode->i_uid,
-		.mode = file->f_path.dentry->d_inode->i_mode
+		.uid = file_inode(file)->i_uid,
+		.mode = file_inode(file)->i_mode
 	};
 
 	return aa_path_perm(op, profile, &file->f_path, PATH_DELEGATE_DELETED,

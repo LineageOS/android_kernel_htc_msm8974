@@ -40,7 +40,7 @@
 #include "yas53x_drv.c"
 
 #define YAS53X_NAME			"yas53x"
-#define YAS53X_MIN_DELAY		(200) 
+#define YAS53X_MIN_DELAY		(200) /* msec */
 
 #define D(x...) printk(KERN_DEBUG "[COMP][YAS53X] " x)
 #define I(x...) printk(KERN_INFO "[COMP][YAS53X] " x)
@@ -135,6 +135,7 @@ static int yas53x_disable(struct yas53x_data *data) {
 	return 0;
 }
 
+/* Sysfs interface */
 static ssize_t yas53x_delay_show(struct device *dev, struct device_attribute *attr, char *buf) {
 	struct yas53x_data *data = i2c_get_clientdata(this_client);
 	int32_t delay;
@@ -303,7 +304,7 @@ static void yas53x_input_work_func(struct work_struct *work) {
 	yas53x_current_time(&time_after);
 	delay = data->delay - (time_after - time_before);
 	mutex_unlock(&data->mutex);
-	
+	/* report magnetic data in [nT] */
 	input_report_abs(data->input_data, ABS_X, mag.xyz.v[0]);
 	input_report_abs(data->input_data, ABS_Y, mag.xyz.v[1]);
 	input_report_abs(data->input_data, ABS_Z, mag.xyz.v[2]);
@@ -539,9 +540,29 @@ static struct i2c_driver yas53x_i2c_driver = {
 	.remove =	yas53x_remove,
 	.id_table	=	yas53x_id,
 
+/*	.id_table	= yas53x_id,
+	.probe		= yas53x_probe,
+	.remove		= yas53x_remove,
+	.suspend	= yas53x_suspend,
+	.resume		= yas53x_resume,*/
 };
 module_i2c_driver(yas53x_i2c_driver);
 
+/*static int __init
+yas53x_init(void)
+{
+	return i2c_add_driver(&yas53x_i2c_driver);
+}
+
+static void __exit
+yas53x_term(void)
+{
+	i2c_del_driver(&yas53x_i2c_driver);
+}
+
+module_init(yas53x_init);
+module_exit(yas53x_term);
+*/
 MODULE_AUTHOR("Yamaha Corporation");
 MODULE_DESCRIPTION("YAS53x Geomagnetic Sensor Driver");
 MODULE_LICENSE("GPL");

@@ -51,7 +51,7 @@ struct htc_gauge {
 	int (*dump_all)(void);
 #endif
 	int (*get_attr_text)(char *buf, int size);
-	
+	/* battery voltage alarm */
 	int (*register_lower_voltage_alarm_notifier)(void (*callback)(int));
 	int (*enable_lower_voltage_alarm)(int enable);
 	int (*set_lower_voltage_alarm_threshold)(int thres_mV);
@@ -59,7 +59,9 @@ struct htc_gauge {
 	int (*check_soc_for_sw_ocv)(void);
 };
 
+/* let driver including this .h can notify event to htc battery */
 int htc_gauge_event_notify(enum htc_gauge_event);
+/* htc_gauge convenience function */
 int htc_gauge_get_battery_voltage(int *result);
 int htc_gauge_set_chg_ovp(int is_ovp);
 #endif

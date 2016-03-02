@@ -1,26 +1,48 @@
 #ifndef _MSM_KGSL_H
 #define _MSM_KGSL_H
 
+/*
+ * The KGSL version has proven not to be very useful in userspace if features
+ * are cherry picked into other trees out of order so it is frozen as of 3.14.
+ * It is left here for backwards compatabilty and as a reminder that
+ * software releases are never linear. Also, I like pie.
+ */
 
 #define KGSL_VERSION_MAJOR        3
 #define KGSL_VERSION_MINOR        14
 
+/*
+ * We have traditionally mixed context and issueibcmds / command batch flags
+ * together into a big flag stew. This worked fine until we started adding a
+ * lot more command batch flags and we started running out of bits. Turns out
+ * we have a bit of room in the context type / priority mask that we could use
+ * for command batches, but that means we need to split out the flags into two
+ * coherent sets.
+ *
+ * If any future definitions are for both context and cmdbatch add both defines
+ * and link the cmdbatch to the context define as we do below. Otherwise feel
+ * free to add exclusive bits to either set.
+ */
+
+/* --- context flags --- */
 #define KGSL_CONTEXT_SAVE_GMEM		0x00000001
 #define KGSL_CONTEXT_NO_GMEM_ALLOC	0x00000002
+/* This is a cmdbatch exclusive flag - use the CMDBATCH equivalent instead */
 #define KGSL_CONTEXT_SUBMIT_IB_LIST	0x00000004
 #define KGSL_CONTEXT_CTX_SWITCH		0x00000008
 #define KGSL_CONTEXT_PREAMBLE		0x00000010
 #define KGSL_CONTEXT_TRASH_STATE	0x00000020
 #define KGSL_CONTEXT_PER_CONTEXT_TS	0x00000040
 #define KGSL_CONTEXT_USER_GENERATED_TS	0x00000080
+/* This is a cmdbatch exclusive flag - use the CMDBATCH equivalent instead */
 #define KGSL_CONTEXT_END_OF_FRAME	0x00000100
-
 #define KGSL_CONTEXT_NO_FAULT_TOLERANCE 0x00000200
+/* This is a cmdbatch exclusive flag - use the CMDBATCH equivalent instead */
 #define KGSL_CONTEXT_SYNC               0x00000400
 #define KGSL_CONTEXT_PWR_CONSTRAINT     0x00000800
+/* bits [12:15] are reserved for future use */
 #define KGSL_CONTEXT_TYPE_MASK          0x01F00000
 #define KGSL_CONTEXT_TYPE_SHIFT         20
-
 #define KGSL_CONTEXT_TYPE_ANY		0
 #define KGSL_CONTEXT_TYPE_GL		1
 #define KGSL_CONTEXT_TYPE_CL		2
@@ -30,10 +52,34 @@
 
 #define KGSL_CONTEXT_INVALID 0xffffffff
 
+/*
+ * --- command batch flags ---
+ * The bits that are linked to a KGSL_CONTEXT equivalent are either legacy
+ * definitions or bits that are valid for both contexts and cmdbatches.  To be
+ * safe the other 8 bits that are still available in the context field should be
+ * omitted here in case we need to share - the other bits are available for
+ * cmdbatch only flags as needed
+ */
+#define KGSL_CMDBATCH_MEMLIST	0x00000001
+#define KGSL_CMDBATCH_MARKER	0x00000002
+#define KGSL_CMDBATCH_SUBMIT_IB_LIST	KGSL_CONTEXT_SUBMIT_IB_LIST /* 0x004 */
+#define KGSL_CMDBATCH_CTX_SWITCH	KGSL_CONTEXT_CTX_SWITCH     /* 0x008 */
+#define KGSL_CMDBATCH_END_OF_FRAME	KGSL_CONTEXT_END_OF_FRAME   /* 0x100 */
+#define KGSL_CMDBATCH_SYNC		KGSL_CONTEXT_SYNC           /* 0x400 */
+#define KGSL_CMDBATCH_PWR_CONSTRAINT	KGSL_CONTEXT_PWR_CONSTRAINT /* 0x800 */
 
+/*
+ * Reserve bits [16:19] and bits [28:31] for possible bits shared between
+ * contexts and command batches.  Update this comment as new flags are added.
+ */
+
+/* --- Memory allocation flags --- */
+
+/* General allocation hints */
 #define KGSL_MEMFLAGS_GPUREADONLY 0x01000000
 #define KGSL_MEMFLAGS_USE_CPU_MAP 0x10000000
 
+/* Memory caching hints */
 #define KGSL_CACHEMODE_MASK 0x0C000000
 #define KGSL_CACHEMODE_SHIFT 26
 
@@ -42,6 +88,7 @@
 #define KGSL_CACHEMODE_WRITETHROUGH 2
 #define KGSL_CACHEMODE_WRITEBACK 3
 
+/* Memory types for which allocations are made */
 #define KGSL_MEMTYPE_MASK		0x0000FF00
 #define KGSL_MEMTYPE_SHIFT		8
 
@@ -68,9 +115,14 @@
 #define KGSL_MEMTYPE_MULTISAMPLE		20
 #define KGSL_MEMTYPE_KERNEL			255
 
+/*
+ * Alignment hint, passed as the power of 2 exponent.
+ * i.e 4k (2^12) would be 12, 64k (2^16)would be 16.
+ */
 #define KGSL_MEMALIGN_MASK		0x00FF0000
 #define KGSL_MEMALIGN_SHIFT		16
 
+/* --- generic KGSL flag values --- */
 
 #define KGSL_FLAGS_NORMALMODE  0x00000000
 #define KGSL_FLAGS_SAFEMODE    0x00000001
@@ -84,6 +136,7 @@
 #define KGSL_FLAGS_SOFT_RESET  0x00000100
 #define KGSL_FLAGS_PER_CONTEXT_TIMESTAMPS 0x00000200
 
+/* Clock flags to show which clocks should be controled by a given platform */
 #define KGSL_CLK_SRC	0x00000001
 #define KGSL_CLK_CORE	0x00000002
 #define KGSL_CLK_IFACE	0x00000004
@@ -91,8 +144,12 @@
 #define KGSL_CLK_MEM_IFACE 0x00000010
 #define KGSL_CLK_AXI	0x00000020
 
+/* Server Side Sync Timeout in milliseconds */
 #define KGSL_SYNCOBJ_SERVER_TIMEOUT 2000
 
+/*
+ * Reset status values for context
+ */
 enum kgsl_ctx_reset_stat {
 	KGSL_CTX_STAT_NO_ERROR				= 0x00000000,
 	KGSL_CTX_STAT_GUILTY_CONTEXT_RESET_EXT		= 0x00000001,
@@ -103,6 +160,7 @@ enum kgsl_ctx_reset_stat {
 #define KGSL_CONVERT_TO_MBPS(val) \
 	(val*1000*1000U)
 
+/* device id */
 enum kgsl_deviceid {
 	KGSL_DEVICE_3D0		= 0x00000000,
 	KGSL_DEVICE_2D0		= 0x00000001,
@@ -121,9 +179,16 @@ enum kgsl_user_mem_type {
 struct kgsl_devinfo {
 
 	unsigned int device_id;
+	/* chip revision id
+	* coreid:8 majorrev:8 minorrev:8 patch:8
+	*/
 	unsigned int chip_id;
 	unsigned int mmu_enabled;
 	unsigned int gmem_gpubaseaddr;
+	/*
+	* This field contains the adreno revision
+	* number 200, 205, 220, etc...
+	*/
 	unsigned int gpu_id;
 	unsigned int gmem_sizebytes;
 };
@@ -149,12 +214,14 @@ struct kgsl_devmemstore {
 	((ctxt_id)*sizeof(struct kgsl_devmemstore) + \
 	 offsetof(struct kgsl_devmemstore, field))
 
+/* timestamp id*/
 enum kgsl_timestamp_type {
-	KGSL_TIMESTAMP_CONSUMED = 0x00000001, 
-	KGSL_TIMESTAMP_RETIRED  = 0x00000002, 
+	KGSL_TIMESTAMP_CONSUMED = 0x00000001, /* start-of-pipeline timestamp */
+	KGSL_TIMESTAMP_RETIRED  = 0x00000002, /* end-of-pipeline timestamp*/
 	KGSL_TIMESTAMP_QUEUED   = 0x00000003,
 };
 
+/* property types - used with kgsl_device_getproperty */
 enum kgsl_property_type {
 	KGSL_PROP_DEVICE_INFO     = 0x00000001,
 	KGSL_PROP_DEVICE_SHADOW   = 0x00000002,
@@ -172,7 +239,7 @@ enum kgsl_property_type {
 struct kgsl_shadowprop {
 	unsigned int gpuaddr;
 	unsigned int size;
-	unsigned int flags; 
+	unsigned int flags; /* contains KGSL_FLAGS_ values */
 };
 
 struct kgsl_version {
@@ -182,6 +249,7 @@ struct kgsl_version {
 	unsigned int dev_minor;
 };
 
+/* Performance counter groups */
 
 #define KGSL_PERFCOUNTER_GROUP_CP 0x0
 #define KGSL_PERFCOUNTER_GROUP_RBBM 0x1
@@ -202,6 +270,7 @@ struct kgsl_version {
 #define KGSL_PERFCOUNTER_NOT_USED 0xFFFFFFFF
 #define KGSL_PERFCOUNTER_BROKEN 0xFFFFFFFE
 
+/* structure holds list of ibs */
 struct kgsl_ibdesc {
 	unsigned int gpuaddr;
 	void *hostptr;
@@ -209,8 +278,19 @@ struct kgsl_ibdesc {
 	unsigned int ctrl;
 };
 
+/* ioctls */
 #define KGSL_IOC_TYPE 0x09
 
+/* get misc info about the GPU
+   type should be a value from enum kgsl_property_type
+   value points to a structure that varies based on type
+   sizebytes is sizeof() that structure
+   for KGSL_PROP_DEVICE_INFO, use struct kgsl_devinfo
+   this structure contaings hardware versioning info.
+   for KGSL_PROP_DEVICE_SHADOW, use struct kgsl_shadowprop
+   this is used to find mmap() offset and sizes for mapping
+   struct kgsl_memstore into userspace.
+*/
 struct kgsl_device_getproperty {
 	unsigned int type;
 	void  *value;
@@ -220,7 +300,12 @@ struct kgsl_device_getproperty {
 #define IOCTL_KGSL_DEVICE_GETPROPERTY \
 	_IOWR(KGSL_IOC_TYPE, 0x2, struct kgsl_device_getproperty)
 
+/* IOCTL_KGSL_DEVICE_READ (0x3) - removed 03/2012
+ */
 
+/* block until the GPU has executed past a given timestamp
+ * timeout is in milliseconds.
+ */
 struct kgsl_device_waittimestamp {
 	unsigned int timestamp;
 	unsigned int timeout;
@@ -238,20 +323,35 @@ struct kgsl_device_waittimestamp_ctxtid {
 #define IOCTL_KGSL_DEVICE_WAITTIMESTAMP_CTXTID \
 	_IOW(KGSL_IOC_TYPE, 0x7, struct kgsl_device_waittimestamp_ctxtid)
 
+/* DEPRECATED: issue indirect commands to the GPU.
+ * drawctxt_id must have been created with IOCTL_KGSL_DRAWCTXT_CREATE
+ * ibaddr and sizedwords must specify a subset of a buffer created
+ * with IOCTL_KGSL_SHAREDMEM_FROM_PMEM
+ * flags may be a mask of KGSL_CONTEXT_ values
+ * timestamp is a returned counter value which can be passed to
+ * other ioctls to determine when the commands have been executed by
+ * the GPU.
+ *
+ * This fucntion is deprecated - consider using IOCTL_KGSL_SUBMIT_COMMANDS
+ * instead
+ */
 struct kgsl_ringbuffer_issueibcmds {
 	unsigned int drawctxt_id;
 	unsigned int ibdesc_addr;
 	unsigned int numibs;
-	unsigned int timestamp; 
+	unsigned int timestamp; /*output param */
 	unsigned int flags;
 };
 
 #define IOCTL_KGSL_RINGBUFFER_ISSUEIBCMDS \
 	_IOWR(KGSL_IOC_TYPE, 0x10, struct kgsl_ringbuffer_issueibcmds)
 
+/* read the most recently executed timestamp value
+ * type should be a value from enum kgsl_timestamp_type
+ */
 struct kgsl_cmdstream_readtimestamp {
 	unsigned int type;
-	unsigned int timestamp; 
+	unsigned int timestamp; /*output param */
 };
 
 #define IOCTL_KGSL_CMDSTREAM_READTIMESTAMP_OLD \
@@ -260,6 +360,11 @@ struct kgsl_cmdstream_readtimestamp {
 #define IOCTL_KGSL_CMDSTREAM_READTIMESTAMP \
 	_IOWR(KGSL_IOC_TYPE, 0x11, struct kgsl_cmdstream_readtimestamp)
 
+/* free memory when the GPU reaches a given timestamp.
+ * gpuaddr specify a memory region created by a
+ * IOCTL_KGSL_SHAREDMEM_FROM_PMEM call
+ * type should be a value from enum kgsl_timestamp_type
+ */
 struct kgsl_cmdstream_freememontimestamp {
 	unsigned int gpuaddr;
 	unsigned int type;
@@ -269,18 +374,27 @@ struct kgsl_cmdstream_freememontimestamp {
 #define IOCTL_KGSL_CMDSTREAM_FREEMEMONTIMESTAMP \
 	_IOW(KGSL_IOC_TYPE, 0x12, struct kgsl_cmdstream_freememontimestamp)
 
+/* Previous versions of this header had incorrectly defined
+   IOCTL_KGSL_CMDSTREAM_FREEMEMONTIMESTAMP as a read-only ioctl instead
+   of a write only ioctl.  To ensure binary compatability, the following
+   #define will be used to intercept the incorrect ioctl
+*/
 
 #define IOCTL_KGSL_CMDSTREAM_FREEMEMONTIMESTAMP_OLD \
 	_IOR(KGSL_IOC_TYPE, 0x12, struct kgsl_cmdstream_freememontimestamp)
 
+/* create a draw context, which is used to preserve GPU state.
+ * The flags field may contain a mask KGSL_CONTEXT_*  values
+ */
 struct kgsl_drawctxt_create {
 	unsigned int flags;
-	unsigned int drawctxt_id; 
+	unsigned int drawctxt_id; /*output param */
 };
 
 #define IOCTL_KGSL_DRAWCTXT_CREATE \
 	_IOWR(KGSL_IOC_TYPE, 0x13, struct kgsl_drawctxt_create)
 
+/* destroy a draw context */
 struct kgsl_drawctxt_destroy {
 	unsigned int drawctxt_id;
 };
@@ -288,12 +402,14 @@ struct kgsl_drawctxt_destroy {
 #define IOCTL_KGSL_DRAWCTXT_DESTROY \
 	_IOW(KGSL_IOC_TYPE, 0x14, struct kgsl_drawctxt_destroy)
 
+/* add a block of pmem, fb, ashmem or user allocated address
+ * into the GPU address space */
 struct kgsl_map_user_mem {
 	int fd;
-	unsigned int gpuaddr;   
+	unsigned int gpuaddr;   /*output param */
 	unsigned int len;
 	unsigned int offset;
-	unsigned int hostptr;   
+	unsigned int hostptr;   /*input param */
 	enum kgsl_user_mem_type memtype;
 	unsigned int flags;
 };
@@ -304,7 +420,7 @@ struct kgsl_map_user_mem {
 struct kgsl_cmdstream_readtimestamp_ctxtid {
 	unsigned int context_id;
 	unsigned int type;
-	unsigned int timestamp; 
+	unsigned int timestamp; /*output param */
 };
 
 #define IOCTL_KGSL_CMDSTREAM_READTIMESTAMP_CTXTID \
@@ -321,9 +437,10 @@ struct kgsl_cmdstream_freememontimestamp_ctxtid {
 	_IOW(KGSL_IOC_TYPE, 0x17, \
 	struct kgsl_cmdstream_freememontimestamp_ctxtid)
 
+/* add a block of pmem or fb into the GPU address space */
 struct kgsl_sharedmem_from_pmem {
 	int pmem_fd;
-	unsigned int gpuaddr;	
+	unsigned int gpuaddr;	/*output param */
 	unsigned int len;
 	unsigned int offset;
 };
@@ -331,6 +448,7 @@ struct kgsl_sharedmem_from_pmem {
 #define IOCTL_KGSL_SHAREDMEM_FROM_PMEM \
 	_IOWR(KGSL_IOC_TYPE, 0x20, struct kgsl_sharedmem_from_pmem)
 
+/* remove memory from the GPU's address space */
 struct kgsl_sharedmem_free {
 	unsigned int gpuaddr;
 };
@@ -380,10 +498,15 @@ struct kgsl_bind_gmem_shadow {
 #define IOCTL_KGSL_DRAWCTXT_BIND_GMEM_SHADOW \
     _IOW(KGSL_IOC_TYPE, 0x22, struct kgsl_bind_gmem_shadow)
 
+/* add a block of memory into the GPU address space */
 
+/*
+ * IOCTL_KGSL_SHAREDMEM_FROM_VMALLOC deprecated 09/2012
+ * use IOCTL_KGSL_GPUMEM_ALLOC instead
+ */
 
 struct kgsl_sharedmem_from_vmalloc {
-	unsigned int gpuaddr;	
+	unsigned int gpuaddr;	/*output param */
 	unsigned int hostptr;
 	unsigned int flags;
 };
@@ -391,6 +514,13 @@ struct kgsl_sharedmem_from_vmalloc {
 #define IOCTL_KGSL_SHAREDMEM_FROM_VMALLOC \
 	_IOWR(KGSL_IOC_TYPE, 0x23, struct kgsl_sharedmem_from_vmalloc)
 
+/*
+ * This is being deprecated in favor of IOCTL_KGSL_GPUMEM_CACHE_SYNC which
+ * supports both directions (flush and invalidate). This code will still
+ * work, but by definition it will do a flush of the cache which might not be
+ * what you want to have happen on a buffer following a GPU operation.  It is
+ * safer to go with IOCTL_KGSL_GPUMEM_CACHE_SYNC
+ */
 
 #define IOCTL_KGSL_SHAREDMEM_FLUSH_CACHE \
 	_IOW(KGSL_IOC_TYPE, 0x24, struct kgsl_sharedmem_free)
@@ -406,12 +536,13 @@ struct kgsl_drawctxt_set_bin_base_offset {
 enum kgsl_cmdwindow_type {
 	KGSL_CMDWINDOW_MIN     = 0x00000000,
 	KGSL_CMDWINDOW_2D      = 0x00000000,
-	KGSL_CMDWINDOW_3D      = 0x00000001, 
+	KGSL_CMDWINDOW_3D      = 0x00000001, /* legacy */
 	KGSL_CMDWINDOW_MMU     = 0x00000002,
 	KGSL_CMDWINDOW_ARBITER = 0x000000FF,
 	KGSL_CMDWINDOW_MAX     = 0x000000FF,
 };
 
+/* write to the command window */
 struct kgsl_cmdwindow_write {
 	enum kgsl_cmdwindow_type target;
 	unsigned int addr;
@@ -433,38 +564,49 @@ struct kgsl_gpumem_alloc {
 struct kgsl_cff_syncmem {
 	unsigned int gpuaddr;
 	unsigned int len;
-	unsigned int __pad[2]; 
+	unsigned int __pad[2]; /* For future binary compatibility */
 };
 
 #define IOCTL_KGSL_CFF_SYNCMEM \
 	_IOW(KGSL_IOC_TYPE, 0x30, struct kgsl_cff_syncmem)
 
+/*
+ * A timestamp event allows the user space to register an action following an
+ * expired timestamp. Note IOCTL_KGSL_TIMESTAMP_EVENT has been redefined to
+ * _IOWR to support fences which need to return a fd for the priv parameter.
+ */
 
 struct kgsl_timestamp_event {
-	int type;                
-	unsigned int timestamp;  
-	unsigned int context_id; 
-	void *priv;              
-	size_t len;              
+	int type;                /* Type of event (see list below) */
+	unsigned int timestamp;  /* Timestamp to trigger event on */
+	unsigned int context_id; /* Context for the timestamp */
+	void *priv;              /* Pointer to the event specific blob */
+	size_t len;              /* Size of the event specific blob */
 };
 
 #define IOCTL_KGSL_TIMESTAMP_EVENT_OLD \
 	_IOW(KGSL_IOC_TYPE, 0x31, struct kgsl_timestamp_event)
 
+/* A genlock timestamp event releases an existing lock on timestamp expire */
 
 #define KGSL_TIMESTAMP_EVENT_GENLOCK 1
 
 struct kgsl_timestamp_event_genlock {
-	int handle; 
+	int handle; /* Handle of the genlock lock to release */
 };
 
+/* A fence timestamp event releases an existing lock on timestamp expire */
 
 #define KGSL_TIMESTAMP_EVENT_FENCE 2
 
 struct kgsl_timestamp_event_fence {
-	int fence_fd; 
+	int fence_fd; /* Fence to signal */
 };
 
+/*
+ * Set a property within the kernel.  Uses the same structure as
+ * IOCTL_KGSL_GETPROPERTY
+ */
 
 #define IOCTL_KGSL_SETPROPERTY \
 	_IOW(KGSL_IOC_TYPE, 0x32, struct kgsl_device_getproperty)
@@ -472,26 +614,70 @@ struct kgsl_timestamp_event_fence {
 #define IOCTL_KGSL_TIMESTAMP_EVENT \
 	_IOWR(KGSL_IOC_TYPE, 0x33, struct kgsl_timestamp_event)
 
+/**
+ * struct kgsl_gpumem_alloc_id - argument to IOCTL_KGSL_GPUMEM_ALLOC_ID
+ * @id: returned id value for this allocation.
+ * @flags: mask of KGSL_MEM* values requested and actual flags on return.
+ * @size: requested size of the allocation and actual size on return.
+ * @mmapsize: returned size to pass to mmap() which may be larger than 'size'
+ * @gpuaddr: returned GPU address for the allocation
+ *
+ * Allocate memory for access by the GPU. The flags and size fields are echoed
+ * back by the kernel, so that the caller can know if the request was
+ * adjusted.
+ *
+ * Supported flags:
+ * KGSL_MEMFLAGS_GPUREADONLY: the GPU will be unable to write to the buffer
+ * KGSL_MEMTYPE*: usage hint for debugging aid
+ * KGSL_MEMALIGN*: alignment hint, may be ignored or adjusted by the kernel.
+ * KGSL_MEMFLAGS_USE_CPU_MAP: If set on call and return, the returned GPU
+ * address will be 0. Calling mmap() will set the GPU address.
+ */
 struct kgsl_gpumem_alloc_id {
 	unsigned int id;
 	unsigned int flags;
 	unsigned int size;
 	unsigned int mmapsize;
 	unsigned long gpuaddr;
+/* private: reserved for future use*/
 	unsigned int __pad[2];
 };
 
 #define IOCTL_KGSL_GPUMEM_ALLOC_ID \
 	_IOWR(KGSL_IOC_TYPE, 0x34, struct kgsl_gpumem_alloc_id)
 
+/**
+ * struct kgsl_gpumem_free_id - argument to IOCTL_KGSL_GPUMEM_FREE_ID
+ * @id: GPU allocation id to free
+ *
+ * Free an allocation by id, in case a GPU address has not been assigned or
+ * is unknown. Freeing an allocation by id with this ioctl or by GPU address
+ * with IOCTL_KGSL_SHAREDMEM_FREE are equivalent.
+ */
 struct kgsl_gpumem_free_id {
 	unsigned int id;
+/* private: reserved for future use*/
 	unsigned int __pad;
 };
 
 #define IOCTL_KGSL_GPUMEM_FREE_ID \
 	_IOWR(KGSL_IOC_TYPE, 0x35, struct kgsl_gpumem_free_id)
 
+/**
+ * struct kgsl_gpumem_get_info - argument to IOCTL_KGSL_GPUMEM_GET_INFO
+ * @gpuaddr: GPU address to query. Also set on return.
+ * @id: GPU allocation id to query. Also set on return.
+ * @flags: returned mask of KGSL_MEM* values.
+ * @size: returned size of the allocation.
+ * @mmapsize: returned size to pass mmap(), which may be larger than 'size'
+ * @useraddr: returned address of the userspace mapping for this buffer
+ *
+ * This ioctl allows querying of all user visible attributes of an existing
+ * allocation, by either the GPU address or the id returned by a previous
+ * call to IOCTL_KGSL_GPUMEM_ALLOC_ID. Legacy allocation ioctls may not
+ * return all attributes so this ioctl can be used to look them up if needed.
+ *
+ */
 struct kgsl_gpumem_get_info {
 	unsigned long gpuaddr;
 	unsigned int id;
@@ -499,17 +685,30 @@ struct kgsl_gpumem_get_info {
 	unsigned int size;
 	unsigned int mmapsize;
 	unsigned long useraddr;
+/* private: reserved for future use*/
 	unsigned int __pad[4];
 };
 
 #define IOCTL_KGSL_GPUMEM_GET_INFO\
 	_IOWR(KGSL_IOC_TYPE, 0x36, struct kgsl_gpumem_get_info)
 
+/**
+ * struct kgsl_gpumem_sync_cache - argument to IOCTL_KGSL_GPUMEM_SYNC_CACHE
+ * @gpuaddr: GPU address of the buffer to sync.
+ * @id: id of the buffer to sync. Either gpuaddr or id is sufficient.
+ * @op: a mask of KGSL_GPUMEM_CACHE_* values
+ *
+ * Sync the L2 cache for memory headed to and from the GPU - this replaces
+ * KGSL_SHAREDMEM_FLUSH_CACHE since it can handle cache management for both
+ * directions
+ *
+ */
 struct kgsl_gpumem_sync_cache {
 	unsigned int gpuaddr;
 	unsigned int id;
 	unsigned int op;
-	unsigned int __pad[2]; 
+/* private: reserved for future use*/
+	unsigned int __pad[2]; /* For future binary compatibility */
 };
 
 #define KGSL_GPUMEM_CACHE_CLEAN (1 << 0)
@@ -524,21 +723,49 @@ struct kgsl_gpumem_sync_cache {
 #define IOCTL_KGSL_GPUMEM_SYNC_CACHE \
 	_IOW(KGSL_IOC_TYPE, 0x37, struct kgsl_gpumem_sync_cache)
 
+/**
+ * struct kgsl_perfcounter_get - argument to IOCTL_KGSL_PERFCOUNTER_GET
+ * @groupid: Performance counter group ID
+ * @countable: Countable to select within the group
+ * @offset: Return offset of the reserved LO counter
+ * @offset_hi: Return offset of the reserved HI counter
+ *
+ * Get an available performance counter from a specified groupid.  The offset
+ * of the performance counter will be returned after successfully assigning
+ * the countable to the counter for the specified group.  An error will be
+ * returned and an offset of 0 if the groupid is invalid or there are no
+ * more counters left.  After successfully getting a perfcounter, the user
+ * must call kgsl_perfcounter_put(groupid, contable) when finished with
+ * the perfcounter to clear up perfcounter resources.
+ *
+ */
 struct kgsl_perfcounter_get {
 	unsigned int groupid;
 	unsigned int countable;
 	unsigned int offset;
 	unsigned int offset_hi;
-	unsigned int __pad; 
+/* private: reserved for future use */
+	unsigned int __pad; /* For future binary compatibility */
 };
 
 #define IOCTL_KGSL_PERFCOUNTER_GET \
 	_IOWR(KGSL_IOC_TYPE, 0x38, struct kgsl_perfcounter_get)
 
+/**
+ * struct kgsl_perfcounter_put - argument to IOCTL_KGSL_PERFCOUNTER_PUT
+ * @groupid: Performance counter group ID
+ * @countable: Countable to release within the group
+ *
+ * Put an allocated performance counter to allow others to have access to the
+ * resource that was previously taken.  This is only to be called after
+ * successfully getting a performance counter from kgsl_perfcounter_get().
+ *
+ */
 struct kgsl_perfcounter_put {
 	unsigned int groupid;
 	unsigned int countable;
-	unsigned int __pad[2]; 
+/* private: reserved for future use */
+	unsigned int __pad[2]; /* For future binary compatibility */
 };
 
 #define IOCTL_KGSL_PERFCOUNTER_PUT \
@@ -563,16 +790,28 @@ struct kgsl_perfcounter_put {
  */
 struct kgsl_perfcounter_query {
 	unsigned int groupid;
-	
+	/* Array to return the current countable for up to size counters */
 	unsigned int *countables;
 	unsigned int count;
 	unsigned int max_counters;
-	unsigned int __pad[2]; 
+/* private: reserved for future use */
+	unsigned int __pad[2]; /* For future binary compatibility */
 };
 
 #define IOCTL_KGSL_PERFCOUNTER_QUERY \
 	_IOWR(KGSL_IOC_TYPE, 0x3A, struct kgsl_perfcounter_query)
 
+/**
+ * struct kgsl_perfcounter_query - argument to IOCTL_KGSL_PERFCOUNTER_QUERY
+ * @groupid: Performance counter group IDs
+ * @countable: Performance counter countable IDs
+ * @value: Return performance counter reads
+ * @size: Size of all arrays (groupid/countable pair and return value)
+ *
+ * Read in the current value of a performance counter given by the groupid
+ * and countable.
+ *
+ */
 
 struct kgsl_perfcounter_read_group {
 	unsigned int groupid;
@@ -583,20 +822,42 @@ struct kgsl_perfcounter_read_group {
 struct kgsl_perfcounter_read {
 	struct kgsl_perfcounter_read_group *reads;
 	unsigned int count;
-	unsigned int __pad[2]; 
+/* private: reserved for future use */
+	unsigned int __pad[2]; /* For future binary compatibility */
 };
 
 #define IOCTL_KGSL_PERFCOUNTER_READ \
 	_IOWR(KGSL_IOC_TYPE, 0x3B, struct kgsl_perfcounter_read)
+/*
+ * struct kgsl_gpumem_sync_cache_bulk - argument to
+ * IOCTL_KGSL_GPUMEM_SYNC_CACHE_BULK
+ * @id_list: list of GPU buffer ids of the buffers to sync
+ * @count: number of GPU buffer ids in id_list
+ * @op: a mask of KGSL_GPUMEM_CACHE_* values
+ *
+ * Sync the cache for memory headed to and from the GPU. Certain
+ * optimizations can be made on the cache operation based on the total
+ * size of the working set of memory to be managed.
+ */
 struct kgsl_gpumem_sync_cache_bulk {
 	unsigned int *id_list;
 	unsigned int count;
 	unsigned int op;
-	unsigned int __pad[2]; 
+/* private: reserved for future use */
+	unsigned int __pad[2]; /* For future binary compatibility */
 };
 
 #define IOCTL_KGSL_GPUMEM_SYNC_CACHE_BULK \
 	_IOWR(KGSL_IOC_TYPE, 0x3C, struct kgsl_gpumem_sync_cache_bulk)
+/*
+* kgsl_get_alloc_size - acquire memory size allocated in kernel space by kgsl
+* @detailed: to indicate if need detailed info,
+* set detailed to 1, if need the detailed info
+* of each gfx process for different type memory usage,
+* said ion, ashmem, kernel ...etc
+*
+* Returns allocated memory size and prints kgsl meminfo in kernel log if set detailed
+*/
 #ifdef CONFIG_MSM_KGSL
 unsigned int kgsl_get_alloc_size(int detailed);
 #else
@@ -606,6 +867,16 @@ static inline int kgsl_get_alloc_size(int detailed)
 }
 #endif
 
+/*
+ * struct kgsl_cmd_syncpoint_timestamp
+ * @context_id: ID of a KGSL context
+ * @timestamp: GPU timestamp
+ *
+ * This structure defines a syncpoint comprising a context/timestamp pair. A
+ * list of these may be passed by IOCTL_KGSL_SUBMIT_COMMANDS to define
+ * dependencies that must be met before the command can be submitted to the
+ * hardware
+ */
 struct kgsl_cmd_syncpoint_timestamp {
 	unsigned int context_id;
 	unsigned int timestamp;
@@ -619,12 +890,42 @@ struct kgsl_cmd_syncpoint_fence {
 
 #define KGSL_CMD_SYNCPOINT_TYPE_FENCE 1
 
+/**
+ * struct kgsl_cmd_syncpoint - Define a sync point for a command batch
+ * @type: type of sync point defined here
+ * @priv: Pointer to the type specific buffer
+ * @size: Size of the type specific buffer
+ *
+ * This structure contains pointers defining a specific command sync point.
+ * The pointer and size should point to a type appropriate structure.
+ */
 struct kgsl_cmd_syncpoint {
 	int type;
 	void __user *priv;
 	unsigned int size;
 };
 
+/* Flag to indicate that the cmdlist may contain memlists */
+#define KGSL_IBDESC_MEMLIST 0x1
+
+/**
+ * struct kgsl_submit_commands - Argument to IOCTL_KGSL_SUBMIT_COMMANDS
+ * @context_id: KGSL context ID that owns the commands
+ * @flags:
+ * @cmdlist: User pointer to a list of kgsl_ibdesc structures
+ * @numcmds: Number of commands listed in cmdlist
+ * @synclist: User pointer to a list of kgsl_cmd_syncpoint structures
+ * @numsyncs: Number of sync points listed in synclist
+ * @timestamp: On entry the a user defined timestamp, on exist the timestamp
+ * assigned to the command batch
+ *
+ * This structure specifies a command to send to the GPU hardware.  This is
+ * similar to kgsl_issueibcmds expect that it doesn't support the legacy way to
+ * submit IB lists and it adds sync points to block the IB until the
+ * dependencies are satisified.  This entry point is the new and preferred way
+ * to submit commands to the GPU. The memory list can be used to specify all
+ * memory that is referrenced in the current set of commands.
+ */
 
 struct kgsl_submit_commands {
 	unsigned int context_id;
@@ -634,12 +935,20 @@ struct kgsl_submit_commands {
 	struct kgsl_cmd_syncpoint __user *synclist;
 	unsigned int numsyncs;
 	unsigned int timestamp;
+/* private: reserved for future use */
 	unsigned int __pad[4];
 };
 
 #define IOCTL_KGSL_SUBMIT_COMMANDS \
 	_IOWR(KGSL_IOC_TYPE, 0x3D, struct kgsl_submit_commands)
 
+/**
+ * struct kgsl_device_constraint - device constraint argument
+ * @context_id: KGSL context ID
+ * @type: type of constraint i.e pwrlevel/none
+ * @data: constraint data
+ * @size: size of the constraint data
+ */
 struct kgsl_device_constraint {
 	unsigned int type;
 	unsigned int context_id;
@@ -647,10 +956,14 @@ struct kgsl_device_constraint {
 	size_t size;
 };
 
+/* Constraint Type*/
 #define KGSL_CONSTRAINT_NONE 0
 #define KGSL_CONSTRAINT_PWRLEVEL 1
 
+/* PWRLEVEL constraint level*/
+/* set to min frequency */
 #define KGSL_CONSTRAINT_PWR_MIN    0
+/* set to max frequency */
 #define KGSL_CONSTRAINT_PWR_MAX    1
 
 struct kgsl_device_constraint_pwrlevel {
@@ -665,4 +978,4 @@ int kgsl_gem_obj_addr(int drm_fd, int handle, unsigned long *start,
 #define kgsl_gem_obj_addr(...) 0
 #endif
 #endif
-#endif 
+#endif /* _MSM_KGSL_H */

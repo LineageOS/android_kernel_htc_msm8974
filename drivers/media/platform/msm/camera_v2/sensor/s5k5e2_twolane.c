@@ -34,9 +34,17 @@ struct msm_sensor_power_setting s5k5e2_twolane_power_setting[] = {
 	{
 		.seq_type = SENSOR_GPIO,
 		.seq_val = SENSOR_GPIO_VIO,
-		.config_val = GPIO_OUT_HIGH,
+		.config_val = GPIO_OUT_HIGH,//GPIO_OUT_HIGH,
 		.delay = 4,
 	},
+	/*
+	{
+		.seq_type = SENSOR_GPIO,
+		.seq_val = SENSOR_GPIO_VAF,
+		.config_val = GPIO_OUT_HIGH,//GPIO_OUT_HIGH,
+		.delay = 100,
+	},
+	*/
 	{
 		.seq_type = SENSOR_CLK,
 		.seq_val = SENSOR_CAM_MCLK,
@@ -46,7 +54,7 @@ struct msm_sensor_power_setting s5k5e2_twolane_power_setting[] = {
 	{
 		.seq_type = SENSOR_GPIO,
 		.seq_val = SENSOR_GPIO_RESET,
-		.config_val = GPIO_OUT_HIGH,
+		.config_val = GPIO_OUT_HIGH,//GPIO_OUT_LOW,
 		.delay = 2,
 	},
 	{
@@ -74,7 +82,7 @@ struct msm_sensor_power_setting s5k5e2_twolane_power_down_setting[] = {
 	{
 		.seq_type = SENSOR_GPIO,
 		.seq_val = SENSOR_GPIO_VIO,
-		.config_val = GPIO_OUT_HIGH,
+		.config_val = GPIO_OUT_HIGH,//GPIO_OUT_HIGH,
 		.delay = 4,
 	},
 
@@ -97,6 +105,51 @@ struct msm_sensor_power_setting s5k5e2_twolane_power_down_setting[] = {
 		.delay = 0,
 	},
 
+	/*
+
+	{
+		.seq_type = SENSOR_GPIO,
+		.seq_val = SENSOR_GPIO_RESET,
+		.config_val = GPIO_OUT_HIGH,
+		.delay = 20,
+	},
+	{
+		.seq_type = SENSOR_VREG_NCP6924,
+		.seq_val = NCP6924_VANA,
+		.config_val = 1,
+		.delay = 1,
+	},
+	{
+		.seq_type = SENSOR_VREG_NCP6924,
+		.seq_val = NCP6924_VIO,
+		.config_val = 1,
+		.delay = 1,
+	},
+	{
+		.seq_type = SENSOR_VREG_NCP6924,
+		.seq_val = NCP6924_VDIG,
+		.config_val = 1,
+		.delay = 1,
+	},
+	{
+		.seq_type = SENSOR_CLK,
+		.seq_val = SENSOR_CAM_MCLK,
+		.config_val = 0,
+		.delay = 5,
+	},
+	{
+		.seq_type = SENSOR_GPIO,
+		.seq_val = SENSOR_GPIO_RESET,
+		.config_val = GPIO_OUT_HIGH,
+		.delay = 80,
+	},
+	{
+		.seq_type = SENSOR_I2C_MUX,
+		.seq_val = 0,
+		.config_val = 0,
+		.delay = 0,
+	},
+	*/
 
 };
 
@@ -226,7 +279,7 @@ static void __exit s5k5e2_twolane_exit_module(void)
 int32_t s5k5e2_twolane_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 {
     int32_t status;
-	
+	//struct regulator *vdig, *vana;
     pr_info("%s: +\n", __func__);
 
     s_ctrl->power_setting_array.power_setting = s5k5e2_twolane_power_setting;
@@ -236,6 +289,7 @@ int32_t s5k5e2_twolane_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl)
     return status;
 }
 
+//For power down sequence, keep reset pin low before Analog power off.
 int32_t s5k5e2_twolane_sensor_power_down(struct msm_sensor_ctrl_t *s_ctrl)
 {
     int32_t status;
@@ -246,7 +300,7 @@ int32_t s5k5e2_twolane_sensor_power_down(struct msm_sensor_ctrl_t *s_ctrl)
     s_ctrl->power_setting_array.power_setting = s5k5e2_twolane_power_down_setting;
     s_ctrl->power_setting_array.size = ARRAY_SIZE(s5k5e2_twolane_power_down_setting);
 
-    
+    //When release regulator, need the same data pointer from power up sequence.
     for(i = 0; i < s_ctrl->power_setting_array.size;  i++)
     {
         data_size = sizeof(s5k5e2_twolane_power_setting[i].data)/sizeof(void *);

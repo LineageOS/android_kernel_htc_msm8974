@@ -44,8 +44,8 @@ int pm8941_bms_exit_qb_mode(void);
 int pm8941_qb_mode_pwr_consumption_check(unsigned long time_stamp);
 int emmc_misc_write(int val, int offset);
 int pm8941_get_batt_id_mv(int *result);
-#endif 
-#else 
+#endif /* CONFIG_HTC_BATT_8960 */
+#else /* CONFIG_QPNP_BMS */
 #ifdef CONFIG_HTC_BATT_8960
 static int inline pm8941_bms_get_batt_current(int *result)
 {
@@ -127,7 +127,7 @@ static inline int pm8941_get_batt_id_mv(int *result)
 {
 	return -ENXIO;
 }
-#endif 
-#endif 
+#endif /* CONFIG_HTC_BATT_8960 */
+#endif /* CONFIG_QPNP_BMS */
 
-#endif 
+#endif /* __QPNP_BMS_H */

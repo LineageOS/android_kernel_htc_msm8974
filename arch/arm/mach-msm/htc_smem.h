@@ -32,11 +32,12 @@ typedef struct {
 
 	u32      	htc_smem_erase_efs_flag;
 	u32    		htc_smem_flight_mode_flag;
-	u8      	htc_radio_version_addr[16];	
-	u8      	htc_protocol_version_addr[16]; 
+	u8      	htc_radio_version_addr[16];	//modem fill it
+	u8      	htc_protocol_version_addr[16]; // modem fill it
 	u8      	reserve2[16];
 
-	htc_modem_request_type		htc_modem_request;
+/* ========= belows are shared ==================== */
+	htc_modem_request_type		htc_modem_request;		// for error handling only
 
 /* for eMMC feature */
 	u32      	htc_emmc_magic_flag;
@@ -50,6 +51,8 @@ typedef struct {
 	u32      	htc_smem_user_time_offset;
 
 
+/* radio debug */
+// Use 32 bytes to record the TCXO shutdown time statistics
 	u32      	htc_tcxo_off_time_total;
 	u32      	htc_tcxo_off_cnt_total;
 	u32      	htc_tcxo_off_time_pwrc_suspend;
@@ -60,9 +63,9 @@ typedef struct {
 	u32      	htc_cdlog_start_addr_for_apps;
 	u32      	htc_cdlog_max_size_for_apps;
 
-#if 1 
+#if 1 /* HTC_INTEGRATE_CIQ_006 */
 	u32		htc_ciq_flag;
-#endif 
+#endif /*END HTC_INTEGRATE_CIQ_006 */
 	u32		htc_modem_info_dch_time;
 	u32		htc_modem_info_fach_time;
 	u32		htc_modem_info_3g_cs_bar1_time;
@@ -93,7 +96,7 @@ typedef struct {
 	u32		htc_modem_info_ps_bar4_time_lte;
 	u32		htc_modem_info_ps_bar5_time_lte;
 
-	u32		htc_global_SYNCACK_garbage_cnt;		
+	u32		htc_global_SYNCACK_garbage_cnt;	/*HTC_INTEGRATE_8960PCN_GF_003*/	//Offset:14C
 	u32		htc_smlog_magic;
 	u8 		htc_rom_sku[16];
 	u32      	htc_smem_ce_radio_dbg_flag_ex1;

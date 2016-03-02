@@ -320,6 +320,7 @@ struct qpnp_bms_chip {
 	bool			batt_full_fake_ocv;
 	int				enable_batt_full_fake_ocv;
 	int				qb_mode_cc_criteria_uAh;
+	int				soc_overrate_criteria_for_sw_ocv;
 };
 
 struct pm8941_bms_debug {
@@ -410,6 +411,7 @@ static int get_rbatt(struct qpnp_bms_chip *chip,
 					int soc_rbatt_mohm, int batt_temp);
 int emmc_misc_write(int val, int offset);
 static int calculate_cc(struct qpnp_bms_chip *chip, int64_t cc, int cc_type, int clear_cc);
+int pm8941_bms_get_percent_charge(struct qpnp_bms_chip *chip);
 
 static bool bms_reset;
 static struct qpnp_bms_chip *the_chip;
@@ -1684,6 +1686,7 @@ static int pm8941_bms_estimate_ocv(void)
 	int	rc;
 	int	estimated_ocv_uv = 0;
 	int ibatt_ua, vbat_uv;
+	int soc_by_sw_ocv, prev_raw_soc, prev_last_ocv_uv, prev_cc_backup_uah;
 	struct raw_soc_params raw;
 
 	if (!the_chip) {
@@ -1741,6 +1744,38 @@ static int pm8941_bms_estimate_ocv(void)
 
 	estimated_ocv_uv = estimate_sw_ocv(the_chip, ibatt_ua, vbat_uv);
 
+	
+	
+	if(the_chip->soc_overrate_criteria_for_sw_ocv) {
+		
+		prev_last_ocv_uv = the_chip->last_ocv_uv;
+		prev_cc_backup_uah = the_chip->cc_backup_uah;
+		prev_raw_soc = bms_dbg.raw_soc;
+
+		
+		the_chip->last_ocv_uv = estimated_ocv_uv;
+		the_chip->cc_backup_uah = calculate_cc(the_chip, raw.cc, CC, NORESET);
+		soc_by_sw_ocv = pm8941_bms_get_percent_charge(the_chip);
+
+		if(soc_by_sw_ocv - prev_raw_soc >= the_chip->soc_overrate_criteria_for_sw_ocv) {
+			pr_info("[EST]New SoC overrate %d%% after SW OCV, skip it! "
+				"raw_soc/ori=%d/%d, last_ocv_uv/ori=%d/%d, cc_backup_uah/ori=%d/%d\n",
+				the_chip->soc_overrate_criteria_for_sw_ocv,
+				soc_by_sw_ocv,
+				prev_raw_soc,
+				the_chip->last_ocv_uv,
+				prev_last_ocv_uv,
+				the_chip->cc_backup_uah,
+				prev_cc_backup_uah);
+			
+			mutex_lock(&the_chip->bms_output_lock);
+			the_chip->last_ocv_uv = prev_last_ocv_uv;
+			the_chip->cc_backup_uah = prev_cc_backup_uah;
+			mutex_unlock(&the_chip->bms_output_lock);
+
+			return 0;
+		}
+	}
 	
 	if (estimated_ocv_uv > 0) {
 		is_do_sw_ocv_in_eoc = 0;
@@ -3355,8 +3390,10 @@ static int backup_new_fcc(struct qpnp_bms_chip *chip, int fcc_mah,
 		min_cycle = chip->fcc_learning_samples[0].chargecycles;
 		for (i = 1; i < chip->min_fcc_learning_samples; i++) {
 			if (min_cycle >
-				chip->fcc_learning_samples[i].chargecycles)
+				chip->fcc_learning_samples[i].chargecycles) {
 				pos = i;
+				break;
+			}
 		}
 	} else {
 		
@@ -5021,6 +5058,7 @@ static inline int bms_read_properties(struct qpnp_bms_chip *chip)
 	SPMI_PROP_READ(enable_sw_ocv_in_eoc, "enable-sw-ocv-in-eoc", rc, true);
 	SPMI_PROP_READ(enable_batt_full_fake_ocv, "enable-batt-full-fake-ocv", rc, true);
 	SPMI_PROP_READ(qb_mode_cc_criteria_uAh, "qb-mode-cc-criteria-uah", rc, true);
+	SPMI_PROP_READ(soc_overrate_criteria_for_sw_ocv, "soc-overrate-criteria-for-sw-ocv", rc, true);
 
 	chip->use_external_rsense = of_property_read_bool(
 			chip->spmi->dev.of_node,
