@@ -533,8 +533,18 @@ uint uXferCnt = 0;
 	if (dev->hsml_proto->debug_mode) {
 		frame = (char *)test_frame;
 	} else {
+#if HSML_VERSION_12
+		if (dev->hsml_ver != cHSML_VER_12) {
+			if (minifb_lockbuf((void**)&frame, &frameSize, MINIFB_REPEAT) < 0)
+				return 0;
+		} else {
+			if (minifb_lockbuf((void**)&frame, &frameSize, MINIFB_NOREPEAT) < 0)
+				return 0;
+		}
+#else
 		if (minifb_lockbuf((void**)&frame, &frameSize, MINIFB_REPEAT) < 0)
 			return 0;
+#endif
 	}
 
 	if (frame == NULL)
@@ -932,6 +942,7 @@ static void projector2_function_disable(struct usb_function *f)
 
 	if (atomic_read(&dev->prj2_enable_HSML) != 0) {
 		atomic_set(&dev->prj2_enable_HSML, 0);
+		printk(KERN_INFO "[MIRROR_LINK]%s, set state: 0\n",__func__);
 		schedule_work(&dev->notifier_setting_work);
 	}
 
@@ -1376,7 +1387,7 @@ static int projector2_bind_config(struct usb_configuration *c)
 
 	INIT_WORK(&dev->send_fb_work, projector2_send_fb_do_work);
 
-	atomic_set(&prj2_dev->prj2_enable_HSML, 1);
+	 
 
 	return 0;
 

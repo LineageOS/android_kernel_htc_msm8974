@@ -24,5 +24,5 @@ typedef struct {
 
 
 
-#endif 
+#endif /* __SHUB_CTRL_H__ */
 

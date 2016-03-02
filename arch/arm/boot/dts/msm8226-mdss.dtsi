@@ -118,9 +118,9 @@
 		qcom,platform-bist-ctrl = [00 00 b1 ff 00 00];
 		qcom,platform-regulator-settings = [07 09 03 00 20 00 01];
 		qcom,platform-lane-config = [00 00 00 00 00 00 00 01 97
-			00 00 00 00 05 00 00 01 97
-			00 00 00 00 0a 00 00 01 97
-			00 00 00 00 0f 00 00 01 97
+			00 00 00 00 00 00 00 01 97
+			00 00 00 00 00 00 00 01 97
+			00 00 00 00 00 00 00 01 97
 			00 c0 00 00 00 00 00 01 bb];
 		qcom,platform-supply-entry1 {
 			qcom,supply-name = "vdd";

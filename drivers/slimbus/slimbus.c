@@ -595,7 +595,8 @@ void slim_framer_booted(struct slim_controller *ctrl)
 	mutex_lock(&ctrl->m_ctrl);
 	list_for_each_safe(pos, next, &ctrl->devs) {
 		struct slim_driver *sbdrv;
-		sbdev = list_entry(pos, struct slim_device, dev_list);
+		if (pos)
+			sbdev = list_entry(pos, struct slim_device, dev_list);
 		mutex_unlock(&ctrl->m_ctrl);
 		if (sbdev && sbdev->dev.driver) {
 			sbdrv = to_slim_driver(sbdev->dev.driver);
@@ -994,11 +995,22 @@ int slim_xfer_msg(struct slim_controller *ctrl, struct slim_device *sbdev,
 	} else
 		ret = slim_processtxn(ctrl, SLIM_MSG_DEST_LOGICALADDR, mc, ec,
 				SLIM_MSG_MT_CORE, rbuf, wbuf, len, mlen,
-				NULL, sbdev->laddr, NULL);
+				msg->comp, sbdev->laddr, NULL);
 xfer_err:
 	return ret;
 }
 EXPORT_SYMBOL_GPL(slim_xfer_msg);
+
+int slim_user_msg(struct slim_device *sb, u8 la, u8 mt, u8 mc,
+				struct slim_ele_access *msg, u8 *buf, u8 len)
+{
+	if (!sb || !sb->ctrl || !msg || mt == SLIM_MSG_MT_CORE)
+		return -EINVAL;
+	if (!sb->ctrl->xfer_user_msg)
+		return -EPROTONOSUPPORT;
+	return sb->ctrl->xfer_user_msg(sb->ctrl, la, mt, mc, msg, buf, len);
+}
+EXPORT_SYMBOL(slim_user_msg);
 
 int slim_alloc_mgrports(struct slim_device *sb, enum slim_port_req req,
 				int nports, u32 *rh, int hsz)
@@ -1273,7 +1285,7 @@ int slim_disconnect_ports(struct slim_device *sb, u32 *ph, int nph)
 }
 EXPORT_SYMBOL_GPL(slim_disconnect_ports);
 
-int slim_port_xfer(struct slim_device *sb, u32 ph, u8 *iobuf, u32 len,
+int slim_port_xfer(struct slim_device *sb, u32 ph, phys_addr_t iobuf, u32 len,
 				struct completion *comp)
 {
 	struct slim_controller *ctrl = sb->ctrl;
@@ -1284,7 +1296,7 @@ int slim_port_xfer(struct slim_device *sb, u32 ph, u8 *iobuf, u32 len,
 EXPORT_SYMBOL_GPL(slim_port_xfer);
 
 enum slim_port_err slim_port_get_xfer_status(struct slim_device *sb, u32 ph,
-			u8 **done_buf, u32 *done_len)
+			phys_addr_t *done_buf, u32 *done_len)
 {
 	struct slim_controller *ctrl = sb->ctrl;
 	u8 pn = SLIM_HDL_TO_PORT(ph);
@@ -1293,7 +1305,7 @@ enum slim_port_err slim_port_get_xfer_status(struct slim_device *sb, u32 ph,
 	dev_dbg(&ctrl->dev, "get status port num:%d", pn);
 	if (la != SLIM_LA_MANAGER) {
 		if (done_buf)
-			*done_buf = NULL;
+			*done_buf = 0;
 		if (done_len)
 			*done_len = 0;
 		return SLIM_P_NOT_OWNED;

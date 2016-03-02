@@ -164,12 +164,11 @@ static irqreturn_t pn544_dev_irq_handler(int irq, void *dev_id)
 	struct pn544_dev *pn544_dev = dev_id;
 	static unsigned long orig_jiffies = 0;
 
-#ifdef CONFIG_SENSORS_NFC_IRQ_WORKAROUND
 	if (gpio_get_value(pn544_dev->irq_gpio) == 0) {
 		I("%s: irq_workaround\n", __func__);
 		return IRQ_HANDLED;
 	}
-#endif
+
 	pn544_disable_irq(pn544_dev);
 
 	
@@ -209,6 +208,7 @@ static int pn544_isEn(void)
 	
 	return pni->ven_value;
 }
+
 uint8_t read_buffer[MAX_BUFFER_SIZE];
 
 static ssize_t pn544_dev_read(struct file *filp, char __user *buf,
@@ -223,7 +223,7 @@ static ssize_t pn544_dev_read(struct file *filp, char __user *buf,
 	D("%s: start count = %u\n", __func__, count);
 
 	if (count > MAX_BUFFER_SIZE) {
-		E("%s : count =%d> MAX_BUFFER_SIZE\n", __func__, count);
+		E("%s : count =%zu> MAX_BUFFER_SIZE\n", __func__, count);
 		count = MAX_BUFFER_SIZE;
 	}
 
@@ -284,7 +284,7 @@ static ssize_t pn544_dev_read(struct file *filp, char __user *buf,
 		return -EFAULT;
 	}
 
-	D("%s done count = %u\n", __func__, count);
+	D("%s done count = %zu\n", __func__, count);
 	return count;
 
 fail:
@@ -301,11 +301,11 @@ static ssize_t pn544_dev_write(struct file *filp, const char __user *buf,
 	int i;
 	i = 0;
 
-	D("%s: start count = %u\n", __func__, count);
+	D("%s: start count = %zu\n", __func__, count);
 	wake_lock_timeout(&pni ->io_wake_lock, IO_WAKE_LOCK_TIMEOUT);
 
 	if (count > MAX_BUFFER_SIZE) {
-		E("%s : count =%d> MAX_BUFFER_SIZE\n", __func__, count);
+		E("%s : count =%zu> MAX_BUFFER_SIZE\n", __func__, count);
 		count = MAX_BUFFER_SIZE;
 	}
 
@@ -329,7 +329,7 @@ static ssize_t pn544_dev_write(struct file *filp, const char __user *buf,
 		E("%s : i2c_master_send returned %d\n", __func__, ret);
 		ret = -EIO;
 	} else {
-		D("%s done count = %u\n", __func__, count);
+		D("%s done count = %zu\n", __func__, count);
 		return count;
 	}
 
@@ -450,7 +450,7 @@ static ssize_t pn_temp1_show(struct device *dev,
 	}
 #endif
 
-	ret = sprintf(buf, "GPIO INT = %d "
+	ret = snprintf(buf, MAX_BUFFER_SIZE*2 , "GPIO INT = %d "
 		"Rx:ret=%d [0x%x, 0x%x, 0x%x, 0x%x]\n", val, ret, buffer[0], buffer[1],
 		buffer[2], buffer[3]);
 
@@ -557,7 +557,7 @@ static ssize_t debug_enable_show(struct device *dev,
 	int ret = 0;
 	I("debug_enable_show\n");
 
-	ret = sprintf(buf, "is_debug=%d\n", is_debug);
+	ret = snprintf(buf, MAX_BUFFER_SIZE *2 ,"is_debug=%d\n", is_debug);
 	return ret;
 }
 
@@ -576,18 +576,18 @@ static ssize_t nxp_chip_alive_show(struct device *dev,
 {
 	int ret = 0;
 	I("%s is %d\n", __func__, is_alive);
-	ret = sprintf(buf, "%d\n", is_alive);
+	ret = snprintf(buf, MAX_BUFFER_SIZE*2 ,"%d\n", is_alive);
 	return ret;
 }
 
-static DEVICE_ATTR(nxp_chip_alive, 0664, nxp_chip_alive_show, NULL);
+static DEVICE_ATTR(nxp_chip_alive, 0444, nxp_chip_alive_show, NULL);
 
 static ssize_t nxp_uicc_swp_show(struct device *dev,
 			struct device_attribute *attr, char *buf)
 {
 	int ret = 0;
 	I("%s is %d\n", __func__, is_uicc_swp);
-	ret = sprintf(buf, "%d\n", is_uicc_swp);
+	ret = snprintf(buf, MAX_BUFFER_SIZE*2 ,"%d\n", is_uicc_swp);
 	return ret;
 }
 
@@ -605,8 +605,8 @@ static ssize_t mfg_nfc_ctrl_show(struct device *dev,
 			struct device_attribute *attr, char *buf)
 {
 	int ret = 0;
-	I("%s mfc_nfc_cmd_result is %d\n", __func__, mfc_nfc_cmd_result);
-	ret = sprintf(buf, "%d\n", mfc_nfc_cmd_result);
+	I("%s not implement yet!! mfc_nfc_cmd_result is %d\n", __func__, mfc_nfc_cmd_result);
+	ret = snprintf(buf, MAX_BUFFER_SIZE*2 ,"%d\n", mfc_nfc_cmd_result);
 	return ret;
 }
 
@@ -617,30 +617,30 @@ static ssize_t mfg_nfc_ctrl_store(struct device *dev,
 	int code = -1;
 
 	sscanf(buf, "%d", &code);
-	I("%s: store value = %d\n", __func__, code);
+	I("%s: not implement yet!! store value = %d\n", __func__, code);
 
 	switch (code) {
 	case 0:
-		I("%s: get nfcversion :\n", __func__);
-		mfc_nfc_cmd_result = 137;
+		I("%s: not implement yet!! get nfcversion :\n", __func__);
+		mfc_nfc_cmd_result = -100;
 		break;
 	case 1:
-		I("%s: nfcreader test :\n", __func__);
-		mfc_nfc_cmd_result = 1;
+		I("%s: not implement yet!! nfcreader test :\n", __func__);
+		mfc_nfc_cmd_result = -100;
 		break;
 	case 2:
-		I("%s: nfccard test :\n", __func__);
-		mfc_nfc_cmd_result = 1;
+		I("%s: not implement yet!! nfccard test :\n", __func__);
+		mfc_nfc_cmd_result = -100;
 		break;
 	default:
-		E("%s: case default\n", __func__);
+		E("%s: not implement yet!! case default do nothing\n", __func__);
 		break;
 	}
 	I("%s: END\n", __func__);
 	return count;
 }
 
-static DEVICE_ATTR(mfg_nfc_ctrl, 0664, mfg_nfc_ctrl_show, mfg_nfc_ctrl_store);
+static DEVICE_ATTR(mfg_nfc_ctrl, 0660, mfg_nfc_ctrl_show, mfg_nfc_ctrl_store);
 
 static int pn544_parse_dt(struct device *dev, struct pn544_i2c_platform_data *pdata)
 {
@@ -741,7 +741,7 @@ static int pn544_probe(struct i2c_client *client,
 				"pn544_probe : failed to allocate \
 				memory for module data\n");
 		ret = -ENOMEM;
-		goto err_exit;
+		goto err_kzalloc;
 	}
 
 	pn_info = pni;
@@ -878,12 +878,14 @@ err_misc_register:
 	wake_lock_destroy(&pni->io_wake_lock);
 	kfree(pni);
 	pn_info = NULL;
+err_kzalloc:
 	gpio_free(platform_data->firm_gpio);
 err_request_gpio_firm:
 	gpio_free(platform_data->ven_gpio);
 err_request_gpio_ven:
 	gpio_free(platform_data->irq_gpio);
 err_exit:
+	kfree(platform_data);
 	E("%s: prob fail\n", __func__);
 	return ret;
 }

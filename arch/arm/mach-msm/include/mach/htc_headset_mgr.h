@@ -65,6 +65,16 @@
 	struct device_attribute dev_attr_headset_##_name = \
 	__ATTR(_name, _mode, _show, _store)
 
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+#define DISABLE			0
+#define ENABLE			1
+#define DEBOUNCE_INIT	         0
+#define DEBOUNCE_MNT	1
+#define DEBOUNCE_ON		2
+#define DEBOUNCE_COUNT	3
+#define DEBOUNCE_TIMER	2000
+#endif
+
 #define DRIVER_HS_MGR_RPC_SERVER	(1 << 0)
 #define DRIVER_HS_MGR_FLOAT_DET		(1 << 1)
 #define DRIVER_HS_MGR_OLD_AJ		(1 << 2)
@@ -132,6 +142,7 @@
 #define HS_DELAY_1WIRE_BUTTON		800
 #define HS_DELAY_1WIRE_BUTTON_SHORT	20
 #define HS_DELAY_IRQ_INIT		(10 * HS_DELAY_SEC)
+#define HS_DET_FLLOW_MIC_TIME		40
 
 #define HS_JIFFIES_ZERO			msecs_to_jiffies(HS_DELAY_ZERO)
 #define HS_JIFFIES_MIC_BIAS		msecs_to_jiffies(HS_DELAY_MIC_BIAS)
@@ -216,14 +227,20 @@ enum {
 	HEADSET_REG_1WIRE_REPORT_TYPE,
 	HEADSET_REG_1WIRE_OPEN,
 	HEADSET_REG_HS_INSERT,
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+	HEADSET_REG_HS_DISABLE_INT,
+	HEADSET_REG_HS_ENABLE_INT,
+	HEADSET_REG_WATER_DETECT_RISING,
+	HEADSET_REG_WATER_DETECT_FALLING
+#endif
 };
 
 enum {
 	HS_MGR_KEY_INVALID	= -1,
 	HS_MGR_KEY_NONE		= 0,
-	HS_MGR_KEY_PLAY		= 1,
-	HS_MGR_KEY_BACKWARD	= 2,
-	HS_MGR_KEY_FORWARD	= 3,
+	HS_MGR_KEY1		= 1,
+	HS_MGR_KEY2		= 2,
+	HS_MGR_KEY3		= 3,
 };
 
 enum {
@@ -295,6 +312,12 @@ struct hs_notifier_func {
 	int (*hs_1wire_report_type)(char **);
 	int (*hs_1wire_open)(void);
 	int (*hs_insert)(int);
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+	void (*hs_enable_int)(int);
+	void (*hs_disable_int)(int);
+	int (*hs_det_rising)(void);
+	int (*hs_det_falling)(void);
+#endif
 };
 
 struct htc_headset_mgr_platform_data {
@@ -372,6 +395,16 @@ struct htc_headset_mgr_info {
 #ifdef CONFIG_HTC_HEADSET_INT_REDETECT
 	int plugout_redetect;
 #endif
+
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+	int insert_count;
+	int remove_count;
+	int keep_mic_on;
+	int debounce_status;
+	int det_rising;
+	int mic_rising;
+	int det_test;
+#endif
 };
 
 int headset_notifier_register(struct headset_notifier *notifier);
@@ -392,6 +425,10 @@ struct class *hs_get_attribute_class(void);
 
 int headset_get_type(void);
 int headset_get_type_sync(int count, unsigned int interval);
+#ifdef CONFIG_HTC_HEADSET_DET_DEBOUNCE
+void set_keep_mic_flag(int flag);
+int get_debounce_state(void);
+#endif
 
 extern int switch_send_event(unsigned int bit, int on);
 

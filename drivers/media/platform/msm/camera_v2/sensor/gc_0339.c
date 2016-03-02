@@ -28,7 +28,7 @@ struct msm_sensor_power_setting gc_0339_power_setting[] = {
 	{
 		.seq_type = SENSOR_GPIO,
 		.seq_val = SENSOR_GPIO_VIO,
-		.config_val = GPIO_OUT_HIGH,
+		.config_val = GPIO_OUT_HIGH,//GPIO_OUT_HIGH,
 		.delay = 4,
 	},
 	{
@@ -46,7 +46,7 @@ struct msm_sensor_power_setting gc_0339_power_setting[] = {
 	{
 		.seq_type = SENSOR_GPIO,
 		.seq_val = SENSOR_GPIO_RESET,
-		.config_val = GPIO_OUT_HIGH,
+		.config_val = GPIO_OUT_HIGH,//GPIO_OUT_LOW,
 		.delay = 2,
 	},
 	{
@@ -68,7 +68,7 @@ struct msm_sensor_power_setting gc_0339_power_down_setting[] = {
 	{
 		.seq_type = SENSOR_GPIO,
 		.seq_val = SENSOR_GPIO_VIO,
-		.config_val = GPIO_OUT_HIGH,
+		.config_val = GPIO_OUT_HIGH,//GPIO_OUT_HIGH,
 		.delay = 1,
 	},
 	{
@@ -223,7 +223,7 @@ static void __exit gc_0339_exit_module(void)
 int32_t gc_0339_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 {
     int32_t status;
-	
+	//struct regulator *vdig, *vana;
     printk("cleandbg %s %d\n", __func__, __LINE__);
     pr_info("%s: +\n", __func__);
 
@@ -235,6 +235,7 @@ int32_t gc_0339_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl)
     return status;
 }
 
+//For power down sequence, keep reset pin low before Analog power off.
 int32_t gc_0339_sensor_power_down(struct msm_sensor_ctrl_t *s_ctrl)
 {
     int32_t status;
@@ -245,7 +246,7 @@ int32_t gc_0339_sensor_power_down(struct msm_sensor_ctrl_t *s_ctrl)
     s_ctrl->power_setting_array.power_setting = gc_0339_power_down_setting;
     s_ctrl->power_setting_array.size = ARRAY_SIZE(gc_0339_power_down_setting);
 
-    
+    //When release regulator, need the same data pointer from power up sequence.
     for(i = 0; i < s_ctrl->power_setting_array.size;  i++)
     {
         data_size = sizeof(gc_0339_power_setting[i].data)/sizeof(void *);

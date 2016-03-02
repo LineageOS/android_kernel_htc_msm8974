@@ -185,9 +185,9 @@ enum hal_property {
 	HAL_CONFIG_VENC_MARKLTRFRAME,
 	HAL_CONFIG_VENC_USELTRFRAME,
 	HAL_CONFIG_VENC_LTRPERIOD,
-	HAL_PARAM_VENC_ENABLE_INITIAL_QP,
 	HAL_CONFIG_VENC_HIER_P_NUM_FRAMES,
 	HAL_PARAM_VENC_HIER_P_MAX_ENH_LAYERS,
+	HAL_PARAM_VENC_ENABLE_INITIAL_QP,
 };
 
 enum hal_domain {
@@ -562,18 +562,6 @@ struct hal_profile_level {
 	u32 profile;
 	u32 level;
 };
-/*
-struct hal_profile_level_range {
-	u32 profile;
-	u32 min_level;
-	u32 max_level;
-}
-
-struct hal_profile_level_supported {
-	u32 profile_count;
-	struct hal_profile_level_range profile_level[1];
-};
-*/
 enum hal_h264_entropy {
 	HAL_H264_ENTROPY_CAVLC = 1,
 	HAL_H264_ENTROPY_CABAC = 2,
@@ -719,7 +707,7 @@ struct hal_buffer_requirements {
 	u32 buffer_alignment;
 };
 
-enum hal_priority {/* Priority increases with number */
+enum hal_priority {
 	HAL_PRIORITY_LOW = 10,
 	HAL_PRIOIRTY_MEDIUM = 20,
 	HAL_PRIORITY_HIGH = 30,
@@ -888,6 +876,14 @@ struct vidc_seq_hdr {
 	u32 seq_hdr_len;
 };
 
+struct hal_fw_info {
+	char version[128];
+	int base_addr;
+	int register_base;
+	int register_size;
+	int irq;
+};
+
 enum hal_flush {
 	HAL_FLUSH_INPUT,
 	HAL_FLUSH_OUTPUT,
@@ -938,7 +934,6 @@ struct hal_ltrmark {
 
 /* HAL Response */
 enum command_response {
-/* SYSTEM COMMANDS_DONE*/
 	VIDC_EVENT_CHANGE,
 	SYS_INIT_DONE,
 	SET_RESOURCE_DONE,
@@ -949,7 +944,6 @@ enum command_response {
 	SYS_DEBUG,
 	SYS_WATCHDOG_TIMEOUT,
 	SYS_ERROR,
-/* SESSION COMMANDS_DONE */
 	SESSION_LOAD_RESOURCE_DONE,
 	SESSION_INIT_DONE,
 	SESSION_END_DONE,
@@ -972,7 +966,6 @@ enum command_response {
 	RESPONSE_UNUSED = 0x10000000,
 };
 
-/* Command Callback structure */
 
 struct msm_vidc_cb_cmd_done {
 	u32 device_id;
@@ -993,7 +986,6 @@ struct msm_vidc_cb_event {
 	u8 *exra_data_buffer;
 };
 
-/* Data callback structure */
 
 struct vidc_hal_ebd {
 	u32 timestamp_hi;
@@ -1095,14 +1087,6 @@ enum mem_type {
 	OCMEM_MEM = 0x2,
 };
 
-enum fw_info {
-	FW_BASE_ADDRESS,
-	FW_REGISTER_BASE,
-	FW_REGISTER_SIZE,
-	FW_IRQ,
-	FW_INFO_MAX,
-};
-
 enum dev_info {
 	DEV_CLOCK_COUNT,
 	DEV_CLOCK_ENABLED,
@@ -1117,7 +1101,7 @@ enum dev_info {
 struct hfi_device {
 	void *hfi_device_data;
 
-	/*Add function pointers for all the hfi functions below*/
+	
 	int (*core_init)(void *device);
 	int (*core_release)(void *device);
 	int (*core_pc_prep)(void *device);
@@ -1160,13 +1144,10 @@ struct hfi_device {
 			int *domain_num, int *partition_num);
 	int (*load_fw)(void *dev);
 	void (*unload_fw)(void *dev);
-	int (*resurrect_fw)(void *dev);
-	int (*get_fw_info)(void *dev, enum fw_info info);
+	int (*get_fw_info)(void *dev, struct hal_fw_info *fw_info);
 	int (*get_info) (void *dev, enum dev_info info);
 	int (*get_stride_scanline)(int color_fmt, int width,
 		int height,	int *stride, int *scanlines);
-	int (*capability_check)(u32 fourcc, u32 width,
-			u32 *max_width, u32 *max_height);
 	int (*session_clean)(void *sess);
 	int (*get_core_capabilities)(void);
 	int (*power_enable)(void *dev);
@@ -1184,4 +1165,4 @@ void vidc_hfi_deinitialize(enum msm_vidc_hfi_type hfi_type,
 			struct hfi_device *hdev);
 
 
-#endif /*__VIDC_HFI_API_H__ */
+#endif 

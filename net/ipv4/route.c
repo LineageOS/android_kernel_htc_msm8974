@@ -2833,6 +2833,7 @@ struct rtable *__ip_route_output_key(struct net *net, struct flowi4 *flp4)
 	struct rtable *rth;
 	unsigned int hash;
 
+//#ifdef CONFIG_HTC_NETWORK_MODIFY
 	if (IS_ERR(net) || (!net)) {
 		printk("[NET] net is NULL in %s\n", __func__);
 		return NULL;
@@ -2842,6 +2843,7 @@ struct rtable *__ip_route_output_key(struct net *net, struct flowi4 *flp4)
 		printk("[NET] flp4 is NULL in %s\n", __func__);
 		return NULL;
 	}
+//#endif
 
 	if (!rt_caching(net))
 		goto slow_output;
@@ -2856,7 +2858,7 @@ struct rtable *__ip_route_output_key(struct net *net, struct flowi4 *flp4)
 		    rt_is_output_route(rth) &&
 		    rth->rt_oif == flp4->flowi4_oif &&
 		    rth->rt_mark == flp4->flowi4_mark &&
-			rth->rt_uid == flp4->flowi4_uid &&
+		    rth->rt_uid == flp4->flowi4_uid &&
 		    !((rth->rt_key_tos ^ flp4->flowi4_tos) &
 			    (IPTOS_RT_MASK | RTO_ONLINK)) &&
 		    net_eq(dev_net(rth->dst.dev), net) &&

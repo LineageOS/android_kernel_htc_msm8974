@@ -22,12 +22,15 @@
 
 #define HSML_PROTOCOL_VERSION		0x0006
 #if HSML_VERSION_12
+/*++ 2014/07/08, USB Team, PCN10001 ++*/
 #define HSML_12_PROTOCOL_VERSION	0x0100
+/*-- 2014/07/08, USB Team, PCN10001 --*/
 #endif
 #define HSML_07_PROTOCOL_VERSION	0x0008
 
 #define HTC_MODE_CONTROL_REQ		0x12
 
+/* HSML version 0.6 */
 #define CLIENT_INFO_SERVER_ROTATE_USED		(1 << 1)
 
 #define CTRL_CONF_TOUCH_EVENT_SUPPORTED		(1 << 0)
@@ -144,6 +147,7 @@ struct key_event {
 } __attribute__ ((__packed__));
 
 
+/* HSML version 0.8 */
 enum {
 	HSML_08_REQ_GET_SERVER_VERSION = 0x40,
 	HSML_08_REQ_NUM_COMPRESSION_SETTINGS,
@@ -215,6 +219,7 @@ struct set_display_info {
 } __attribute__ ((__packed__));
 
 #if HSML_VERSION_12
+/* HSML version 1.2 */
 enum {
     HSML_12_REQ_GET_VERSION = 0x40,
     HSML_12_REQ_GET_PARAMETERS,
@@ -274,4 +279,4 @@ struct hsml_protocol {
 	u8 debug_mode;
 };
 
-#endif 
+#endif /* _HTC_MODE_SERVER_H_ */

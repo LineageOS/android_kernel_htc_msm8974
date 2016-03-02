@@ -41,6 +41,9 @@ void driver_report_meminfo(struct seq_file *m)
 	uintptr_t ion_inuse = msm_ion_heap_meminfo(false);
 	unsigned long free_cma = free_cma_pages();
 
+	/*
+	 * display in kilobytes.
+	 */
 #define K(x) ((x) << (PAGE_SHIFT - 10))
 
 	seq_printf(m,
@@ -64,25 +67,35 @@ static unsigned long subtotal_pages(struct sysinfo *i)
 	unsigned long slab_pages = global_page_state(NR_SLAB_RECLAIMABLE) +
 	                           global_page_state(NR_SLAB_UNRECLAIMABLE);
 
+/*
+	Total memory = AnonPages + Buffers + CachedUnmapped + DMA_Alloc +
+	               DriverAlloc + Ftrace + IOMMUPGD + IonTotal + KernelStack +
+	               KgslUnmapped + Kmalloc + Mapped + MemFree + PageTables +
+	               Slab + SwapCached + VmallocAlloc
+*/
 
-	return global_page_state(NR_ANON_PAGES) +               
-	       i->bufferram +                                   
-	       cached_unmapped_pages(i) +                       
-	       meminfo_total_pages(NR_DMA_PAGES) +              
-	       meminfo_total_pages(NR_DRIVER_ALLOC_PAGES) +     
-	       0UL +                                            
-	       meminfo_total_pages(NR_IOMMU_PAGETABLES_PAGES) + 
-	       ion_total_pages +                                
-	       kernel_stack_pages +                             
-	       kgsl_unmapped_pages() +                          
-	       meminfo_total_pages(NR_KMALLOC_PAGES) +          
-	       global_page_state(NR_FILE_MAPPED) +              
-	       i->freeram +                                     
-	       global_page_state(NR_PAGETABLE) +                
-	       slab_pages +                                     
-	       total_swapcache_pages +                          
-	       vmalloc_alloc_pages();                           
+	return global_page_state(NR_ANON_PAGES) +               // AnonPages
+	       i->bufferram +                                   // Buffers
+	       cached_unmapped_pages(i) +                       // CachedUnmapped
+	       meminfo_total_pages(NR_DMA_PAGES) +              // DMA_Alloc
+	       meminfo_total_pages(NR_DRIVER_ALLOC_PAGES) +     // DriverAlloc
+	       0UL +                                            // Ftrace
+	       meminfo_total_pages(NR_IOMMU_PAGETABLES_PAGES) + // IOMMUPGD
+	       ion_total_pages +                                // IonTotal
+	       kernel_stack_pages +                             // KernelStack
+	       kgsl_unmapped_pages() +                          // KgslUnmapped
+	       meminfo_total_pages(NR_KMALLOC_PAGES) +          // Kmalloc
+	       global_page_state(NR_FILE_MAPPED) +              // Mapped
+	       i->freeram +                                     // MemFree
+	       global_page_state(NR_PAGETABLE) +                // PageTables
+	       slab_pages +                                     // Slab
+	       total_swapcache_pages +                          // SwapCached
+	       vmalloc_alloc_pages();                           // VmallocAlloc
 
+	       /*
+	       FIXME: We didn't account ftrace pages because show_meminfo might be
+	              in atomic context but ftrace_total_pages() has a mutex lock.
+	       */
 }
 
 static inline unsigned long cached_pages(struct sysinfo *i)
@@ -106,6 +119,9 @@ void show_meminfo(void)
 	unsigned long vmalloc_alloc = vmalloc_alloc_pages();
 	unsigned long subtotal;
 
+	/*
+	 * display in kilobytes.
+	 */
 #define K(x) ((x) << (PAGE_SHIFT - 10))
 	si_meminfo(&i);
 	si_swapinfo(&i);
@@ -156,6 +172,9 @@ static int meminfo_proc_show(struct seq_file *m, void *v)
 	long cached;
 	unsigned long pages[NR_LRU_LISTS];
 	int lru;
+/*
+ * display in kilobytes.
+ */
 #define K(x) ((x) << (PAGE_SHIFT - 10))
 	si_meminfo(&i);
 	si_swapinfo(&i);
@@ -173,6 +192,9 @@ static int meminfo_proc_show(struct seq_file *m, void *v)
 	for (lru = LRU_BASE; lru < NR_LRU_LISTS; lru++)
 		pages[lru] = global_page_state(NR_LRU_BASE + lru);
 
+	/*
+	 * Tagged format, for easy grepping and expansion.
+	 */
 	seq_printf(m,
 		"MemTotal:       %8lu kB\n"
 		"MemFree:        %8lu kB\n"

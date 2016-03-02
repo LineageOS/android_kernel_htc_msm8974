@@ -37,6 +37,12 @@
 #define WLAN_DATA1	37
 #define WLAN_DATA2	36
 
+#define WLAN_CLK	40
+#define WLAN_SET	39
+#define WLAN_DATA0	38
+#define WLAN_DATA1	37
+#define WLAN_DATA2	36
+
 static struct gpiomux_setting ap2mdm_cfg = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_2MA,
@@ -753,31 +759,31 @@ static struct msm_gpiomux_config msm8974_slimbus_config[] __initdata = {
 
 static struct gpiomux_setting cam_settings[] = {
 	{
-		.func = GPIOMUX_FUNC_1,  
+		.func = GPIOMUX_FUNC_1, /*active 1*/ /* 0 */
 		.drv = GPIOMUX_DRV_2MA,
 		.pull = GPIOMUX_PULL_NONE,
 	},
 
 	{
-		.func = GPIOMUX_FUNC_1,  
+		.func = GPIOMUX_FUNC_1, /*suspend*/ /* 1 */
 		.drv = GPIOMUX_DRV_2MA,
 		.pull = GPIOMUX_PULL_DOWN,
 	},
 
 	{
-		.func = GPIOMUX_FUNC_1,  
+		.func = GPIOMUX_FUNC_1, /*i2c suspend*/ /* 2 */
 		.drv = GPIOMUX_DRV_2MA,
 		.pull = GPIOMUX_PULL_KEEPER,
 	},
 
 	{
-		.func = GPIOMUX_FUNC_GPIO,  
+		.func = GPIOMUX_FUNC_GPIO, /*active 0*/ /* 3 */
 		.drv = GPIOMUX_DRV_2MA,
 		.pull = GPIOMUX_PULL_NONE,
 	},
 
 	{
-		.func = GPIOMUX_FUNC_GPIO,  
+		.func = GPIOMUX_FUNC_GPIO, /*suspend 0*/ /* 4 */
 		.drv = GPIOMUX_DRV_2MA,
 		.pull = GPIOMUX_PULL_DOWN,
 	},

@@ -32,6 +32,7 @@
 #include <mach/socinfo.h>
 #include <mach/subsystem_notif.h>
 #include "../../../sound/soc/msm/qdsp6v2/msm-pcm-routing-v2.h"
+#include <sound/q6core.h>
 #include "../../../sound/soc/codecs/wcd9xxx-common.h"
 #include "../../../sound/soc/codecs/wcd9306.h"
 
@@ -2225,6 +2226,22 @@ static struct snd_soc_dai_link msm8226_common_dai[] = {
 		.be_hw_params_fixup = msm_be_hw_params_fixup,
 		.ignore_suspend = 1,
 	},
+        
+        {
+                .name = "VoWLAN",
+                .stream_name = "VoWLAN",
+                .cpu_dai_name   = "VoWLAN",
+                .platform_name  = "msm-pcm-voice",
+                .dynamic = 1,
+                .trigger = {SND_SOC_DPCM_TRIGGER_POST,
+                            SND_SOC_DPCM_TRIGGER_POST},
+                .no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
+                .ignore_suspend = 1,
+                .ignore_pmdown_time = 1,
+                .codec_dai_name = "snd-soc-dummy-dai",
+                .codec_name = "snd-soc-dummy",
+                .be_id = MSM_FRONTEND_DAI_VOWLAN,
+        },
 };
 
 static struct snd_soc_dai_link msm8226_9306_dai[] = {
@@ -2939,7 +2956,8 @@ static __devinit int msm8226_asoc_machine_probe(struct platform_device *pdev)
 			continue;
 		}
 		for (j = 0; j < ARRAY_SIZE(HTC_AUD_HW_LIST); j++) {
-			if (!strcmp(str, HTC_AUD_HW_LIST[j].name)) {
+			if (!strncmp(str, HTC_AUD_HW_LIST[j].name, strlen(HTC_AUD_HW_LIST[j].name)) &&
+                strlen(str) == strlen(HTC_AUD_HW_LIST[j].name)) {
 				htc_hw_component_mask |= HTC_AUD_HW_LIST[j].id;
 				dev_info(&pdev->dev, "Found HW: %s, htc_hw_component_mask 0x%X.\n",
 					HTC_AUD_HW_LIST[j].name, htc_hw_component_mask);

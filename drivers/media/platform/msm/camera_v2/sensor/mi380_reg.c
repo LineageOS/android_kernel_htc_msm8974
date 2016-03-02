@@ -19,6 +19,7 @@
  */
 
 
+//#include "msm_sensor.h"
 
 #if 0
 static const struct mi380_i2c_reg_conf const pll_setup_tbl[] = {
@@ -28,6 +29,7 @@ static const struct mi380_i2c_reg_conf const pll_setup_tbl[] = {
 };
 #endif
 
+/* WB : AUTO mode*/
 static struct mi380_i2c_reg_conf wb_auto[] = {
 	{0x098C, 0x2306, WORD_LEN, 0},
 	{0x0990, 0x03C0, WORD_LEN, 0},
@@ -73,21 +75,22 @@ static struct mi380_i2c_reg_conf wb_auto[] = {
 	{0x0990, 0x0010, WORD_LEN, 0},
 	{0x098C, 0x2330, WORD_LEN, 0},
 	{0x0990, 0xFFF3, WORD_LEN, 0},
-	
-	{0x098C, 0xA34A, WORD_LEN, 0},
+	/*Mu lee add for AWB -- prevent be modifed after MWB 0901*/
+	{0x098C, 0xA34A, WORD_LEN, 0},/*MCU_ADDRESS [AWB_GAIN_MIN_R]*/
 	{0x0990, 0x0059, WORD_LEN, 0},
-	{0x098C, 0xA34B, WORD_LEN, 0},
+	{0x098C, 0xA34B, WORD_LEN, 0},/*MCU_ADDRESS [AWB_GAIN_MAX_R]*/
 	{0x0990, 0x00E6, WORD_LEN, 0},
-	{0x098C, 0xA34C, WORD_LEN, 0},
+	{0x098C, 0xA34C, WORD_LEN, 0},/*CU_ADDRESS [AWB_GAIN_MIN_B]*/
 	{0x0990, 0x0059, WORD_LEN, 0},
-	{0x098C, 0xA34D, WORD_LEN, 0},
+	{0x098C, 0xA34D, WORD_LEN, 0},/*MCU_ADDRESS [AWB_GAIN_MAX_B]*/
 	{0x0990, 0x00E6, WORD_LEN, 0},
-	{0x098C, 0xA351, WORD_LEN, 0},
+	{0x098C, 0xA351, WORD_LEN, 0},/*MCU_ADDRESS [AWB_CCM_POSITION_MIN]*/
 	{0x0990, 0x0000, WORD_LEN, 0},
-	{0x098C, 0xA352, WORD_LEN, 0},
+	{0x098C, 0xA352, WORD_LEN, 0},/*MCU_ADDRESS [AWB_CCM_POSITION_MAX]*/
 	{0x0990, 0x007F, WORD_LEN, 0},
 };
 
+/*WB : Fluorescent mode*/
 static struct mi380_i2c_reg_conf wb_fluorescent[] = {
 	{0x098C, 0xA353, WORD_LEN, 0},
 	{0x0990, 0x0043, WORD_LEN, 0},
@@ -99,6 +102,7 @@ static struct mi380_i2c_reg_conf wb_fluorescent[] = {
 	{0x0990, 0x008A, WORD_LEN, 0}
 };
 
+/*WB : Incandescent mode */
 static struct mi380_i2c_reg_conf wb_incandescent[] = {
 	{0x098C, 0xA353, WORD_LEN, 0},
 	{0x0990, 0x000B, WORD_LEN, 0},
@@ -110,6 +114,7 @@ static struct mi380_i2c_reg_conf wb_incandescent[] = {
 	{0x0990, 0x00A0, WORD_LEN, 0}
 };
 
+/*WB : Daylight mode*/
 static struct mi380_i2c_reg_conf wb_daylight[] = {
 	{0x098C, 0xA353, WORD_LEN, 0},
 	{0x0990, 0x007F, WORD_LEN, 0},
@@ -121,6 +126,7 @@ static struct mi380_i2c_reg_conf wb_daylight[] = {
 	{0x0990, 0x0080, WORD_LEN, 0}
 };
 
+/*WB : Cloudy mode*/
 static struct mi380_i2c_reg_conf wb_cloudy[] = {
 	{0x098C, 0xA353, WORD_LEN, 0},
 	{0x0990, 0x007F, WORD_LEN, 0},
@@ -133,6 +139,7 @@ static struct mi380_i2c_reg_conf wb_cloudy[] = {
 };
 
 
+/* Contract 0 */
 static struct mi380_i2c_reg_conf contract_setup_tb0[] = {
 #if 0
 	{0x098C, 0xAB3C, WORD_LEN, 0},
@@ -195,9 +202,9 @@ static struct mi380_i2c_reg_conf contract_setup_tb0[] = {
 {0x098C, 0xAB45, WORD_LEN, 0},
 {0x0990, 0x00D9, WORD_LEN, 0},
 {0x098C, 0xAB46, WORD_LEN, 0},
-{0x0990, 0x00E1, WORD_LEN, 0},
+{0x0990, 0x00E1, WORD_LEN, 0},/*{0x0990, 0x0000, WORD_LEN, 0},*/
 {0x098C, 0xAB47, WORD_LEN, 0},
-{0x0990, 0x00E8, WORD_LEN, 0},
+{0x0990, 0x00E8, WORD_LEN, 0},/*{0x0990, 0x0000, WORD_LEN, 0},*/
 {0x098C, 0xAB48, WORD_LEN, 0},
 {0x0990, 0x00EE, WORD_LEN, 0},
 {0x098C, 0xAB49, WORD_LEN, 0},
@@ -215,6 +222,7 @@ static struct mi380_i2c_reg_conf contract_setup_tb0[] = {
 
 };
 
+/* Contract 1 */
 static struct mi380_i2c_reg_conf contract_setup_tb1[] = {
 #if 0
 	{0x098C, 0xAB3C, WORD_LEN, 0},
@@ -277,9 +285,9 @@ static struct mi380_i2c_reg_conf contract_setup_tb1[] = {
 {0x098C, 0xAB45, WORD_LEN, 0},
 {0x0990, 0x00D9, WORD_LEN, 0},
 {0x098C, 0xAB46, WORD_LEN, 0},
-{0x0990, 0x00E1, WORD_LEN, 0},
+{0x0990, 0x00E1, WORD_LEN, 0},/*{0x0990, 0x0000, WORD_LEN, 0},*/
 {0x098C, 0xAB47, WORD_LEN, 0},
-{0x0990, 0x00E8, WORD_LEN, 0},
+{0x0990, 0x00E8, WORD_LEN, 0},/*{0x0990, 0x0000, WORD_LEN, 0},*/
 {0x098C, 0xAB48, WORD_LEN, 0},
 {0x0990, 0x00EE, WORD_LEN, 0},
 {0x098C, 0xAB49, WORD_LEN, 0},
@@ -297,6 +305,7 @@ static struct mi380_i2c_reg_conf contract_setup_tb1[] = {
 
 };
 
+/* Contract 2 */
 static struct mi380_i2c_reg_conf contract_setup_tb2[] = {
 #if 0
 	{0x098C, 0xAB3C, WORD_LEN, 0},
@@ -379,6 +388,7 @@ static struct mi380_i2c_reg_conf contract_setup_tb2[] = {
 
 };
 
+/* Contract 3 */
 static struct mi380_i2c_reg_conf contract_setup_tb3[] = {
 #if 0
 	{0x098C, 0xAB3C, WORD_LEN, 0},
@@ -447,7 +457,7 @@ static struct mi380_i2c_reg_conf contract_setup_tb3[] = {
 {0x098C, 0xAB48, WORD_LEN, 0},
 {0x0990, 0x00DB, WORD_LEN, 0},
 {0x098C, 0xAB49, WORD_LEN, 0},
-{0x0990, 0x00E3, WORD_LEN, 0},
+{0x0990, 0x00E3, WORD_LEN, 0},/*{0x0990, 0x0000, WORD_LEN, 0},*/
 {0x098C, 0xAB4A, WORD_LEN, 0},
 {0x0990, 0x00EA, WORD_LEN, 0},
 {0x098C, 0xAB4B, WORD_LEN, 0},
@@ -461,6 +471,7 @@ static struct mi380_i2c_reg_conf contract_setup_tb3[] = {
 
 };
 
+/* Contract 4 */
 static struct mi380_i2c_reg_conf contract_setup_tb4[] = {
 #if 0
 	{0x098C, 0xAB3C, WORD_LEN, 0},
@@ -529,7 +540,7 @@ static struct mi380_i2c_reg_conf contract_setup_tb4[] = {
 {0x098C, 0xAB48, WORD_LEN, 0},
 {0x0990, 0x00E2, WORD_LEN, 0},
 {0x098C, 0xAB49, WORD_LEN, 0},
-{0x0990, 0x00E9, WORD_LEN, 0},
+{0x0990, 0x00E9, WORD_LEN, 0},/*{0x0990, 0x0000, WORD_LEN, 0},*/
 {0x098C, 0xAB4A, WORD_LEN, 0},
 {0x0990, 0x00EE, WORD_LEN, 0},
 {0x098C, 0xAB4B, WORD_LEN, 0},
@@ -544,7 +555,7 @@ static struct mi380_i2c_reg_conf contract_setup_tb4[] = {
 };
 
 static struct mi380_i2c_reg_conf power_up_tbl[] = {
-	
+	/* Power Up */
 #ifdef CONFIG_MSM_CAMERA_8X60
 	{0x001A, 0x0011, WORD_LEN, 10},
 	{0x001A, 0x0010, WORD_LEN, 10},
@@ -552,12 +563,15 @@ static struct mi380_i2c_reg_conf power_up_tbl[] = {
 	{0x001A, 0x0011, WORD_LEN, 10},
 	{0x001A, 0x0010, WORD_LEN, 10},
 #endif
+//	{0x301A, 0x1218, WORD_LEN, 10},
+//	{0x301A, 0x121C, WORD_LEN, 10}, /*David 20110801*/
 };
 
+/* sensor register init */
 static struct mi380_i2c_reg_conf register_init_tbl[] = {
-	
+	/* move to code */
 #if 0
-	
+	/* RESET and MISC Contro*/
 	{0x0018, 0x4028, WORD_LEN, 0},
 	{0x001A, 0x0003, WORD_LEN, 2},
 	{0x001A, 0x0000, WORD_LEN, 2},
@@ -565,7 +579,7 @@ static struct mi380_i2c_reg_conf register_init_tbl[] = {
 	{0x001A, 0x0210, WORD_LEN, 0},
 	{0x001E, 0x0777, WORD_LEN, 0},
 	{0x0016, 0x42DF, WORD_LEN, 0},
-	
+	/* PLL Setup 24Mhz In/28Mhz Out */
 	{0x0014, 0xB04B, WORD_LEN, 0},
 	{0x0014, 0xB049, WORD_LEN, 0},
 	{0x0010, 0x021C, WORD_LEN, 0},
@@ -574,30 +588,30 @@ static struct mi380_i2c_reg_conf register_init_tbl[] = {
 	{0x0014, 0x304B, WORD_LEN, 0},
 	{0x0014, 0xB04A, WORD_LEN, 0},
 #endif
-	
-	{0x098C, 0xA11D, WORD_LEN, 0}, 	
+	/* Dynamic AE */
+	{0x098C, 0xA11D, WORD_LEN, 0}, 	/*MCU_ADDRESS [SEQ_PREVIEW_1_AE]*/
 	{0x0990, 0x0001, WORD_LEN, 0},
-	{0x098C, 0xA249, WORD_LEN, 0},
-	{0x0990, 0x0002, WORD_LEN, 0},
-	{0x098C, 0xA24F, WORD_LEN, 0}, 	
-	{0x0990, 0x0040, WORD_LEN, 0},	
-	{0x098C, 0xA24B, WORD_LEN, 0}, 	
+	{0x098C, 0xA249, WORD_LEN, 0},//REG= 0x098C, 0xA249    // MCU_ADDRESS [AE_TARGETSTEPSIZE]  //mk0106
+	{0x0990, 0x0002, WORD_LEN, 0},//REG= 0x0990, 0x0002    // MCU_DATA_0                       //mk0106
+	{0x098C, 0xA24F, WORD_LEN, 0}, 	/*MCU_ADDRESS [AE_BASETARGET]*/
+	{0x0990, 0x0040, WORD_LEN, 0},	//{0x0990, 0x0040, WORD_LEN, 0},					   //mk0106
+	{0x098C, 0xA24B, WORD_LEN, 0}, 	/*MCU_ADDRESS [AE_TARGETMAX]*/
 	{0x0990, 0x0086, WORD_LEN, 0},
-	{0x098C, 0xA24A, WORD_LEN, 0}, 	
-	{0x0990, 0x007E, WORD_LEN, 0},
-	{0x098C, 0xA207, WORD_LEN, 0},	
+	{0x098C, 0xA24A, WORD_LEN, 0}, 	/*MCU_ADDRESS [AE_TARGETMIN]*/
+	{0x0990, 0x007E, WORD_LEN, 0},//{0x0990, 0x006E, WORD_LEN, 0},                             //mk0106
+	{0x098C, 0xA207, WORD_LEN, 0},	/*MCU_ADDRESS [AE_GATE]*/
 	{0x0990, 0x0002, WORD_LEN, 0},
-	{0x098C, 0x2257, WORD_LEN, 0}, 
-	{0x0990, 0x3A98, WORD_LEN, 0}, 
-	
+	{0x098C, 0x2257, WORD_LEN, 0}, // MCU_ADDRESS [AE_EXPCOMPCENTER]  REG= 0x098C, 0x2257  //mk0106
+	{0x0990, 0x3A98, WORD_LEN, 0}, // MCU_DATA_0   REG= 0x0990, 0x3A98                     //mk0106
+	/* Char_settings */
 	{0x098C, 0xAB1F, WORD_LEN, 0},
 	{0x0990, 0x00C9, WORD_LEN, 0},
 	{0x326C, 0x0900, WORD_LEN, 0},
 	{0x001E, 0x0400, WORD_LEN, 0},
-	
+	/* Sharpness */
 	{0x098C, 0xAB22, WORD_LEN, 0},
-	{0x0990, 0x0005, WORD_LEN, 0},
-	
+	{0x0990, 0x0005, WORD_LEN, 0},//mu l 1005 enhance to compensate face beauty 0x0003
+	/* Flicker Setting */
 	{0x098C, 0xA404, WORD_LEN, 0},
 	{0x0990, 0x0010, WORD_LEN, 0},
 	{0x098C, 0x222D, WORD_LEN, 0},
@@ -624,7 +638,7 @@ static struct mi380_i2c_reg_conf register_init_tbl[] = {
 	{0x0990, 0x0003, WORD_LEN, 0},
 	{0x098C, 0xA410, WORD_LEN, 0},
 	{0x0990, 0x000A, WORD_LEN, 0},
-	
+	/* Micron lens Correction *//*Mu Lee update for new lens 0126*/
 	{0x364E, 0x0330, WORD_LEN, 0},
 	{0x3650, 0x010B, WORD_LEN, 0},
 	{0x3652, 0x2312, WORD_LEN, 0},
@@ -727,19 +741,19 @@ static struct mi380_i2c_reg_conf register_init_tbl[] = {
 	{0x3714, 0xE93C, WORD_LEN, 0},
 	{0x3644, 0x0144, WORD_LEN, 0},
 	{0x3642, 0x00F0, WORD_LEN, 0},
-	
+	/*{0x3210, 0x0008, WORD_LEN, 0}, //LC_ENABLE*/
 };
 
 static struct mi380_i2c_reg_conf register_init_tb2[] = {
 
-	
+	/*{0x3210[3], 0x0001, WORD_LEN, 0},*/
 
-	
+	/* Saturation */
 	{0x098C, 0xA354, WORD_LEN, 0},
-	{0x0990, 0x0048, WORD_LEN, 0},
+	{0x0990, 0x0048, WORD_LEN, 0},//mu l 1003{0x0990, 0x0040, WORD_LEN, 0},//{0x0990, 0x0036, WORD_LEN, 0},//{0x0990, 0x0048, WORD_LEN, 0},   //mk0906
 	{0x098C, 0xAB20, WORD_LEN, 0},
-	{0x0990, 0x0048, WORD_LEN, 0},
-	
+	{0x0990, 0x0048, WORD_LEN, 0},//mu l 1003{0x0990, 0x0040, WORD_LEN, 0},//{0x0990, 0x0036, WORD_LEN, 0},//{0x0990, 0x0048, WORD_LEN, 0},   //mk0906
+	/* Micron AWB and CCMs */
 	{0x098C, 0xA11F, WORD_LEN, 0},
 	{0x0990, 0x0001, WORD_LEN, 0},
 	{0x098C, 0x2306, WORD_LEN, 0},
@@ -819,12 +833,12 @@ static struct mi380_i2c_reg_conf register_init_tb2[] = {
 	{0x098C, 0xA303, WORD_LEN, 0},
 	{0x0990, 0x00EF, WORD_LEN, 0},
 	{0x098C, 0xA366, WORD_LEN, 0},
-	{0x0990, 0x00A6, WORD_LEN, 0},
+	{0x0990, 0x00A6, WORD_LEN, 0},/* A0 Mu c0 Kevin modify for reducing A light yellowish 0427 */
 	{0x098C, 0xA367, WORD_LEN, 0},
-	{0x0990, 0x0096, WORD_LEN, 0},
+	{0x0990, 0x0096, WORD_LEN, 0},/* 96 Mu 73 Kevin modify for reducing A light yellowish 0413 */
 	{0x098C, 0xA368, WORD_LEN, 0},
-	{0x0990, 0x005C, WORD_LEN, 0},
-	
+	{0x0990, 0x005C, WORD_LEN, 0},/* 80 Mu 38 Kevin modify for reducing A light yellowish 0427 */
+	/* Gamma Morph brightness setting */
 #ifndef CONFIG_MSM_CAMERA_8X60
 	{0x098C, 0x2B1B, WORD_LEN, 0},
 	{0x0990, 0x0000, WORD_LEN, 0},
@@ -834,12 +848,12 @@ static struct mi380_i2c_reg_conf register_init_tb2[] = {
 	{0x098C, 0x2B2A, WORD_LEN, 0},
 	{0x0990, 0x1B58, WORD_LEN, 0},
 	{0x098C, 0xAB37, WORD_LEN, 0},
-	{0x0990, 0x0001, WORD_LEN, 0}, 
+	{0x0990, 0x0001, WORD_LEN, 0}, //{0x0990, 0x0003, WORD_LEN, 0},  //mk0106
 	{0x098C, 0x2B38, WORD_LEN, 0},
 	{0x0990, 0x157C, WORD_LEN, 0},
 	{0x098C, 0x2B3A, WORD_LEN, 0},
 	{0x0990, 0x1B58, WORD_LEN, 0},
-	
+	/* Gamma Table Context A (normal light) */
 	{0x098C, 0xAB3C, WORD_LEN, 0},
 	{0x0990, 0x0000, WORD_LEN, 0},
 	{0x098C, 0xAB3D, WORD_LEN, 0},
@@ -878,7 +892,7 @@ static struct mi380_i2c_reg_conf register_init_tb2[] = {
 	{0x0990, 0x00F9, WORD_LEN, 0},
 	{0x098C, 0xAB4E, WORD_LEN, 0},
 	{0x0990, 0x00FF, WORD_LEN, 0},
-	
+	/* Gamma Table Context B (dark scene) */
 	{0x098C, 0xAB4F, WORD_LEN, 0},
 	{0x0990, 0x0000, WORD_LEN, 0},
 	{0x098C, 0xAB50, WORD_LEN, 0},
@@ -917,7 +931,7 @@ static struct mi380_i2c_reg_conf register_init_tb2[] = {
 	{0x0990, 0x00F9, WORD_LEN, 0},
 	{0x098C, 0xAB61, WORD_LEN, 0},
 	{0x0990, 0x00FF, WORD_LEN, 0},
-	
+	/* Mode-set up Preview (VGA) /Capture Mode (VGA) */
 	{0x098C, 0x2703, WORD_LEN, 0},
 	{0x0990, 0x0280, WORD_LEN, 0},
 	{0x098C, 0x2705, WORD_LEN, 0},
@@ -933,7 +947,9 @@ static struct mi380_i2c_reg_conf register_init_tb2[] = {
 	{0x098C, 0x2715, WORD_LEN, 0},
 	{0x0990, 0x0001, WORD_LEN, 0},
 	{0x098C, 0x2717, WORD_LEN, 0},
-	{0x0990, 0x0025, WORD_LEN, 0},     
+/* HTC_START 20131016 fix mirror-flip mode for J1 temporary */
+	{0x0990, 0x0025, WORD_LEN, 0}, /* 0x0024: mirror and flip */  /* 0x0025: mirror */  /* 0x0026: flip */
+/* HTC_END */
 	{0x098C, 0x2719, WORD_LEN, 0},
 	{0x0990, 0x001A, WORD_LEN, 0},
 	{0x098C, 0x271B, WORD_LEN, 0},
@@ -967,7 +983,9 @@ static struct mi380_i2c_reg_conf register_init_tb2[] = {
 	{0x098C, 0x272B, WORD_LEN, 0},
 	{0x0990, 0x0001, WORD_LEN, 0},
 	{0x098C, 0x272D, WORD_LEN, 0},
-	{0x0990, 0x0025, WORD_LEN, 0},     
+/* HTC_START 20131016 fix mirror-flip mode for J1 temporary */
+	{0x0990, 0x0025, WORD_LEN, 0}, /* 0x0024: mirror and flip */  /* 0x0025: mirror */  /* 0x0026: flip */
+/* HTC_END */
 	{0x098C, 0x272F, WORD_LEN, 0},
 	{0x0990, 0x001A, WORD_LEN, 0},
 	{0x098C, 0x2731, WORD_LEN, 0},
@@ -990,11 +1008,11 @@ static struct mi380_i2c_reg_conf register_init_tb2[] = {
 	{0x0990, 0x0002, WORD_LEN, 0},
 	{0x098C, 0x2757, WORD_LEN, 0},
 	{0x0990, 0x0002, WORD_LEN, 0},
-	{0x098C, 0xA20C, WORD_LEN, 0},
-	{0x0990, 0x000C, WORD_LEN, 0},
+	{0x098C, 0xA20C, WORD_LEN, 0},/*Mu add for min frame rate =15fps 0126*/
+	{0x0990, 0x000C, WORD_LEN, 0},//mk0829 /*Mu add for min frame rate =15fps 0126*/
 
 #if 0
-	
+	/* move to code */
 	{0x098C, 0xA103, WORD_LEN, 0},
 	{0x0990, 0x0006, WORD_LEN, 0},
 	{0x098C, 0xA103, WORD_LEN, 0},

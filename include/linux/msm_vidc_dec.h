@@ -4,27 +4,43 @@
 #include <linux/types.h>
 #include <linux/ioctl.h>
 
+/* STATUS CODES */
+/* Base value for status codes */
 #define VDEC_S_BASE	0x40000000
+/* Success */
 #define VDEC_S_SUCCESS	(VDEC_S_BASE)
+/* General failure */
 #define VDEC_S_EFAIL	(VDEC_S_BASE + 1)
+/* Fatal irrecoverable  failure. Need to  tear down session. */
 #define VDEC_S_EFATAL   (VDEC_S_BASE + 2)
+/* Error detected in the passed  parameters */
 #define VDEC_S_EBADPARAM	(VDEC_S_BASE + 3)
+/* Command called in invalid  state. */
 #define VDEC_S_EINVALSTATE	(VDEC_S_BASE + 4)
- 
+ /* Insufficient OS  resources - thread, memory etc. */
 #define VDEC_S_ENOSWRES	(VDEC_S_BASE + 5)
- 
+ /* Insufficient HW resources -  core capacity  maxed  out. */
 #define VDEC_S_ENOHWRES	(VDEC_S_BASE + 6)
+/* Invalid command  called */
 #define VDEC_S_EINVALCMD	(VDEC_S_BASE + 7)
+/* Command timeout. */
 #define VDEC_S_ETIMEOUT	(VDEC_S_BASE + 8)
+/* Pre-requirement is  not met for API. */
 #define VDEC_S_ENOPREREQ	(VDEC_S_BASE + 9)
+/* Command queue is full. */
 #define VDEC_S_ECMDQFULL	(VDEC_S_BASE + 10)
+/* Command is not supported  by this driver */
 #define VDEC_S_ENOTSUPP	(VDEC_S_BASE + 11)
+/* Command is not implemented by thedriver. */
 #define VDEC_S_ENOTIMPL	(VDEC_S_BASE + 12)
+/* Command is not implemented by the driver.  */
 #define VDEC_S_BUSY	(VDEC_S_BASE + 13)
 #define VDEC_S_INPUT_BITSTREAM_ERR (VDEC_S_BASE + 14)
 
 #define VDEC_INTF_VER	1
 #define VDEC_MSG_BASE	0x0000000
+/* Codes to identify asynchronous message responses and events that driver
+  wants to communicate to the app.*/
 #define VDEC_MSG_INVALID	(VDEC_MSG_BASE + 0)
 #define VDEC_MSG_RESP_INPUT_BUFFER_DONE	(VDEC_MSG_BASE + 1)
 #define VDEC_MSG_RESP_OUTPUT_BUFFER_DONE	(VDEC_MSG_BASE + 2)
@@ -45,6 +61,7 @@
 #define VDEC_MSG_EVT_HW_OVERLOAD	(VDEC_MSG_BASE + 17)
 #define VDEC_MSG_EVT_MAX_CLIENTS	(VDEC_MSG_BASE + 18)
 
+/*Buffer flags bits masks.*/
 #define VDEC_BUFFERFLAG_EOS	0x00000001
 #define VDEC_BUFFERFLAG_DECODEONLY	0x00000004
 #define VDEC_BUFFERFLAG_DATACORRUPT	0x00000008
@@ -53,6 +70,7 @@
 #define VDEC_BUFFERFLAG_EXTRADATA	0x00000040
 #define VDEC_BUFFERFLAG_CODECCONFIG	0x00000080
 
+/*Post processing flags bit masks*/
 #define VDEC_EXTRADATA_NONE 0x001
 #define VDEC_EXTRADATA_QP 0x004
 #define VDEC_EXTRADATA_MB_ERROR_MAP 0x008
@@ -74,25 +92,37 @@ struct vdec_ioctl_msg {
 	void __user *out;
 };
 
+/* CMD params: InputParam:enum vdec_codec
+   OutputParam: struct vdec_profile_level*/
 #define VDEC_IOCTL_GET_PROFILE_LEVEL_SUPPORTED \
 	_IOWR(VDEC_IOCTL_MAGIC, 0, struct vdec_ioctl_msg)
 
+/*CMD params:InputParam: NULL
+  OutputParam: uint32_t(bitmask)*/
 #define VDEC_IOCTL_GET_INTERLACE_FORMAT \
 	_IOR(VDEC_IOCTL_MAGIC, 1, struct vdec_ioctl_msg)
 
+/* CMD params: InputParam:  enum vdec_codec
+   OutputParam: struct vdec_profile_level*/
 #define VDEC_IOCTL_GET_CURRENT_PROFILE_LEVEL \
 	_IOWR(VDEC_IOCTL_MAGIC, 2, struct vdec_ioctl_msg)
 
+/*CMD params: SET: InputParam: enum vdec_output_fromat  OutputParam: NULL
+  GET:  InputParam: NULL OutputParam: enum vdec_output_fromat*/
 #define VDEC_IOCTL_SET_OUTPUT_FORMAT \
 	_IOWR(VDEC_IOCTL_MAGIC, 3, struct vdec_ioctl_msg)
 #define VDEC_IOCTL_GET_OUTPUT_FORMAT \
 	_IOWR(VDEC_IOCTL_MAGIC, 4, struct vdec_ioctl_msg)
 
+/*CMD params: SET: InputParam: enum vdec_codec OutputParam: NULL
+  GET: InputParam: NULL OutputParam: enum vdec_codec*/
 #define VDEC_IOCTL_SET_CODEC \
 	_IOW(VDEC_IOCTL_MAGIC, 5, struct vdec_ioctl_msg)
 #define VDEC_IOCTL_GET_CODEC \
 	_IOR(VDEC_IOCTL_MAGIC, 6, struct vdec_ioctl_msg)
 
+/*CMD params: SET: InputParam: struct vdec_picsize outputparam: NULL
+ GET: InputParam: NULL outputparam: struct vdec_picsize*/
 #define VDEC_IOCTL_SET_PICRES \
 	_IOW(VDEC_IOCTL_MAGIC, 7, struct vdec_ioctl_msg)
 #define VDEC_IOCTL_GET_PICRES \
@@ -106,21 +136,28 @@ struct vdec_ioctl_msg {
 #define VDEC_IOCTL_SET_SEQUENCE_HEADER \
 	_IOW(VDEC_IOCTL_MAGIC, 11, struct vdec_ioctl_msg)
 
+/* CMD params: SET: InputParam - vdec_allocatorproperty, OutputParam - NULL
+   GET: InputParam - NULL, OutputParam - vdec_allocatorproperty*/
 #define VDEC_IOCTL_SET_BUFFER_REQ \
 	_IOW(VDEC_IOCTL_MAGIC, 12, struct vdec_ioctl_msg)
 #define VDEC_IOCTL_GET_BUFFER_REQ \
 	_IOR(VDEC_IOCTL_MAGIC, 13, struct vdec_ioctl_msg)
+/* CMD params: InputParam - vdec_buffer, OutputParam - uint8_t** */
 #define VDEC_IOCTL_ALLOCATE_BUFFER \
 	_IOWR(VDEC_IOCTL_MAGIC, 14, struct vdec_ioctl_msg)
+/* CMD params: InputParam - uint8_t *, OutputParam - NULL.*/
 #define VDEC_IOCTL_FREE_BUFFER \
 	_IOW(VDEC_IOCTL_MAGIC, 15, struct vdec_ioctl_msg)
 
+/*CMD params: CMD: InputParam - struct vdec_setbuffer_cmd, OutputParam - NULL*/
 #define VDEC_IOCTL_SET_BUFFER \
 	_IOW(VDEC_IOCTL_MAGIC, 16, struct vdec_ioctl_msg)
 
+/* CMD params: InputParam - struct vdec_fillbuffer_cmd, OutputParam - NULL*/
 #define VDEC_IOCTL_FILL_OUTPUT_BUFFER \
 	_IOW(VDEC_IOCTL_MAGIC, 17, struct vdec_ioctl_msg)
 
+/*CMD params: InputParam - struct vdec_frameinfo , OutputParam - NULL*/
 #define VDEC_IOCTL_DECODE_FRAME \
 	_IOW(VDEC_IOCTL_MAGIC, 18, struct vdec_ioctl_msg)
 
@@ -130,9 +167,14 @@ struct vdec_ioctl_msg {
 #define VDEC_IOCTL_CMD_PAUSE _IO(VDEC_IOCTL_MAGIC, 22)
 #define VDEC_IOCTL_CMD_RESUME _IO(VDEC_IOCTL_MAGIC, 23)
 
+/*CMD params: InputParam - enum vdec_bufferflush , OutputParam - NULL */
 #define VDEC_IOCTL_CMD_FLUSH _IOW(VDEC_IOCTL_MAGIC, 24, struct vdec_ioctl_msg)
 
+/* ========================================================
+ * IOCTL for getting asynchronous notification from driver
+ * ========================================================*/
 
+/*IOCTL params: InputParam - NULL, OutputParam - struct vdec_msginfo*/
 #define VDEC_IOCTL_GET_NEXT_MSG \
 	_IOR(VDEC_IOCTL_MAGIC, 25, struct vdec_ioctl_msg)
 
@@ -555,4 +597,4 @@ struct vdec_meta_buffers {
 	int offset;
 };
 
-#endif 
+#endif /* end of macro _VDECDECODER_H_ */

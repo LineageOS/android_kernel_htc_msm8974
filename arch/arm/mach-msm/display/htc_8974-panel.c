@@ -8,12 +8,14 @@
 #include <mach/debug_display.h>
 #include "../../../../drivers/video/msm/mdss/mdss_dsi.h"
 
+/* HTC: dsi_power_data overwrite the role of dsi_drv_cm_data
+   in mdss_dsi_ctrl_pdata structure */
 struct dsi_power_data {
-	uint32_t sysrev;         
-	struct regulator *vddio; 
-	struct regulator *vdda;  
+	uint32_t sysrev;         /* system revision info */
+	struct regulator *vddio; /* 1.8v */
+	struct regulator *vdda;  /* 1.2v */
 
-	struct regulator *vlcmio; 
+	struct regulator *vlcmio; /* 1.8v */
 	int lcmio;
 	int lcmp5v;
 	int lcmn5v;
@@ -83,9 +85,9 @@ static int htc_8974_regulator_init(struct platform_device *pdev)
 	pwrdata->lcmn5v = of_get_named_gpio(pdev->dev.of_node,
 						"htc,lcm_n5v-gpio", 0);
 	if (gpio_is_valid(pwrdata->lcmio)) {
-		
+		/* EVM */
 	} else {
-		
+		/* GLU(XA) and after */
 		pwrdata->vlcmio = devm_regulator_get(&pdev->dev, "vlcmio");
 		if (IS_ERR(pwrdata->vlcmio)) {
 			pr_err("%s: could not get vlcmio reg, rc=%ld\n",
@@ -99,7 +101,9 @@ static int htc_8974_regulator_init(struct platform_device *pdev)
 
 static int htc_8974_regulator_deinit(struct platform_device *pdev)
 {
-	
+	/* devm_regulator() will automatically free regulators
+	   while dev detach. */
+	/* nothing */
 	return 0;
 }
 
@@ -188,7 +192,7 @@ static int htc_8974_panel_power_on(struct mdss_panel_data *pdata, int enable)
 
 	if (enable) {
 		if (gpio_is_valid(pwrdata->lcmio)) {
-			
+			/* EVM */
 			gpio_set_value(pwrdata->lcmio, 1);
 		} else {
 			ret = regulator_enable(pwrdata->vlcmio);

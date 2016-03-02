@@ -72,6 +72,7 @@ int current_lightsensor_kadc;
 static struct mutex als_enable_mutex, als_disable_mutex, als_get_adc_mutex;
 static struct mutex ps_enable_mutex;
 static int ps_hal_enable, ps_drv_enable;
+//static int ps_near;
 static int phone_status;
 static int psensor_enable_by_touch = 0;
 
@@ -107,8 +108,8 @@ struct cm3629_info {
 	uint16_t cali_table[10];
 	int irq;
 	int ls_calibrate;
-	int (*power)(int, uint8_t); 
-	int (*lpm_power)(int on); 
+	int (*power)(int, uint8_t); /* power to the chip */
+	int (*lpm_power)(int on); /* power to the chip */
 	uint32_t als_kadc;
 	uint32_t emmc_als_kadc;
 	uint32_t als_gadc;
@@ -127,7 +128,7 @@ struct cm3629_info {
 	uint8_t original_ps_thd_set;
 	int current_level;
 	uint16_t current_adc;
-	
+	/* Command code 0x02, intelligent cancel level */
 	uint8_t inte_ps1_canc;
 	uint8_t inte_ps2_canc;
 	uint8_t ps_conf1_val;
@@ -135,7 +136,7 @@ struct cm3629_info {
 	uint8_t ps_conf1_val_from_board;
 	uint8_t ps_conf2_val_from_board;
 	uint8_t ps_conf3_val;
-	uint8_t ps_calibration_rule; 
+	uint8_t ps_calibration_rule; /* For Saga */
 	int ps_pocket_mode;
 	unsigned long j_start;
 	unsigned long j_end;
@@ -192,7 +193,7 @@ static void report_near_do_work(struct work_struct *w)
 
 	input_report_abs(lpi->ps_input_dev, ABS_DISTANCE, 0);
 	input_sync(lpi->ps_input_dev);
-	
+	//blocking_notifier_call_chain(&psensor_notifier_list, 2 + oncall, NULL);
 }
 
 int psensor_enable_by_touch_driver(int on)
@@ -218,6 +219,7 @@ int psensor_enable_by_touch_driver(int on)
 EXPORT_SYMBOL_GPL(psensor_enable_by_touch_driver);
 
 
+// status : 0 Near 1 Far
 void touch_report_psensor_input_event(int status)
 {
 	struct cm3629_info *lpi = lp_info;
@@ -247,19 +249,32 @@ static ssize_t phone_status_store(struct device *dev,
 				const char *buf, size_t count)
 {
 	int phone_status1 = 0;
+/*	int i;
+ *		char cmd[2];*/
 
 	sscanf(buf, "%d" , &phone_status1);
 
 	phone_status = phone_status1;
+/*
+ * phone_status:
+ * call end = 0
+ * call out = 1
+ * call connect = 2
+ * call in = 3
+ * */
 
         D("[PS][cm3629] %s: phone_status = %d\n", __func__, phone_status);
+/*	if (phone_status == 0)
+ *			oncall = 0;
+ *				else
+ *						oncall = 4;*/
 
-	if ((phone_status == 1)||(phone_status == 2)) 
+	if ((phone_status == 1)||(phone_status == 2)) //call out , proximity on
 	{
 		D("[PS][TP] %s proximity on\n",__func__);
 		proximity_enable_from_ps(1);
 	}
-	if (phone_status == 0) 
+	if (phone_status == 0) //call end , proximity off
 	{
 		D("[PS][TP] %s proximity off\n",__func__);
 		proximity_enable_from_ps(0);
@@ -279,7 +294,7 @@ static int psensor_open(struct inode *inode, struct file *file)
 		return -EBUSY;
 
 	lpi->psensor_opened = 1;
-	
+	//psensor_disable(lpi);
 	return 0;
 }
 
@@ -291,7 +306,7 @@ static int psensor_release(struct inode *inode, struct file *file)
 	phone_status = 0;
 	lpi->psensor_opened = 0;
 	return 0;
-	
+	//return ps_hal_enable ? psensor_disable(lpi) : 0 ;
 }
 
 static long psensor_ioctl(struct file *file, unsigned int cmd,
@@ -307,12 +322,12 @@ static long psensor_ioctl(struct file *file, unsigned int cmd,
 		if (get_user(val, (unsigned long __user *)arg))
 			return -EFAULT;
 		if (val) {
-			
+			//err = psensor_enable(lpi);
 			if (!err)
 				ps_hal_enable = 1;
 			return err;
 		} else {
-			
+			//err = psensor_disable(lpi);
 			if (!err)
 				ps_hal_enable = 0;
 			return err;
@@ -396,14 +411,14 @@ static int fb_notifier_callback(struct notifier_block *self,
 		blank = evdata->data;
 		switch (*blank) {
 			case FB_BLANK_UNBLANK:
-				
+				//sensor_lpm_power(0);
 				break;
 			case FB_BLANK_POWERDOWN:
 			case FB_BLANK_HSYNC_SUSPEND:
 			case FB_BLANK_VSYNC_SUSPEND:
 			case FB_BLANK_NORMAL:
 				if (lpi->ps_enable == 0)
-					
+					//sensor_lpm_power(1);
 					D("[PS][cm3629] %s: Psensor not enable\n", __func__);
 
 				else
@@ -423,14 +438,14 @@ static void cm3629_early_suspend(struct early_suspend *h)
 	D("[LS][cm3629] %s\n", __func__);
 
 	if (lpi->ps_enable == 0)
-		
+		//sensor_lpm_power(1);
 	else
 		D("[PS][cm3629] %s: Psensor enable, so did not enter lpm\n", __func__);
 }
 
 static void cm3629_late_resume(struct early_suspend *h)
 {
-	
+	//sensor_lpm_power(0);
 	D("[LS][cm3629] %s\n", __func__);
 
 }
@@ -438,10 +453,159 @@ static void cm3629_late_resume(struct early_suspend *h)
 
 static int cm3629_parse_dt(struct device *dev, struct psensor_platform_data *pdata)
 {
-	
-	
+	//struct property *prop;
+	//struct device_node *dt = dev->of_node;
 
 	D("[PS][cm3629] %s: +\n", __func__);
+/*
+	prop = of_find_property(dt, "cm3629,model", NULL);
+	if (prop) {
+		of_property_read_u32(dt, "cm3629,model", &pdata->model);
+	}
+
+	prop = of_find_property(dt, "cm3629,ps_select", NULL);
+	if (prop) {
+		of_property_read_u32(dt, "cm3629,ps_select", &pdata->ps_select);
+	}
+
+	prop = of_find_property(dt, "cm3629,use__PS2v85", NULL);
+	if (prop) {
+		of_property_read_u32(dt, "cm3629,use__PS2v85", &pdata->use__PS2v85);
+	}
+
+	prop = of_find_property(dt, "cm3629,levels", NULL);
+	if (prop) {
+		of_property_read_u32_array(dt, "cm3629,levels", adctable, 10);
+		pdata->levels = &adctable[0];
+	}
+
+	prop = of_find_property(dt, "cm3629,correction", NULL);
+	if (prop) {
+		of_property_read_u32_array(dt, "cm3629,correction", correction_table, 10);
+	} else {
+		correction_table[0] = 0;
+	}
+	pdata->correction = &correction_table[0];
+
+	prop = of_find_property(dt, "cm3629,golden_adc", NULL);
+	if (prop) {
+		of_property_read_u32(dt, "cm3629,golden_adc", &pdata->golden_adc);
+	}
+
+	prop = of_find_property(dt, "cm3629,cm3629_slave_address", NULL);
+	if (prop) {
+		of_property_read_u32(dt, "cm3629,cm3629_slave_address", &pdata->cm3629_slave_address);
+	}
+
+	prop = of_find_property(dt, "cm3629,ps1_thd_set", NULL);
+	if (prop) {
+		of_property_read_u32(dt, "cm3629,ps1_thd_set", &pdata->ps1_thd_set);
+	}
+
+	prop = of_find_property(dt, "cm3629,ps1_thd_no_cal", NULL);
+	if (prop) {
+		of_property_read_u32(dt, "cm3629,ps1_thd_no_cal", &pdata->ps1_thd_no_cal);
+	}
+
+	prop = of_find_property(dt, "cm3629,ps1_thd_with_cal", NULL);
+	if (prop) {
+		of_property_read_u32(dt, "cm3629,ps1_thd_with_cal", &pdata->ps1_thd_with_cal);
+	}
+
+	prop = of_find_property(dt, "cm3629,ps_th_add", NULL);
+	if (prop) {
+		of_property_read_u32(dt, "cm3629,ps_th_add", &pdata->ps_th_add);
+	}
+
+	prop = of_find_property(dt, "cm3629,ps_calibration_rule", NULL);
+	if (prop) {
+		of_property_read_u32(dt, "cm3629,ps_calibration_rule", &pdata->ps_calibration_rule);
+	}
+
+	prop = of_find_property(dt, "cm3629,dynamical_threshold", NULL);
+	if (prop) {
+		of_property_read_u32(dt, "cm3629,dynamical_threshold", &pdata->dynamical_threshold);
+	}
+
+	prop = of_find_property(dt, "cm3629,dark_level", NULL);
+	if (prop) {
+		of_property_read_u32(dt, "cm3629,dark_level", &pdata->dark_level);
+	}
+
+	prop = of_find_property(dt, "cm3629,ps_duty", NULL);
+	if (prop) {
+		of_property_read_u32(dt, "cm3629,ps_duty", &temp);
+	}
+	pdata->ps_conf1_val = 0;
+	pdata->ps_conf1_val |= (temp << 6);
+
+	prop = of_find_property(dt, "cm3629,ps_it", NULL);
+	if (prop) {
+		of_property_read_u32(dt, "cm3629,ps_it", &temp);
+	}
+	pdata->ps_conf1_val |= (temp << 4);
+
+	prop = of_find_property(dt, "cm3629,ps_pers", NULL);
+	if (prop) {
+		of_property_read_u32(dt, "cm3629,ps_pers", &temp);
+	}
+	pdata->ps_conf1_val |= (temp << 2);
+
+	prop = of_find_property(dt, "cm3629,ps_itb", NULL);
+	if (prop) {
+		of_property_read_u32(dt, "cm3629,ps_itb", &temp);
+	}
+
+	pdata->ps_conf2_val = 0;
+	pdata->ps_conf2_val |= (temp << 6);
+
+	prop = of_find_property(dt, "cm3629,ps_itr", NULL);
+	if (prop) {
+		of_property_read_u32(dt, "cm3629,ps_itr", &temp);
+	}
+
+	pdata->ps_conf2_val |= (temp << 4);
+	pdata->ps_conf2_val |= CM3629_PS2_INT_DIS | CM3629_PS1_INT_DIS;
+	pdata->ps_conf3_val = CM3629_PS2_PROL_32;
+	pdata->emmc_als_kadc = 0;
+
+	if ((offset = of_find_node_by_path(CALIBRATION_DATA_PATH))) {
+		cali_data = (unsigned char*) of_get_property(offset, LIGHT_SENSOR_FLASH_DATA, &cali_size);
+
+		D("%s: Light sensor cali_size = %d", __func__, cali_size);
+		if (cali_data) {
+			for (i = 0; (i < cali_size) && (i < 4); i++) {
+				D("cali_data[%d] = %02x ", i, cali_data[i]);
+				pdata->emmc_als_kadc |= (cali_data[i] << (i * 8));
+			}
+		}
+	} else
+		D("%s: Light sensor calibration data offset not found", __func__);
+
+	pdata->emmc_ps_kadc1 = 0;
+	pdata->emmc_ps_kadc2 = 0;
+
+	if ((offset = of_find_node_by_path(CALIBRATION_DATA_PATH))) {
+		cali_data = (unsigned char*) of_get_property(offset, PSENSOR_FLASH_DATA, &cali_size);
+
+		D("%s: Psensor cali_size = %d", __func__, cali_size);
+		if (cali_data) {
+			for (i = 0; (i < cali_size) && (i < 4); i++) {
+				D("cali_data[%d] = %02x ", i, cali_data[i]);
+				pdata->emmc_ps_kadc1 |= (cali_data[i] << (i * 8));
+			}
+			for (i = 4; (i < cali_size) && (i < 8); i++) {
+				D("cali_data[%d] = %02x ", i, cali_data[i]);
+				pdata->emmc_ps_kadc2 |= (cali_data[i] << ((i-4) * 8));
+			}
+		}
+	} else
+		D("%s: Psensor calibration data offset not found", __func__);
+
+	pdata->intr = of_get_named_gpio_flags(dt, "cm3629,irq-gpio",
+				0, &pdata->irq_gpio_flags);
+	pdata->lpm_power = cm3629_sr_lpm;
+*/
 	return 0;
 }
 
@@ -529,6 +693,39 @@ static int  proximity_sensor_probe(struct platform_device *pdev)
 		lpi->ps_dev = NULL;
 		goto err_create_ls_device_file;
 	}
+/*
+	ret = device_create_file(lpi->ps_dev, &dev_attr_ps_adc);
+	if (ret)
+		goto err_create_ps_device;
+
+	ret = device_create_file(lpi->ps_dev, &dev_attr_ps_kadc);
+	if (ret)
+		goto err_create_ps_device;
+
+	ret = device_create_file(lpi->ps_dev, &dev_attr_ps_canc);
+	if (ret)
+		goto err_create_ps_device;
+
+	ret = device_create_file(lpi->ps_dev, &dev_attr_ps_hw);
+	if (ret)
+		goto err_create_ps_device;
+
+	ret = device_create_file(lpi->ps_dev, &dev_attr_ps_i2c);
+	if (ret)
+		goto err_create_ps_device;
+
+	ret = device_create_file(lpi->ps_dev, &dev_attr_ps_headset_bt_plugin);
+	if (ret)
+		goto err_create_ps_device;
+
+	ret = device_create_file(lpi->ps_dev, &dev_attr_ps_workaround_table);
+	if (ret)
+		goto err_create_ps_device;
+
+	ret = device_create_file(lpi->ps_dev, &dev_attr_ps_fixed_thd_add);
+	if (ret)
+		goto err_create_ps_device;
+*/
 	ret = device_create_file(lpi->ps_dev, &dev_attr_PhoneApp_status);
 	if (ret)
 		goto err_create_ps_device;
@@ -549,6 +746,7 @@ static int  proximity_sensor_probe(struct platform_device *pdev)
 	lpi->early_suspend.resume = cm3629_late_resume;
 	register_early_suspend(&lpi->early_suspend);
 #endif
+//	state_helper_register_notifier(&release_psensor_wakelock_handler, "psensor_release_wakelock_event");
 	D("[PS][cm3629] %s: Probe success!\n", __func__);
 	is_probe_success = 1;
 	return ret;

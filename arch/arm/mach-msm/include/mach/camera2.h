@@ -62,11 +62,13 @@ struct v4l2_subdev_info {
 	uint16_t order;
 };
 
+/* HTC_START Steven.CW_Wu 20131206 - porting ov13850 and NCP6924 */
 struct camera_ncp6924_vreg_t {
 	const char *reg_name;
 	int min_voltage;
 	int max_voltage;
 };
+/* HTC_END Steven.CW_Wu 20131206 - porting ov13850 and NCP6924 */
 
 struct msm_camera_power_ctrl_t {
 	struct device *dev;
@@ -100,14 +102,14 @@ struct msm_camera_sensor_board_info {
 	struct msm_camera_power_ctrl_t power_info;
 	struct msm_camera_sensor_slave_info *cam_slave_info;
 
-	
+	//HTC_START
 	uint32_t htc_image;
 	uint32_t camid_value;
-	
-	
+	//HTC_END
+	/* HTC_START Steven.CW_Wu 20131206 - porting ov13850 and NCP6924 */
   uint32_t pm_ncp6924;
   struct camera_ncp6924_vreg_t *cam_ncp6924_vreg;
-	
+	/* HTC_END Steven.CW_Wu 20131206 - porting ov13850 and NCP6924 */
 };
 
 enum msm_camera_i2c_cmd_type {
@@ -153,9 +155,9 @@ struct msm_eeprom_memory_map_t {
 
 struct msm_eeprom_memory_block_t {
 	struct msm_eeprom_memory_map_t *map;
-	uint32_t num_map;	
+	uint32_t num_map;	/* number of map blocks */
 	uint8_t *mapdata;
-	uint32_t num_data;	
+	uint32_t num_data;	/* size of total mapdata */
 };
 
 struct msm_eeprom_mm_t {

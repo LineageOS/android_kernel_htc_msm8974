@@ -434,6 +434,10 @@ typedef enum
 #define		BIT_DISC_CTRL1_STROBE_OFF					0x02
 
 #define	REG_DISC_CTRL2									TX_PAGE_3, 0x11
+/*
+#define	REG_DISC_CTRL3									TX_PAGE_3, 0x12
+#define		BIT_DC3_DEFAULT								0x86
+*/
 #define	REG_DISC_CTRL3									TX_PAGE_3, 0x12
 #define	REG_DISC_CTRL4									TX_PAGE_3, 0x13
 #define	REG_DISC_CTRL5									TX_PAGE_3, 0x14

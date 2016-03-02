@@ -30,9 +30,14 @@
  * HISTORY      : 2011/08/25    K.Kitamura(*)
  *                001 new creation
  ******************************************************************************/
+/*..+....1....+....2....+....3....+....4....+....5....+....6....+....7....+...*/
 #ifndef _TUNER_DRV_SYS_H
 #define _TUNER_DRV_SYS_H
 
+/******************************************************************************
+ * define
+ ******************************************************************************/
+/* IOCTL parameters */
 #define TUNER_IOC_MAGIC 'd'
 #define TUNER_IOCTL_VALGET        _IOW(TUNER_IOC_MAGIC, 1, struct _tuner_data_rw)
 #define TUNER_IOCTL_VALSET        _IOR(TUNER_IOC_MAGIC, 2, struct _tuner_data_rw)
@@ -41,28 +46,35 @@
 #define TUNER_IOCTL_VALSET_EVENT  _IOW(TUNER_IOC_MAGIC, 5, struct _tuner_data_rw)
 #define TUNER_IOCTL_VALREL_EVENT  _IOW(TUNER_IOC_MAGIC, 6, struct _tuner_data_rw)
 
-#define TUNER_DRV_CTL_POWON              0       
-#define TUNER_DRV_CTL_POWOFF             1       
+/* power supply parameters */
+#define TUNER_DRV_CTL_POWON              0       /* Power ON */
+#define TUNER_DRV_CTL_POWOFF             1       /* Power OFF */
 
-#define TUNER_SET_ENADATA             0xFF       
+/* enabit enable */
+#define TUNER_SET_ENADATA             0xFF       /* enabit */
 
+/******************************************************************************
+ * data
+ ******************************************************************************/
+/* structure for register Read/Write */
 typedef struct _tuner_data_rw {
-    unsigned short slave_adr;                     
-    unsigned short adr;                           
-    unsigned short sbit;                          
-    unsigned short ebit;                          
-    unsigned short param;                         
-    unsigned short enabit;                        
+    unsigned short slave_adr;                     /* I2C slave address */
+    unsigned short adr;                           /* reg. address */
+    unsigned short sbit;                          /* start bit position */
+    unsigned short ebit;                          /* end bit position */
+    unsigned short param;                         /* write/read value */
+    unsigned short enabit;                        /* enable bit mask */
 } TUNER_DATA_RW ;
 
 #if 0
+/* for ioctl data storage */
 struct ioctl_cmd {
-    unsigned int reg;                            
-    unsigned int offset;                         
-    unsigned int val;                            
+    unsigned int reg;                            /* reg. address */
+    unsigned int offset;                         /* offset */
+    unsigned int val;                            /* value */
 };
 #endif
-#endif
+#endif/* _TUNER_DRV_SYS_H */
 /*******************************************************************************
  *              Copyright(c) 2011 Panasonc Co., Ltd.
  ******************************************************************************/

@@ -1622,6 +1622,7 @@ int mdss_mdp_pp_setup_locked(struct mdss_mdp_ctl *ctl)
 	u32 disp_num;
 	int i;
 	bool valid_mixers = true;
+	bool ad_disable = true;
 	if ((!ctl->mfd) || (!mdss_pp_res))
 		return -EINVAL;
 
@@ -1642,7 +1643,9 @@ int mdss_mdp_pp_setup_locked(struct mdss_mdp_ctl *ctl)
 		if (mixer_id[i] >= mdata->nad_cfgs)
 			valid_mixers = false;
 	}
-	if (valid_mixers && (mixer_cnt <= mdata->nmax_concurrent_ad_hw)) {
+	
+	if (valid_mixers && (mixer_cnt <= mdata->nmax_concurrent_ad_hw) &&
+		!ad_disable) {
 		ret = mdss_mdp_ad_setup(ctl->mfd);
 		if (ret < 0)
 			pr_warn("ad_setup(disp%d) returns %d", disp_num, ret);
@@ -4021,9 +4024,8 @@ int mdss_mdp_ad_input(struct msm_fb_data_type *mfd,
 			}
 			mutex_unlock(&ad->lock);
 			mutex_lock(&mfd->bl_lock);
-			if (!mfd->panel_info->act_brt)
-				MDSS_BRIGHT_TO_BL(bl, bl, mfd->panel_info->bl_max,
-								MDSS_MAX_BL_BRIGHTNESS);
+			MDSS_BRIGHT_TO_BL(bl, bl, mfd->panel_info->bl_max,
+							MDSS_MAX_BL_BRIGHTNESS);
 			mdss_fb_set_backlight(mfd, bl);
 			mutex_unlock(&mfd->bl_lock);
 			mutex_lock(&ad->lock);

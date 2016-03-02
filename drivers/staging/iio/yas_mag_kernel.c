@@ -743,6 +743,20 @@ static struct i2c_driver yas_driver = {
 	.id_table	= yas_id,
 };
 module_i2c_driver(yas_driver);
+/*
+static int __init yas_init(void)
+{
+	return i2c_add_driver(&yas_driver);
+}
+
+static void __exit yas_exit(void)
+{
+	i2c_del_driver(&yas_driver);
+}
+
+module_init(yas_init);
+module_exit(yas_exit);
+*/
 
 MODULE_DESCRIPTION("Yamaha Magnetometer I2C driver");
 MODULE_LICENSE("GPL v2");

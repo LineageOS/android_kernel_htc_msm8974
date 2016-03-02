@@ -28,10 +28,11 @@
 #include <linux/leds-lp5521_htc.h>
 #include <linux/regulator/consumer.h>
 #include <linux/module.h>
+//#include <mach/ADP5585_ioextender.h>
 #include <linux/of_gpio.h>
 #include <linux/wakelock.h>
 
-#define LP5521_MAX_LEDS			9	
+#define LP5521_MAX_LEDS			9	/* Maximum number of LEDs */
 #define LED_DEBUG				1
 #if LED_DEBUG
 #define D(x...) printk(KERN_DEBUG "[LED]" x)
@@ -77,7 +78,7 @@ struct lp5521_led {
 
 struct lp5521_chip {
 	struct led_i2c_platform_data *pdata;
-	struct mutex		led_i2c_rw_mutex; 
+	struct mutex		led_i2c_rw_mutex; /* Serialize control */
 	struct i2c_client	*client;
 	struct lp5521_led	leds[LP5521_MAX_LEDS];
 	struct early_suspend early_suspend_led;
@@ -216,19 +217,25 @@ static void lp5521_led_enable(struct i2c_client *client, int blink_enable)
 
 	I(" %s +++\n" , __func__);
 
-	
+	/* === led pin enable ===*/
 	if (plat_data->ena_gpio) {
 		ret = gpio_direction_output(plat_data->ena_gpio, 1);
 		if (ret < 0) {
 			pr_err("[LED] %s: gpio_direction_output high failed %d\n", __func__, ret);
 			gpio_free(plat_data->ena_gpio);
 		}
-	} 
+	} /*else if (pdata->ena_gpio_io_ext) {
+	    ret = ioext_gpio_set_value(pdata->ena_gpio_io_ext, 1);
+	    if (ret < 0) {
+	    pr_err("[LED] %s: io_extender high failed %d\n", __func__, ret);
+	    gpio_free(pdata->ena_gpio);
+	    }
+	    }*/
 
 	msleep(1);
 #if 1
 	if (blink_enable) {
-		
+		/* === reset ===*/
 		data = 0xFF;
 		ret = i2c_write_block(client, 0x0d, &data, 1);
 		msleep(20);
@@ -240,11 +247,11 @@ static void lp5521_led_enable(struct i2c_client *client, int blink_enable)
 #endif
 	chip_enable = 1;
 	mutex_lock(&led_mutex);
-	
+	/* === enable CHIP_EN === */
 	data = 0x40;
 	ret = i2c_write_block(client, ENABLE_REGISTER, &data, 1);
 	udelay(550);
-	
+	/* === configuration control in power save mode=== */
 	data = 0x29;
 	ret = i2c_write_block(client, 0x08, &data, 1);
 	mutex_unlock(&led_mutex);
@@ -261,32 +268,32 @@ static void lp5521_red_long_blink(struct i2c_client *client)
 	ret = i2c_write_block(client, OPRATION_REGISTER, &data, 1);
 	udelay(200);
 
-	
+	/* === set pwm to 200 === */
 	data = 0x40;
 	ret = i2c_write_block(client, 0x10, &data, 1);
 	data = 0xc8;
 	ret = i2c_write_block(client, 0x11, &data, 1);
-	
+	/* === wait 0.999s === */
 	data = 0x7f;
 	ret = i2c_write_block(client, 0x12, &data, 1);
 	data = 0x00;
 	ret = i2c_write_block(client, 0x13, &data, 1);
-	
+	/* === set pwm to 0 === */
 	data = 0x40;
 	ret = i2c_write_block(client, 0x14, &data, 1);
 	data = 0x00;
 	ret = i2c_write_block(client, 0x15, &data, 1);
-	
+	/* === wait 0.999s === */
 	data = 0x7f;
 	ret = i2c_write_block(client, 0x16, &data, 1);
 	data = 0x00;
 	ret = i2c_write_block(client, 0x17, &data, 1);
-	
+	/* === clear register === */
 	data = 0x00;
 	ret = i2c_write_block(client, 0x18, &data, 1);
 	ret = i2c_write_block(client, 0x19, &data, 1);
 
-	
+	/* === run program === */
 
 	data = 0x20;
 	ret = i2c_write_block(client, OPRATION_REGISTER, &data, 1);
@@ -323,100 +330,100 @@ static void lp5521_color_blink(struct i2c_client *client, uint8_t red, uint8_t g
 	ret = i2c_write_block(client, 0x0b, &data, 1);
 
 	if (red) {
-		
+		/* === wait 0.999s === */
 		data = 0x7f;
 		ret = i2c_write_block(client, 0x10, &data, 1);
 		data = 0x00;
 		ret = i2c_write_block(client, 0x11, &data, 1);
-		
+		/* === set red pwm === */
 		data = 0x40;
 		ret = i2c_write_block(client, 0x12, &data, 1);
 
 		ret = i2c_write_block(client, 0x13, &red, 1);
-		
+		/* === wait 0.064s === */
 		data = 0x44;
 		ret = i2c_write_block(client, 0x14, &data, 1);
 		data = 0x00;
 		ret = i2c_write_block(client, 0x15, &data, 1);
-		
+		/* === set pwm to 0 === */
 		data = 0x40;
 		ret = i2c_write_block(client, 0x16, &data, 1);
 		data = 0x00;
 		ret = i2c_write_block(client, 0x17, &data, 1);
-		
+		/* === wait 0.935s === */
 		data = 0x7c;
 		ret = i2c_write_block(client, 0x18, &data, 1);
 		data = 0x00;
 		ret = i2c_write_block(client, 0x19, &data, 1);
-		
+		/* === clear register === */
 		data = 0x00;
 		ret = i2c_write_block(client, 0x1a, &data, 1);
 		ret = i2c_write_block(client, 0x1b, &data, 1);
 	}
 	if (green) {
-		
+		/* === wait 0.999s === */
 		data = 0x7f;
 		ret = i2c_write_block(client, 0x30, &data, 1);
 		data = 0x00;
 		ret = i2c_write_block(client, 0x31, &data, 1);
-		
+		/* === set green pwm === */
 		data = 0x40;
 		ret = i2c_write_block(client, 0x32, &data, 1);
 
 		ret = i2c_write_block(client, 0x33, &green, 1);
-		
+		/* === wait 0.064s === */
 		data = 0x44;
 		ret = i2c_write_block(client, 0x34, &data, 1);
 		data = 0x00;
 		ret = i2c_write_block(client, 0x35, &data, 1);
-		
+		/* === set pwm to 0 === */
 		data = 0x40;
 		ret = i2c_write_block(client, 0x36, &data, 1);
 		data = 0x00;
 		ret = i2c_write_block(client, 0x37, &data, 1);
-		
+		/* === wait 0.935s === */
 		data = 0x7c;
 		ret = i2c_write_block(client, 0x38, &data, 1);
 		data = 0x00;
 		ret = i2c_write_block(client, 0x39, &data, 1);
-		
+		/* === clear register === */
 		data = 0x00;
 		ret = i2c_write_block(client, 0x3a, &data, 1);
 		ret = i2c_write_block(client, 0x3b, &data, 1);
 	}
 	if (blue) {
-		
+		/* === wait 0.999s === */
 		data = 0x7f;
 		ret = i2c_write_block(client, 0x50, &data, 1);
 		data = 0x00;
 		ret = i2c_write_block(client, 0x51, &data, 1);
-		
+		/* === set blue pwm === */
 		data = 0x40;
 		ret = i2c_write_block(client, 0x52, &data, 1);
 
 		ret = i2c_write_block(client, 0x53, &blue, 1);
-		
+		/* === wait 0.064s === */
 		data = 0x44;
 		ret = i2c_write_block(client, 0x54, &data, 1);
 		data = 0x00;
 		ret = i2c_write_block(client, 0x55, &data, 1);
-		
+		/* === set pwm to 0 === */
 		data = 0x40;
 		ret = i2c_write_block(client, 0x56, &data, 1);
 		data = 0x00;
 		ret = i2c_write_block(client, 0x57, &data, 1);
-		
+		/* === wait 0.935s === */
 		data = 0x7c;
 		ret = i2c_write_block(client, 0x58, &data, 1);
 		data = 0x00;
 		ret = i2c_write_block(client, 0x59, &data, 1);
-		
+		/* === clear register === */
 		data = 0x00;
 		ret = i2c_write_block(client, 0x5a, &data, 1);
 		ret = i2c_write_block(client, 0x5b, &data, 1);
 	}
 
-	
+	/* === run program === */
 	data = mode & 0x2a;
 	ret = i2c_write_block(client, OPRATION_REGISTER, &data, 1);
 	udelay(200);
@@ -439,80 +446,80 @@ static void lp5521_dual_color_blink(struct i2c_client *client)
 	udelay(200);
 
 
-	
+	/* === set pwm to 200 === */
 	data = 0x40;
 	ret = i2c_write_block(client, 0x10, &data, 1);
 	data = 0xc8;
 	ret = i2c_write_block(client, 0x11, &data, 1);
-	
+	/* === wait 0.064s === */
 	data = 0x44;
 	ret = i2c_write_block(client, 0x12, &data, 1);
 	data = 0x00;
 	ret = i2c_write_block(client, 0x13, &data, 1);
-	
+	/* === set pwm to 0 === */
 	data = 0x40;
 	ret = i2c_write_block(client, 0x14, &data, 1);
 	data = 0x00;
 	ret = i2c_write_block(client, 0x15, &data, 1);
-	
+	/* === wait 0.25s === */
 	data = 0x50;
 	ret = i2c_write_block(client, 0x16, &data, 1);
 	data = 0x00;
 	ret = i2c_write_block(client, 0x17, &data, 1);
-	
+	/* === trigger sg, wg === */
 	data = 0xe1;
 	ret = i2c_write_block(client, 0x18, &data, 1);
 	data = 0x04;
 	ret = i2c_write_block(client, 0x19, &data, 1);
-	
+	/* === clear register === */
 	data = 0x00;
 	ret = i2c_write_block(client, 0x1a, &data, 1);
 	ret = i2c_write_block(client, 0x1b, &data, 1);
 	udelay(550);
 
-	
+	/* === trigger wr === */
 	data = 0xe0;
 	ret = i2c_write_block(client, 0x30, &data, 1);
 	data = 0x80;
 	ret = i2c_write_block(client, 0x31, &data, 1);
 	udelay(550);
-	
+	/* set pwm to 200 */
 	data = 0x40;
 	ret = i2c_write_block(client, 0x32, &data, 1);
 	data = 0xc8;
 	ret = i2c_write_block(client, 0x33, &data, 1);
-	
+	/* === wait 0.064s === */
 	data = 0x44;
 	ret = i2c_write_block(client, 0x34, &data, 1);
 	data = 0x00;
 	ret = i2c_write_block(client, 0x35, &data, 1);
-	
+	/* === set pwm to 0 === */
 	data = 0x40;
 	ret = i2c_write_block(client, 0x36, &data, 1);
 	data = 0x00;
 	ret = i2c_write_block(client, 0x37, &data, 1);
-	
+	/* === wait 0.999s === */
 	data = 0x7f;
 	ret = i2c_write_block(client, 0x38, &data, 1);
 	data = 0x00;
 	ret = i2c_write_block(client, 0x39, &data, 1);
-	
+	/* === wait 0.622s === */
 	data = 0x68;
 	ret = i2c_write_block(client, 0x3a, &data, 1);
 	data = 0x00;
 	ret = i2c_write_block(client, 0x3b, &data, 1);
-	
+	/* === trigger sr === */
 	data = 0xe0;
 	ret = i2c_write_block(client, 0x3c, &data, 1);
 	data = 0x02;
 	ret = i2c_write_block(client, 0x3d, &data, 1);
-	
+	/* === clear register === */
 	data = 0x00;
 	ret = i2c_write_block(client, 0x3e, &data, 1);
 	ret = i2c_write_block(client, 0x3f, &data, 1);
 	udelay(550);
 
-	
+	/* === run program === */
 
 	data = 0x28;
 	ret = i2c_write_block(client, OPRATION_REGISTER, &data, 1);
@@ -542,7 +549,7 @@ static void lp5521_led_off(struct i2c_client *client)
 	}
 
 	mutex_lock(&led_mutex);
-	
+	/* === reset red green blue === */
 	data = 0x00;
 	ret = i2c_write_block(client, B_PWM_CONTROL, &data, 1);
 	ret = i2c_write_block(client, G_PWM_CONTROL, &data, 1);
@@ -556,7 +563,13 @@ static void lp5521_led_off(struct i2c_client *client)
 			pr_err("[LED] %s: gpio_direction_output high failed %d\n", __func__, ret);
 			gpio_free(plat_data->ena_gpio);
 		}
-	} 
+	} /*else if (pdata->ena_gpio_io_ext) {
+	    ret = ioext_gpio_set_value(pdata->ena_gpio_io_ext, 0);
+	    if (ret < 0) {
+	    pr_err("[LED] %s: io extender low failed %d\n", __func__, ret);
+	    gpio_free(pdata->ena_gpio);
+	    }
+	    }*/
 	chip_enable = 0;
 	I(" %s ---\n" , __func__);
 }
@@ -613,7 +626,7 @@ static void multicolor_work_func(struct work_struct *work)
 
 	if (ldata->Mode == 0) {
 		lp5521_led_off(client);
-	} else if (ldata->Mode == 1) {  
+	} else if (ldata->Mode == 1) {  /* === set red, green, blue direct control === */
 		mutex_lock(&led_mutex);
 		ret = i2c_write_block(client, R_PWM_CONTROL, &ldata->Red, 1);
 		ret = i2c_write_block(client, G_PWM_CONTROL, &ldata->Green, 1);
@@ -625,14 +638,14 @@ static void multicolor_work_func(struct work_struct *work)
 		ret = i2c_write_block(client, ENABLE_REGISTER, &data, 1);
 		udelay(500);
 		mutex_unlock(&led_mutex);
-	} else if (ldata->Mode == 2) { 
+	} else if (ldata->Mode == 2) { /* === set short blink === */
 		lp5521_color_blink(client, ldata->Red, ldata->Green, ldata->Blue);
-	} else if (ldata->Mode == 3) { 
+	} else if (ldata->Mode == 3) { /* === set delayed short blink === */
 		msleep(1000);
 		lp5521_color_blink(client, ldata->Red, ldata->Green, ldata->Blue);
-	} else if (ldata->Mode == 4 && ldata->Red && !ldata->Green && !ldata->Blue) { 
+	} else if (ldata->Mode == 4 && ldata->Red && !ldata->Green && !ldata->Blue) { /* === set red long blink === */
 		lp5521_red_long_blink(client);
-	} else if (ldata->Mode ==5 && ldata->Red && ldata->Green && !ldata->Blue) { 
+	} else if (ldata->Mode ==5 && ldata->Red && ldata->Green && !ldata->Blue) { /* === set red green blink === */
 		lp5521_dual_color_blink(client);
 	} else {
 		for (i = 0; i <= 0x6f; i++) {
@@ -740,6 +753,7 @@ static ssize_t lp5521_led_multi_color_store(struct device *dev,
 static DEVICE_ATTR(ModeRGB, 0644, lp5521_led_multi_color_show,
 		lp5521_led_multi_color_store);
 
+/* === read/write i2c and control enable pin for debug === */
 static ssize_t lp5521_led_i2c_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -841,7 +855,7 @@ static int lp5521_led_probe(struct i2c_client *client
 
 	printk("[LED][PROBE] led driver probe +++\n");
 
-	
+	/* === init platform and client data === */
 	cdata = kzalloc(sizeof(struct lp5521_chip), GFP_KERNEL);
 	if (!cdata) {
 		ret = -ENOMEM;
@@ -857,7 +871,7 @@ static int lp5521_led_probe(struct i2c_client *client
 		ret = -ENOMEM;
 	ret = lp5521_parse_dt(&client->dev, pdata);
 	led_rw_delay = 5;
-	
+	/* === led enable pin === */
 	if (pdata->ena_gpio) {
 		ret = gpio_request(pdata->ena_gpio, "led_enable");
 		if (ret < 0) {
@@ -870,8 +884,14 @@ static int lp5521_led_probe(struct i2c_client *client
 			gpio_free(pdata->ena_gpio);
 			return ret;
 		}
-	} 
-	
+	} /*else if (pdata->ena_gpio_io_ext) {
+	    ret = ioext_gpio_set_value(pdata->ena_gpio_io_ext, 1);
+	    if (ret < 0) {
+	    pr_err("[LED] %s: io extender high failed %d\n", __func__, ret);
+	    gpio_free(pdata->ena_gpio);
+	    }
+	    }*/
+	/* === led trigger signal pin === */
 	if (pdata->tri_gpio) {
 		ret = gpio_request(pdata->tri_gpio, "led_trigger");
 		if (ret < 0) {
@@ -925,15 +945,17 @@ static int lp5521_led_probe(struct i2c_client *client
 	mutex_init(&cdata->led_i2c_rw_mutex);
 	mutex_init(&led_mutex);
 	plat_data = pdata;
-	
+	/* Avoid led turn off when entering kernel */
 #if 0
-	
+	/* === disable CHIP_EN === */
 	data = 0x00;
 	ret = i2c_write_block(client, ENABLE_REGISTER, &data, 1);
 	udelay(550);
 	if (pdata->ena_gpio) {
 		gpio_direction_output(pdata->ena_gpio, 0);
-	} 
+	} /*else if (pdata->ena_gpio_io_ext) {
+	    ioext_gpio_set_value(pdata->ena_gpio_io_ext, 0);
+	    }*/
 #endif
 	printk("[LED][PROBE] led driver probe ---\n");
 	return 0;
@@ -951,6 +973,8 @@ err_register_attr_ModeRGB:
 	}
 err_create_work_queue:
 	kfree(pdata);
+	/*err_exit:
+	  kfree(cdata);*/
 err_cdata:
 	return ret;
 }
@@ -968,7 +992,9 @@ static int __devexit lp5521_led_remove(struct i2c_client *client)
 	ret = lp5521_parse_dt(&client->dev, plat_data);
 	if (plat_data->ena_gpio) {
 		gpio_direction_output(plat_data->ena_gpio, 0);
-	} 
+	} /*else if (pdata->ena_gpio_io_ext) {
+	    ioext_gpio_set_value(pdata->ena_gpio_io_ext, 0);
+	    }*/
 	for (i = 0; i < plat_data->num_leds; i++) {
 		device_remove_file(cdata->leds[i].cdev.dev,&dev_attr_off_timer);
 		device_remove_file(cdata->leds[i].cdev.dev,&dev_attr_ModeRGB);
@@ -1003,6 +1029,25 @@ static struct i2c_driver led_i2c_driver = {
 	.remove = __devexit_p(lp5521_led_remove),
 };
 module_i2c_driver(led_i2c_driver);
+/*
+   static int __init lp5521_led_init(void)
+   {
+   int ret;
+
+   ret = i2c_add_driver(&led_i2c_driver);
+   if (ret)
+   return ret;
+   return 0;
+   }
+
+   static void __exit lp5521_led_exit(void)
+   {
+   i2c_del_driver(&led_i2c_driver);
+   }
+
+   module_init(lp5521_led_init);
+   module_exit(lp5521_led_exit);
+ */
 MODULE_AUTHOR("<ShihHao_Shiung@htc.com>, <Dirk_Chang@htc.com>");
 MODULE_DESCRIPTION("LP5521 LED driver");
 

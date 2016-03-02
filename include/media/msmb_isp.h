@@ -116,32 +116,32 @@ struct msm_vfe_input_cfg {
 };
 
 struct msm_vfe_axi_plane_cfg {
-	uint32_t output_width; 
+	uint32_t output_width; /*Include padding*/
 	uint32_t output_height;
 	uint32_t output_stride;
 	uint32_t output_scan_lines;
-	uint32_t output_plane_format; 
+	uint32_t output_plane_format; /*Y/Cb/Cr/CbCr*/
 	uint32_t plane_addr_offset;
-	uint8_t csid_src; 
-	uint8_t rdi_cid;
+	uint8_t csid_src; /*RDI 0-2*/
+	uint8_t rdi_cid;/*CID 1-16*/
 };
 
 struct msm_vfe_axi_stream_request_cmd {
 	uint32_t session_id;
 	uint32_t stream_id;
 	uint32_t vt_enable;
-	uint32_t output_format;
-	enum msm_vfe_axi_stream_src stream_src; 
+	uint32_t output_format;/*Planar/RAW/Misc*/
+	enum msm_vfe_axi_stream_src stream_src; /*CAMIF/IDEAL/RDIs*/
 	struct msm_vfe_axi_plane_cfg plane_cfg[MAX_PLANES_PER_STREAM];
 
 	uint32_t burst_count;
 	uint32_t hfr_mode;
 	uint8_t frame_base;
 
-	uint32_t init_frame_drop; 
+	uint32_t init_frame_drop; /*MAX 31 Frames*/
 	enum msm_vfe_frame_skip_pattern frame_skip_pattern;
-	uint8_t buf_divert; 
-	
+	uint8_t buf_divert; /* if TRUE no vb2 buf done. */
+	/*Return values*/
 	uint32_t axi_stream_handle;
 };
 
@@ -181,18 +181,18 @@ struct msm_vfe_axi_stream_update_cmd {
 };
 
 enum msm_isp_stats_type {
-	MSM_ISP_STATS_AEC,   
-	MSM_ISP_STATS_AF,    
-	MSM_ISP_STATS_AWB,   
-	MSM_ISP_STATS_RS,    
-	MSM_ISP_STATS_CS,    
-	MSM_ISP_STATS_IHIST, 
-	MSM_ISP_STATS_SKIN,  
-	MSM_ISP_STATS_BG,    
-	MSM_ISP_STATS_BF,    
-	MSM_ISP_STATS_BE,    
-	MSM_ISP_STATS_BHIST, 
-	MSM_ISP_STATS_MAX    
+	MSM_ISP_STATS_AEC,   /* legacy based AEC */
+	MSM_ISP_STATS_AF,    /* legacy based AF */
+	MSM_ISP_STATS_AWB,   /* legacy based AWB */
+	MSM_ISP_STATS_RS,    /* legacy based RS */
+	MSM_ISP_STATS_CS,    /* legacy based CS */
+	MSM_ISP_STATS_IHIST, /* legacy based HIST */
+	MSM_ISP_STATS_SKIN,  /* legacy based SKIN */
+	MSM_ISP_STATS_BG,    /* Bayer Grids */
+	MSM_ISP_STATS_BF,    /* Bayer Focus */
+	MSM_ISP_STATS_BE,    /* Bayer Exposure*/
+	MSM_ISP_STATS_BHIST, /* Bayer Hist */
+	MSM_ISP_STATS_MAX    /* MAX */
 };
 
 struct msm_vfe_stats_stream_request_cmd {
@@ -254,8 +254,8 @@ struct msm_vfe_reg_mask_info {
 };
 
 struct msm_vfe_reg_dmi_info {
-	uint32_t hi_tbl_offset; 
-	uint32_t lo_tbl_offset; 
+	uint32_t hi_tbl_offset; /*Optional*/
+	uint32_t lo_tbl_offset; /*Required*/
 	uint32_t len;
 };
 
@@ -286,9 +286,9 @@ struct msm_isp_buf_request {
 struct msm_isp_qbuf_info {
 	uint32_t handle;
 	int buf_idx;
-	
+	/*Only used for prepare buffer*/
 	struct v4l2_buffer buffer;
-	
+	/*Only used for diverted buffer*/
 	uint32_t dirty_buf;
 };
 
@@ -326,6 +326,9 @@ enum msm_isp_event_idx {
 #define ISP_EVENT_BUF_DIVERT      (ISP_BUF_EVENT_BASE)
 #define ISP_EVENT_STATS_NOTIFY    (ISP_STATS_EVENT_BASE)
 #define ISP_EVENT_COMP_STATS_NOTIFY (ISP_EVENT_STATS_NOTIFY + MSM_ISP_STATS_MAX)
+/* The msm_v4l2_event_data structure should match the
+ * v4l2_event.u.data field.
+ * should not exceed 64 bytes */
 
 struct msm_isp_buf_event {
 	uint32_t session_id;
@@ -335,8 +338,8 @@ struct msm_isp_buf_event {
 	int8_t buf_idx;
 };
 struct msm_isp_stats_event {
-	uint32_t stats_mask;                        
-	uint8_t stats_buf_idxs[MSM_ISP_STATS_MAX];  
+	uint32_t stats_mask;                        /* 4 bytes */
+	uint8_t stats_buf_idxs[MSM_ISP_STATS_MAX];  /* 11 bytes */
 };
 
 struct msm_isp_stream_ack {
@@ -346,15 +349,18 @@ struct msm_isp_stream_ack {
 };
 
 struct msm_isp_event_data {
+	/*Wall clock except for buffer divert events
+	 *which use monotonic clock
+	 */
 	struct timeval timestamp;
-	
+	/* Monotonic timestamp since bootup */
 	struct timeval mono_timestamp;
 	enum msm_vfe_input_src input_intf;
 	uint32_t frame_id;
 	union {
 		struct msm_isp_stats_event stats;
 		struct msm_isp_buf_event buf_done;
-	} u; 
+	} u; /* union can have max 52 bytes */
 };
 
 #define V4L2_PIX_FMT_QBGGR8  v4l2_fourcc('Q', 'B', 'G', '8')
@@ -414,4 +420,4 @@ struct msm_isp_event_data {
 #define VIDIOC_MSM_ISP_UPDATE_STREAM \
 	_IOWR('V', BASE_VIDIOC_PRIVATE+13, struct msm_vfe_axi_stream_update_cmd)
 
-#endif 
+#endif /* __MSMB_ISP__ */

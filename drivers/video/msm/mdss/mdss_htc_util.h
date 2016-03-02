@@ -58,5 +58,8 @@ void htc_dimming_off(void);
 void htc_debugfs_init(struct msm_fb_data_type *mfd);
 void htc_set_pp_pa(struct mdss_mdp_ctl *ctl);
 void htc_set_pp_pcc(struct mdss_mdp_ctl *ctl);
+int htc_backlight_transfer_bl_brightness(int val, struct mdss_panel_info *panel_info, bool brightness_to_bl);
+int htc_backlight_bl_to_nits(int val, struct mdss_panel_info *panel_info);
+int htc_backlight_nits_to_bl(int val, struct mdss_panel_info *panel_info);
 
 #endif 

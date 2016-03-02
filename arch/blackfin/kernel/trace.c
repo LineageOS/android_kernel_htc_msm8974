@@ -42,11 +42,11 @@ void decode_address(char *buf, unsigned long address)
 	buf += sprintf(buf, "<0x%08lx> ", address);
 
 #ifdef CONFIG_KALLSYMS
-	
+	/* look up the address and see if we are in kernel space */
 	symname = kallsyms_lookup(address, &symsize, &offset, &modname, namebuf);
 
 	if (symname) {
-		
+		/* yeah! kernel space! */
 		if (!modname)
 			modname = delim = "";
 		sprintf(buf, "{ %s%s%s%s + 0x%lx }",
@@ -57,12 +57,12 @@ void decode_address(char *buf, unsigned long address)
 #endif
 
 	if (address >= FIXED_CODE_START && address < FIXED_CODE_END) {
-		
+		/* Problem in fixed code section? */
 		strcat(buf, "/* Maybe fixed code section */");
 		return;
 
 	} else if (address < CONFIG_BOOT_LOAD) {
-		
+		/* Problem somewhere before the kernel start address */
 		strcat(buf, "/* Maybe null pointer? */");
 		return;
 
@@ -99,11 +99,19 @@ void decode_address(char *buf, unsigned long address)
 		return;
 	}
 
+	/*
+	 * Don't walk any of the vmas if we are oopsing, it has been known
+	 * to cause problems - corrupt vmas (kernel crashes) cause double faults
+	 */
 	if (oops_in_progress) {
 		strcat(buf, "/* kernel dynamic memory (maybe user-space) */");
 		return;
 	}
 
+	/* looks like we're off in user-land, so let's walk all the
+	 * mappings of all our processes and see if we can't be a whee
+	 * bit more specific
+	 */
 	write_lock_irqsave(&tasklist_lock, flags);
 	for_each_process(p) {
 		mm = (in_atomic ? p->mm : get_task_mm(p));
@@ -133,7 +141,13 @@ void decode_address(char *buf, unsigned long address)
 						name = d_name;
 				}
 
+				/* FLAT does not have its text aligned to the start of
+				 * the map while FDPIC ELF does ...
+				 */
 
+				/* before we can check flat/fdpic, we need to
+				 * make sure current is valid
+				 */
 				if ((unsigned long)current >= FIXED_CODE_START &&
 				    !((unsigned long)current & 0x3)) {
 					if (current->mm &&
@@ -165,6 +179,10 @@ void decode_address(char *buf, unsigned long address)
 			mmput(mm);
 	}
 
+	/*
+	 * we were unable to find this address anywhere,
+	 * or some MMs were skipped because they were in use.
+	 */
 	sprintf(buf, "/* kernel dynamic memory */");
 
 done:
@@ -173,11 +191,15 @@ done:
 
 #define EXPAND_LEN ((1 << CONFIG_DEBUG_BFIN_HWTRACE_EXPAND_LEN) * 256 - 1)
 
+/*
+ * Similar to get_user, do some address checking, then dereference
+ * Return true on success, false on bad address
+ */
 bool get_mem16(unsigned short *val, unsigned short *address)
 {
 	unsigned long addr = (unsigned long)address;
 
-	
+	/* Check for odd addresses */
 	if (addr & 0x1)
 		return false;
 
@@ -192,7 +214,7 @@ bool get_mem16(unsigned short *val, unsigned short *address)
 	case BFIN_MEM_ACCESS_ITEST:
 		isram_memcpy(val, address, 2);
 		return true;
-	default: 
+	default: /* invalid access */
 		return false;
 	}
 }
@@ -202,26 +224,26 @@ bool get_instruction(unsigned int *val, unsigned short *address)
 	unsigned long addr = (unsigned long)address;
 	unsigned short opcode0, opcode1;
 
-	
+	/* Check for odd addresses */
 	if (addr & 0x1)
 		return false;
 
-	
+	/* MMR region will never have instructions */
 	if (addr >= SYSMMR_BASE)
 		return false;
 
-	
+	/* Scratchpad will never have instructions */
 	if (addr >= L1_SCRATCH_START && addr < L1_SCRATCH_START + L1_SCRATCH_LENGTH)
 		return false;
 
-	
+	/* Data banks will never have instructions */
 	if (addr >= BOOT_ROM_START + BOOT_ROM_LENGTH && addr < L1_CODE_START)
 		return false;
 
 	if (!get_mem16(&opcode0, address))
 		return false;
 
-	
+	/* was this a 32-bit instruction? If so, get the next 16 bits */
 	if ((opcode0 & 0xc000) == 0xc000) {
 		if (!get_mem16(&opcode1, address + 1))
 			return false;
@@ -233,6 +255,13 @@ bool get_instruction(unsigned int *val, unsigned short *address)
 }
 
 #if defined(CONFIG_DEBUG_BFIN_HWTRACE_ON)
+/*
+ * decode the instruction if we are printing out the trace, as it
+ * makes things easier to follow, without running it through objdump
+ * Decode the change of flow, and the common load/store instructions
+ * which are the main cause for faults, and discontinuities in the trace
+ * buffer.
+ */
 
 #define ProgCtrl_opcode         0x0000
 #define ProgCtrl_poprnd_bits    0
@@ -598,6 +627,10 @@ static void decode_instruction(unsigned short *address)
 
 	decode_opcode(opcode);
 
+	/* If things are a 32-bit instruction, it has the possibility of being
+	 * a multi-issue instruction (a 32-bit, and 2 16 bit instrucitions)
+	 * This test collidates with the unlink instruction, so disallow that
+	 */
 	if ((opcode & 0xc0000000) == 0xc0000000 &&
 	    (opcode & BIT_MULTI_INS) &&
 	    (opcode & 0xe8000000) != 0xe8000000) {
@@ -637,6 +670,10 @@ void dump_bfin_trace_buffer(void)
 			addr = (unsigned short *)bfin_read_TBUF();
 			decode_address(buf, (unsigned long)addr);
 			pr_notice("%4i Target : %s\n", i, buf);
+			/* Normally, the faulting instruction doesn't go into
+			 * the trace buffer, (since it doesn't commit), so
+			 * we print out the fault address here
+			 */
 			if (!fault && addr == ((unsigned short *)evt_ivhw)) {
 				addr = (unsigned short *)bfin_read_TBUF();
 				decode_address(buf, (unsigned long)addr);
@@ -694,6 +731,8 @@ EXPORT_SYMBOL(dump_bfin_trace_buffer);
 
 void dump_bfin_process(struct pt_regs *fp)
 {
+	/* We should be able to look at fp->ipend, but we don't push it on the
+	 * stack all the time, so do this until we fix that */
 	unsigned int context = bfin_read_IPEND();
 
 	if (oops_in_progress)
@@ -710,6 +749,9 @@ void dump_bfin_process(struct pt_regs *fp)
 	else if (context & 0x8000)
 		pr_notice("Kernel process context\n");
 
+	/* Because we are crashing, and pointers could be bad, we check things
+	 * pretty closely before we use them
+	 */
 	if ((unsigned long)current >= FIXED_CODE_START &&
 	    !((unsigned long)current & 0x3) && current->pid) {
 		pr_notice("CURRENT PROCESS:\n");
@@ -764,16 +806,16 @@ void dump_bfin_mem(struct pt_regs *fp)
 		} else
 			pr_cont(" %s ", buf);
 
-		
-		if (addr <= erraddr &&				
-		    ((val >= 0x0040 && val <= 0x0047) ||	
-		      val == 0x017b))				
+		/* Do any previous instructions turn on interrupts? */
+		if (addr <= erraddr &&				/* in the past */
+		    ((val >= 0x0040 && val <= 0x0047) ||	/* STI instruction */
+		      val == 0x017b))				/* [SP++] = RETI */
 			sti = 1;
 	}
 
 	pr_cont("\n");
 
-	
+	/* Hardware error interrupts can be deferred */
 	if (unlikely(sti && (fp->seqstat & SEQSTAT_EXCAUSE) == VEC_HWERR &&
 	    oops_in_progress)){
 		pr_notice("Looks like this was a deferred error - sorry\n");
@@ -781,9 +823,14 @@ void dump_bfin_mem(struct pt_regs *fp)
 		pr_notice("The remaining message may be meaningless\n");
 		pr_notice("You should enable CONFIG_DEBUG_HWERR to get a better idea where it came from\n");
 #else
+		/* If we are handling only one peripheral interrupt
+		 * and current mm and pid are valid, and the last error
+		 * was in that user space process's text area
+		 * print it out - because that is where the problem exists
+		 */
 		if ((!(((fp)->ipend & ~0x30) & (((fp)->ipend & ~0x30) - 1))) &&
 		     (current->pid && current->mm)) {
-			
+			/* And the last RETI points to the current userspace context */
 			if ((fp + 1)->pc >= current->mm->start_code &&
 			    (fp + 1)->pc <= current->mm->end_code) {
 				pr_notice("It might be better to look around here :\n");
@@ -842,7 +889,7 @@ void show_regs(struct pt_regs *fp)
 		pr_notice("  HWERRCAUSE: 0x%lx\n",
 			(fp->seqstat & SEQSTAT_HWERRCAUSE) >> 14);
 #ifdef EBIU_ERRMST
-		
+		/* If the error was from the EBIU, print it out */
 		if (bfin_read_EBIU_ERRMST() & CORE_ERROR) {
 			pr_notice("  EBIU Error Reason  : 0x%04x\n",
 				bfin_read_EBIU_ERRMST());
@@ -863,7 +910,7 @@ void show_regs(struct pt_regs *fp)
 		}
 	}
 
-	
+	/* if no interrupts are going off, don't print this out */
 	if (fp->ipend & ~0x3F) {
 		for (i = 0; i < (NR_IRQS - 1); i++) {
 			struct irq_desc *desc = irq_to_desc(i);
