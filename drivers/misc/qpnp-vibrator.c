@@ -280,7 +280,7 @@ static ssize_t voltage_level_store(
 	return size;
 }
 
-static DEVICE_ATTR(voltage_level, S_IRUGO | S_IWUSR, voltage_level_show, voltage_level_store);
+static DEVICE_ATTR(vtg_level, S_IRUGO | S_IWUSR, voltage_level_show, voltage_level_store);
 
 static ssize_t vib_enlarge_en_show(struct device *dev, struct device_attribute *attr,
 		char *buf) {
