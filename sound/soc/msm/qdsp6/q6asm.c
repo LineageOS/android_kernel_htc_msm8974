@@ -3074,13 +3074,21 @@ static int q6asm_memory_map_regions(struct audio_client *ac, int dir,
 	void	*payload = NULL;
 	int	rc = 0;
 	int	i = 0;
-	int	cmd_size = 0;
+	uint32_t cmd_size = 0;
 
 	if (!ac || ac->apr == NULL || this_mmap.apr == NULL) {
 		pr_err("APR handle NULL\n");
 		return -EINVAL;
 	}
 	pr_debug("%s: Session[%d]\n", __func__, ac->session);
+
+	if (bufcnt > (UINT_MAX
+			- sizeof(struct asm_stream_cmd_memory_map_regions))
+			/ sizeof(struct asm_memory_map_regions)) {
+		pr_err("%s: Unsigned Integer Overflow. bufcnt = %u\n",
+				__func__, bufcnt);
+		return -EINVAL;
+	}
 
 	cmd_size = sizeof(struct asm_stream_cmd_memory_map_regions)
 			+ sizeof(struct asm_memory_map_regions) * bufcnt;
