@@ -221,10 +221,12 @@ static int hall_input_register(struct ak_hall_data *hl)
 	hl->input_dev->name = HL_INPUTDEV_NAME;
 
 	set_bit(EV_SYN, hl->input_dev->evbit);
+	set_bit(EV_SW, hl->input_dev->evbit);
 	set_bit(EV_KEY, hl->input_dev->evbit);
 
 	input_set_capability(hl->input_dev, EV_KEY, HALL_N_POLE);
 	input_set_capability(hl->input_dev, EV_KEY, HALL_S_POLE);
+	input_set_capability(hl->input_dev, EV_SW, SW_LID);
 
 	HL_LOG("%s\n", __func__);
 	return input_register_device(hl->input_dev);
@@ -255,6 +257,7 @@ static void report_cover_event(int pole, int irq, struct ak_hall_data *hl)
 		wake_lock_timeout(&hl->wake_lock, (2 * HZ));
 
 		if (prev_val_s != val_s) {
+			input_report_switch(hl->input_dev, SW_LID, !val_s);
 			input_report_key(hl->input_dev, HALL_S_POLE, !val_s);
 			input_sync(hl->input_dev);
 			prev_val_s = val_s;
