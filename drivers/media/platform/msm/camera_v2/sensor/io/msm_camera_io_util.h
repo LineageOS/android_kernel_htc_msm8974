@@ -26,6 +26,7 @@ void msm_camera_io_w_mb(u32 data, void __iomem *addr);
 u32 msm_camera_io_r(void __iomem *addr);
 u32 msm_camera_io_r_mb(void __iomem *addr);
 void msm_camera_io_dump(void __iomem *addr, int size);
+void msm_camera_io_dump_2(void __iomem *addr, int size);
 void msm_camera_io_memcpy(void __iomem *dest_addr,
 		void __iomem *src_addr, u32 len);
 void msm_camera_io_memcpy_mb(void __iomem *dest_addr,
@@ -53,6 +54,9 @@ void msm_camera_config_single_gpio(uint16_t gpio, unsigned long flags,
 
 int msm_camera_config_single_vreg(struct device *dev,
 	struct camera_vreg_t *cam_vreg, struct regulator **reg_ptr, int config);
+
+int msm_camera_config_single_ncp6924_vreg(struct device *dev,
+	struct camera_ncp6924_vreg_t *ncp6924_vreg, struct regulator **reg_ptr, int config);
 
 int msm_camera_request_gpio_table(struct gpio *gpio_tbl, uint8_t size,
 	int gpio_en);
