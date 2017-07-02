@@ -787,6 +787,22 @@ static struct snd_soc_dai_driver msm_fe_dais[] = {
 		.ops = &msm_fe_dai_ops,
 		.name = "QCHAT",
 	},
+//htc audio ++
+	{
+		.playback = {
+			.stream_name = "MM_STUB Playback",
+			.aif_name = "MM_STUB_DL",
+			.rates = SNDRV_PCM_RATE_8000_48000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE,
+			.channels_min = 1,
+			.channels_max = 2,
+			.rate_min = 8000,
+			.rate_max = 48000,
+		},
+		.ops = &msm_fe_dai_ops,
+		.name = "MM_STUB",
+	},
+//htc audio --
 	{
 		.capture = {
 			.stream_name = "Listen 1 Audio Service Capture",
