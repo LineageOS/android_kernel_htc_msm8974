@@ -214,8 +214,6 @@ static struct sock *ping_lookup(struct net *net, struct sk_buff *skb, u16 ident)
 					     &ipv6_hdr(skb)->daddr))
 				continue;
 #endif
-		} else {
-			continue;
 		}
 
 		if (sk->sk_bound_dev_if && sk->sk_bound_dev_if != dif)
@@ -252,11 +250,11 @@ int ping_init_sock(struct sock *sk)
 	gid_t group = current_egid();
 	gid_t range[2];
 	struct group_info *group_info;
-	int i, j, count  ;
-        int ret = 0;
+	int i, j, count;
+	int ret = 0;
 
 	if (sk->sk_family == AF_INET6)
-                inet6_sk(sk)->ipv6only = 1;
+		inet6_sk(sk)->ipv6only = 1;
 
 	inet_get_ping_group_range_net(net, range, range+1);
 	if (range[0] <= group && group <= range[1])
@@ -857,6 +855,10 @@ int ping_recvmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
 	struct sockaddr_in6 *sin6;
 	struct sk_buff *skb;
 	int copied, err;
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	err = 0 ;
+#endif
 
 	pr_debug("ping_recvmsg(sk=%p,sk->num=%u)\n", isk, isk->inet_num);
 

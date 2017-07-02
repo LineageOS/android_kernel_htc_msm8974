@@ -42,7 +42,9 @@
 #define SHARED_QSIZE 0x1000000
 
 static struct hal_device_data hal_ctxt;
-
+#ifdef REDUCE_KERNEL_ERROR_LOG
+static int kernel_log_Count =0;
+#endif
 static const u32 venus_qdss_entries[][2] = {
 	{0xFC307000, 0x1000},
 	{0xFC322000, 0x1000},
@@ -1988,6 +1990,13 @@ static int venus_hfi_core_init(void *device)
 			goto err_core_init;
 		}
 
+		
+		if (dev->inst == NULL)
+			dprintk(VIDC_ERR, "[Vidc_Mem] In %s: Get NULL inst\n", __func__);
+		else
+			dev->hal_client->inst = dev->inst;
+		
+
 		dprintk(VIDC_DBG, "Dev_Virt: 0x%x, Reg_Virt: 0x%x",
 		dev->hal_data->device_base_addr,
 		(u32) dev->hal_data->register_base_addr);
@@ -2944,7 +2953,6 @@ static void venus_hfi_pm_hndlr(struct work_struct *work)
 			"Failed to unset and free OCMEM for PC, rc : %d\n", rc);
 		return;
 	}
-
 	rc = venus_hfi_prepare_pc(device);
 	if (rc) {
 		dprintk(VIDC_ERR, "Failed to prepare for PC, rc : %d\n", rc);
@@ -2954,7 +2962,6 @@ static void venus_hfi_pm_hndlr(struct work_struct *work)
 				"Failed to re-allocate OCMEM. Performance will be impacted\n");
 		return;
 	}
-
 	mutex_lock(&device->clk_pwr_lock);
 	if (device->pc_num_cmds) {
 		dprintk(VIDC_DBG,
@@ -3047,8 +3054,20 @@ static void venus_hfi_process_msg_event_notify(
 		vsfr = (struct hfi_sfr_struct *)
 				device->sfr.align_virtual_addr;
 		if (vsfr)
-			dprintk(VIDC_ERR, "SFR Message from FW : %s",
+		{
+#ifdef REDUCE_KERNEL_ERROR_LOG
+			if(kernel_log_Count<=10)
+			{
+				dprintk(VIDC_ERR, "SFR Message from FW : %s",
 				vsfr->rg_data);
+				kernel_log_Count++;
+			}
+#else
+			dprintk(VIDC_ERR, "SFR Message from FW : %s",
+			vsfr->rg_data);
+
+#endif
+		}
 	}
 }
 static void venus_hfi_response_handler(struct venus_hfi_device *device)
@@ -3761,8 +3780,7 @@ static void venus_hfi_unload_fw(void *dev)
 		return;
 	}
 	if (device->resources.fw.cookie) {
-		if (device->state != VENUS_STATE_DEINIT)
-			flush_workqueue(device->vidc_workq);
+		flush_workqueue(device->vidc_workq);
 		flush_workqueue(device->venus_pm_workq);
 		subsystem_put(device->resources.fw.cookie);
 		venus_hfi_interface_queues_release(dev);
@@ -4040,7 +4058,9 @@ int venus_hfi_initialize(struct hfi_device *hdev, u32 device_id,
 		hfi_cmd_response_callback callback)
 {
 	int rc = 0;
-
+#ifdef REDUCE_KERNEL_ERROR_LOG
+	kernel_log_Count=0;
+#endif
 	if (!hdev || !res || !callback) {
 		dprintk(VIDC_ERR, "Invalid params: %p %p %p\n",
 			hdev, res, callback);

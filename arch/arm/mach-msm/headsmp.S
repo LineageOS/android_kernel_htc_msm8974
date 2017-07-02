@@ -22,6 +22,7 @@ __CPUINIT
 ENTRY(msm_secondary_startup)
 	mrc	p15, 0, r0, c0, c0, 5 	@ MPIDR
 	and	r0, r0, #15		@ What CPU am I
+
 	adr	r4, 1f			@ address of
 	ldmia	r4, {r5, r6}		@ load curr addr and pen_rel addr
 	sub	r4, r4, r5		@ determine virtual/phys offsets

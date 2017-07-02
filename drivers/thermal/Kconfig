@@ -117,3 +117,28 @@ config THERMAL_QPNP_ADC_TM
 	  Disabling the thermal zone device via the mode file results in disabling
 	  the sensor. Also able to set threshold temperature for both hot and cold
 	  and update when a threshold is reached.
+
+config THERMAL_MAX_TEMP_PROTECT
+       bool "Max temperature protection support"
+       depends on THERMAL
+       default n
+       help
+         This enable the protection under critical high temperature enviroment.
+         Device would auto shutdown when thermal sensor senses the temperature
+         is higher than the critical high temperature.
+
+config THERMAL_MIN_TEMP_PROTECT
+       bool "Min temperature protection support"
+       depends on THERMAL
+       default n
+       help
+         This enable the protection under critical low temperature enviroment.
+         Device would auto shutdown when thermal sensor senses the temperature
+         is lower than the critical low temperature.
+
+config THERMAL_DELTA
+	bool "HTC THERMAL TUNER"
+	default n
+	help
+		This module export a paramter for thermal tuning.
+

@@ -112,6 +112,7 @@ typedef struct {
  */
 struct reclaim_state {
 	unsigned long reclaimed_slab;
+	int trigger_lmk;
 };
 
 #ifdef __KERNEL__

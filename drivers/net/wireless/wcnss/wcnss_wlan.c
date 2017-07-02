@@ -43,6 +43,9 @@
 #include <mach/subsystem_restart.h>
 #include <mach/subsystem_notif.h>
 
+#include <mach/devices_dtb.h>
+#include <mach/devices_cmdline.h>
+
 #ifdef CONFIG_WCNSS_MEM_PRE_ALLOC
 #include "wcnss_prealloc.h"
 #endif
@@ -56,7 +59,6 @@
 #define WCNSS_ENABLE_PC_LATENCY	PM_QOS_DEFAULT_VALUE
 #define WCNSS_PM_QOS_TIMEOUT	15000
 #define WAIT_FOR_CBC_IND     2
-#define IS_CAL_DATA_PRESENT     0
 
 /* module params */
 #define WCNSS_CONFIG_UNSPECIFIED (-1)
@@ -79,6 +81,7 @@ module_param(do_not_cancel_vote, int, S_IWUSR | S_IRUGO);
 MODULE_PARM_DESC(do_not_cancel_vote, "Do not cancel votes for wcnss");
 
 static DEFINE_SPINLOCK(reg_spinlock);
+
 
 #define MSM_RIVA_PHYS			0x03204000
 #define MSM_PRONTO_PHYS			0xfb21b000
@@ -158,6 +161,35 @@ static DEFINE_SPINLOCK(reg_spinlock);
 
 #define MSM_PRONTO_PLL_BASE				0xfb21b1c0
 #define PRONTO_PLL_STATUS_OFFSET		0x1c
+#define MSM_PRONTO_TXP_STATUS           0xfb08040c
+
+#define MSM_PRONTO_MCU_BASE			0xfb080c00
+#define MCU_CBR_CCAHB_ERR_OFFSET		0x380
+#define MCU_CBR_CAHB_ERR_OFFSET			0x384
+#define MCU_CBR_CCAHB_TIMEOUT_OFFSET		0x388
+#define MCU_CBR_CAHB_TIMEOUT_OFFSET		0x38c
+#define MCU_DBR_CDAHB_ERR_OFFSET		0x390
+#define MCU_DBR_DAHB_ERR_OFFSET			0x394
+#define MCU_DBR_CDAHB_TIMEOUT_OFFSET		0x398
+#define MCU_DBR_DAHB_TIMEOUT_OFFSET		0x39c
+#define MCU_FDBR_CDAHB_ERR_OFFSET		0x3a0
+#define MCU_FDBR_FDAHB_ERR_OFFSET		0x3a4
+#define MCU_FDBR_CDAHB_TIMEOUT_OFFSET		0x3a8
+#define MCU_FDBR_FDAHB_TIMEOUT_OFFSET		0x3ac
+
+#define MSM_PRONTO_MCU_BASE			0xfb080c00
+#define MCU_CBR_CCAHB_ERR_OFFSET		0x380
+#define MCU_CBR_CAHB_ERR_OFFSET			0x384
+#define MCU_CBR_CCAHB_TIMEOUT_OFFSET		0x388
+#define MCU_CBR_CAHB_TIMEOUT_OFFSET		0x38c
+#define MCU_DBR_CDAHB_ERR_OFFSET		0x390
+#define MCU_DBR_DAHB_ERR_OFFSET			0x394
+#define MCU_DBR_CDAHB_TIMEOUT_OFFSET		0x398
+#define MCU_DBR_DAHB_TIMEOUT_OFFSET		0x39c
+#define MCU_FDBR_CDAHB_ERR_OFFSET		0x3a0
+#define MCU_FDBR_FDAHB_ERR_OFFSET		0x3a4
+#define MCU_FDBR_CDAHB_TIMEOUT_OFFSET		0x3a8
+#define MCU_FDBR_FDAHB_TIMEOUT_OFFSET		0x3ac
 
 #define MSM_PRONTO_MCU_BASE			0xfb080c00
 #define MCU_APB2PHY_STATUS_OFFSET		0xec
@@ -265,6 +297,7 @@ static struct notifier_block wnb = {
 };
 
 #define NVBIN_FILE "wlan/prima/WCNSS_qcom_wlan_nv.bin"
+#define NVBIN_FILE_EPCOS "wlan/prima/WCNSS_qcom_wlan_nv_EPCOS.bin"
 
 /*
  * On SMD channel 4K of maximum data can be transferred, including message
@@ -734,6 +767,7 @@ void wcnss_pronto_log_debug_regs(void)
 	reg = reg | WCNSS_TSTBUS_CTRL_EN | WCNSS_TSTBUS_CTRL_CMDFIFO;
 	writel_relaxed(reg, tst_ctrl_addr);
 	reg = readl_relaxed(tst_addr);
+
 	if (!(reg & A2XB_FIFO_EMPTY)) {
 		wcnss_pronto_is_a2xb_bus_stall(tst_addr,
 			       A2XB_CMD_FIFO_FILL_MASK, "Cmd");
@@ -938,6 +972,9 @@ void wcnss_log_debug_regs_on_bite(void)
 			wcnss_log_iris_regs();
 		}
 	}
+    else{
+        pr_err("Can't access measure or wcnss_debug\n");
+    }
 }
 #endif
 
@@ -1080,12 +1117,14 @@ static void wcnss_smd_notify_event(void *data, unsigned int event)
 			pr_err("wcnss: failed to read from smd %d\n", len);
 			return;
 		}
+		printk("wcnss_debug: wcnss_smd_notify_event() : Start to schedule wcnssctrl_rx_work to read smd packet \r\n");
 		schedule_work(&penv->wcnssctrl_rx_work);
 		break;
 
 	case SMD_EVENT_OPEN:
 		pr_debug("wcnss: opening WCNSS SMD channel :%s",
 				WCNSS_CTRL_CHANNEL);
+		printk("wcnss_debug: opening WCNSS SMD channel :%s", WCNSS_CTRL_CHANNEL);
 		schedule_work(&penv->wcnssctrl_version_work);
 		schedule_work(&penv->wcnss_pm_config_work);
 		__cancel_delayed_work(&penv->wcnss_pm_qos_del_req);
@@ -1117,6 +1156,8 @@ static void wcnss_post_bootup(struct work_struct *work)
 	/* Since WCNSS is up, cancel any APPS vote for Iris & WCNSS VREGs  */
 	wcnss_wlan_power(&penv->pdev->dev, &penv->wlan_config,
 		WCNSS_WLAN_SWITCH_OFF, NULL);
+	
+	wcnss_allow_suspend();
 
 }
 
@@ -1299,6 +1340,12 @@ EXPORT_SYMBOL(wcnss_is_hw_pronto_ver3);
 
 int wcnss_device_ready(void)
 {
+	if(penv == NULL)
+	{
+	    printk("wcnss_debug : wcnss_device is not ready\r\n");
+	    return 0;
+	}
+	printk("wcnss_debug : wcnss_device_ready(): penv->nv_downloaded = 0x%x\r\n", penv->nv_downloaded);
 	if (penv && penv->pdev && penv->nv_downloaded &&
 	    !wcnss_device_is_shutdown())
 		return 1;
@@ -1363,9 +1410,10 @@ void wcnss_wlan_unregister_pm_ops(struct device *dev,
 	if (penv && dev && (dev == &penv->pdev->dev) && pm_ops) {
 		if (penv->pm_ops == NULL) {
 			pr_err("%s: pm_ops is already unregistered.\n",
-				__func__);
+				 __func__);
 			return;
 		}
+
 		if (pm_ops->suspend != penv->pm_ops->suspend ||
 				pm_ops->resume != penv->pm_ops->resume)
 			pr_err("PM APIs dont match with registered APIs\n");
@@ -1595,6 +1643,7 @@ static int wcnss_smd_tx(void *data, int len)
 		pr_err("wcnss: failed to write Command %d", len);
 		ret = -ENODEV;
 	}
+	printk("wcnss_debug: wcnss_smd_tx() finish and exit \r\n");
 	return ret;
 }
 
@@ -2031,6 +2080,21 @@ static void wcnss_send_pm_config(struct work_struct *worker)
 
 static DECLARE_RWSEM(wcnss_pm_sem);
 
+static int engid = 0;
+static int engidprint(char *str){
+    int ret;
+    ret = get_option(&str, &engid);
+    return ret;
+}
+
+int getengid(void)
+{
+    return engid;
+}
+EXPORT_SYMBOL(getengid);
+
+__setup("androidboot.engid=",engidprint);
+
 static void wcnss_nvbin_dnld(void)
 {
 	int ret = 0;
@@ -2045,15 +2109,41 @@ static void wcnss_nvbin_dnld(void)
 	const struct firmware *nv = NULL;
 	struct device *dev = &penv->pdev->dev;
 
-	down_read(&wcnss_pm_sem);
+    down_read(&wcnss_pm_sem);
 
-	ret = request_firmware(&nv, NVBIN_FILE, dev);
+    
+    
+    pr_err("engid %d\n", engid);
+    if (engid >= 8) {
+        pr_err("wcnss: read WCNSS_qcom_wlan_nv_EPCOS.bin\n");
+        ret = request_firmware(&nv, NVBIN_FILE_EPCOS, dev);
 
-	if (ret || !nv || !nv->data || !nv->size) {
-		pr_err("wcnss: %s: request_firmware failed for %s(ret = %d)\n",
-			__func__, NVBIN_FILE, ret);
-		goto out;
-	}
+        if (ret || !nv || !nv->data || !nv->size) {
+            pr_err("wcnss: %s: request_firmware failed for %s\n",
+                      __func__, NVBIN_FILE_EPCOS);
+            pr_err("wcnss: fail to read WCNSS_qcom_wlan_nv_EPCOS.bin -> read WCNSS_qcom_wlan_nv.bin \n");
+            ret = request_firmware(&nv, NVBIN_FILE, dev);
+            if (ret || !nv || !nv->data || !nv->size) {
+                pr_err("wcnss: %s: request_firmware failed for %s(ret = %d)\n",
+                    __func__, NVBIN_FILE, ret);
+                goto out;
+            }
+        }
+    } else {
+            pr_err("wcnss: read WCNSS_qcom_wlan_nv.bin \n");
+    
+
+    	ret = request_firmware(&nv, NVBIN_FILE, dev);
+
+    	if (ret || !nv || !nv->data || !nv->size) {
+    		pr_err("wcnss: %s: request_firmware failed for %s(ret = %d)\n",
+    			__func__, NVBIN_FILE, ret);
+    		goto out;
+    	}
+
+    
+    }
+    
 
 	/*
 	 * First 4 bytes in nv blob is validity bitmap.
@@ -2255,7 +2345,7 @@ static void wcnss_nvbin_dnld_main(struct work_struct *worker)
 	if (!FW_CALDATA_CAPABLE())
 		goto nv_download;
 
-	if (!penv->fw_cal_available && IS_CAL_DATA_PRESENT
+	if (!penv->fw_cal_available && WCNSS_CONFIG_UNSPECIFIED
 		!= has_calibrated_data && !penv->user_cal_available) {
 		while (!penv->user_cal_available && retry++ < 5)
 			msleep(500);
@@ -2609,7 +2699,6 @@ wcnss_trigger_config(struct platform_device *pdev)
 	} while (pil_retry++ < WCNSS_MAX_PIL_RETRY && IS_ERR(penv->pil));
 
 	if (pil_retry >= WCNSS_MAX_PIL_RETRY) {
-		wcnss_reset_intr();
 		if (penv->wcnss_notif_hdle)
 			subsys_notif_unregister_notifier(penv->wcnss_notif_hdle,
 				&wnb);
@@ -2660,6 +2749,7 @@ fail_ioremap2:
 	if (penv->msm_wcnss_base)
 		iounmap(penv->msm_wcnss_base);
 fail_ioremap:
+	wcnss_allow_suspend();
 	wake_lock_destroy(&penv->wcnss_wake_lock);
 fail_res:
 	wcnss_wlan_power(&pdev->dev, &penv->wlan_config,
@@ -2687,20 +2777,6 @@ void wcnss_flush_work(struct work_struct *work)
 }
 EXPORT_SYMBOL(wcnss_flush_work);
 
-/* wlan prop driver cannot invoke show_stack
- * function directly, so to invoke this function it
- * call wcnss_dump_stack function
- */
-void wcnss_dump_stack(struct task_struct *task)
-{
-	show_stack(task, NULL);
-}
-EXPORT_SYMBOL(wcnss_dump_stack);
-
-/* wlan prop driver cannot invoke cancel_delayed_work_sync
- * function directly, so to invoke this function it call
- * wcnss_flush_delayed_work function
- */
 void wcnss_flush_delayed_work(struct delayed_work *dwork)
 {
 	struct delayed_work *cnss_dwork = dwork;

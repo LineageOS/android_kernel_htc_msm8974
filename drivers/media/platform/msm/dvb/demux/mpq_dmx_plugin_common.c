@@ -88,7 +88,11 @@ static int mpq_sdmx_scramble_odd = 0x3;
 module_param(mpq_sdmx_scramble_odd, int, S_IRUGO | S_IWUSR);
 
 /* Whether to use secure demux or bypass it. Use for debugging */
-static int mpq_bypass_sdmx = 1;
+//++ DTV_PCN1000002_HTC_SECURE_DEMUX
+/* [HTC]  Secure demux */
+static int mpq_bypass_sdmx = 0;
+//-- DTV_PCN1000002_HTC_SECURE_DEMUX
+
 module_param(mpq_bypass_sdmx, int, S_IRUGO | S_IWUSR);
 
 /* Max number of TS packets allowed as input for a single sdmx process */

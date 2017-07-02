@@ -31,6 +31,7 @@
 #include <mach/msm_iomap.h>
 #endif
 
+
 #include "fault.h"
 
 #define CREATE_TRACE_POINTS
@@ -140,6 +141,7 @@ static void
 __do_kernel_fault(struct mm_struct *mm, unsigned long addr, unsigned int fsr,
 		  struct pt_regs *regs)
 {
+
 	/*
 	 * Are we prepared to handle this kernel fault?
 	 */

@@ -260,6 +260,14 @@ static int kgsl_drv_full_cache_threshold_show(struct device *dev,
 			kgsl_driver.full_cache_threshold);
 }
 
+static int kgsl_alloc_show(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%d\n",
+			kgsl_get_alloc_size(true));
+}
+
 DEVICE_ATTR(vmalloc, 0444, kgsl_drv_memstat_show, NULL);
 DEVICE_ATTR(vmalloc_max, 0444, kgsl_drv_memstat_show, NULL);
 DEVICE_ATTR(page_alloc, 0444, kgsl_drv_memstat_show, NULL);
@@ -271,6 +279,7 @@ DEVICE_ATTR(mapped_max, 0444, kgsl_drv_memstat_show, NULL);
 DEVICE_ATTR(full_cache_threshold, 0644,
 		kgsl_drv_full_cache_threshold_show,
 		kgsl_drv_full_cache_threshold_store);
+DEVICE_ATTR(kgsl_alloc, 0444, kgsl_alloc_show, NULL);
 
 static const struct device_attribute *drv_attr_list[] = {
 	&dev_attr_vmalloc,
@@ -282,6 +291,7 @@ static const struct device_attribute *drv_attr_list[] = {
 	&dev_attr_mapped,
 	&dev_attr_mapped_max,
 	&dev_attr_full_cache_threshold,
+	&dev_attr_kgsl_alloc,
 	NULL
 };
 
@@ -405,9 +415,10 @@ done:
 
 static void kgsl_page_alloc_free(struct kgsl_memdesc *memdesc)
 {
-	int i = 0;
+	int i = 0, j, size;
 	struct scatterlist *sg;
 	int sglen = memdesc->sglen;
+	struct kgsl_process_private *priv = memdesc->private;
 
 	atomic_sub(memdesc->size, &kgsl_driver.stats.page_alloc);
 
@@ -417,8 +428,43 @@ static void kgsl_page_alloc_free(struct kgsl_memdesc *memdesc)
 	BUG_ON(memdesc->hostptr);
 
 	if (memdesc->sg)
-		for_each_sg(memdesc->sg, sg, sglen, i)
+		for_each_sg(memdesc->sg, sg, sglen, i) {
+			if (sg->length == 0)
+				break;
+			if (memdesc->sg_backup && sg->page_link != memdesc->sg_backup[i].page_link) {
+				
+				struct scatterlist *sg2 = &memdesc->sg_backup[i];
+
+				pr_warn("%s: memdesc=%p {size=%u sglen=%d/%d, ts=%lu, created since %d msec}\n",
+					__func__, memdesc, memdesc->size, memdesc->sglen, memdesc->sglen_alloc,
+					memdesc->sg_create, jiffies_to_msecs(jiffies - memdesc->sg_create));
+				pr_warn("%s: sg=%p [%d/%d] {page=0x%lx, len=%u, off=%u, dma=%u}\n",
+					__func__, sg, i, sglen, sg->page_link, sg->length, sg->offset, sg->dma_address);
+				pr_warn("%s: sg_backup=%p [%d/%d] {page=0x%lx, len=%u, off=%u, dma=%u}\n",
+					__func__, sg2, i, sglen, sg2->page_link, sg2->length, sg2->offset, sg2->dma_address);
+				continue;
+			} else if (!IS_ALIGNED(sg->length, PAGE_SIZE) || sg->offset || sg->dma_address) {
+				
+				pr_warn("%s: memdesc=%p {size=%u sglen=%d/%d, ts=%lu, created since %d msec}\n",
+					__func__, memdesc, memdesc->size, memdesc->sglen, memdesc->sglen_alloc,
+					memdesc->sg_create, jiffies_to_msecs(jiffies - memdesc->sg_create));
+				pr_warn("%s: sg=%p [%d/%d] {page=0x%lx, len=%u, off=%u, dma=%u}\n",
+					__func__, sg, i, sglen, sg->page_link, sg->length, sg->offset, sg->dma_address);
+				continue;
+			}
+			size = 1 << get_order(sg->length);
+			for (j = 0; j < size; j++)
+				ClearPageKgsl(nth_page(sg_page(sg), j));
 			__free_pages(sg_page(sg), get_order(sg->length));
+		}
+
+	if (memdesc->sg_backup) {
+		kgsl_sg_free(memdesc->sg_backup, sglen);
+		memdesc->sg_backup = NULL;
+	}
+
+	if (priv)
+		kgsl_process_sub_stats(priv, KGSL_MEM_ENTRY_PAGE_ALLOC, memdesc->size);
 }
 
 static int kgsl_contiguous_vmflags(struct kgsl_memdesc *memdesc)
@@ -721,8 +767,10 @@ _kgsl_sharedmem_page_alloc(struct kgsl_memdesc *memdesc,
 			goto done;
 		}
 
-		for (j = 0; j < page_size >> PAGE_SHIFT; j++)
+		for (j = 0; j < page_size >> PAGE_SHIFT; j++) {
 			pages[pcount++] = nth_page(page, j);
+			SetPageKgsl(nth_page(page, j));
+		}
 
 		sg_set_page(&memdesc->sg[sglen++], page, page_size, 0);
 		len -= page_size;
@@ -730,6 +778,10 @@ _kgsl_sharedmem_page_alloc(struct kgsl_memdesc *memdesc,
 
 	memdesc->sglen = sglen;
 	memdesc->size = size;
+	memdesc->sg_create = jiffies;
+	memdesc->sg_backup = kgsl_sg_copy(memdesc->sg, memdesc->sglen);
+	if (memdesc->sg_backup)
+		kmemleak_not_leak(memdesc->sg_backup);
 
 	/*
 	 * All memory that goes to the user has to be zeroed out before it gets
@@ -816,11 +868,18 @@ kgsl_sharedmem_page_alloc_user(struct kgsl_memdesc *memdesc,
 			    struct kgsl_pagetable *pagetable,
 			    size_t size)
 {
+	int ret = 0;
+	struct kgsl_process_private *priv = memdesc->private;
+
 	size = PAGE_ALIGN(size);
 	if (size == 0)
 		return -EINVAL;
 
-	return _kgsl_sharedmem_page_alloc(memdesc, pagetable, size);
+	ret = _kgsl_sharedmem_page_alloc(memdesc, pagetable, size);
+
+	if (!ret && priv)
+		kgsl_process_add_stats(priv, KGSL_MEM_ENTRY_PAGE_ALLOC, size);
+	return ret;
 }
 EXPORT_SYMBOL(kgsl_sharedmem_page_alloc_user);
 

@@ -216,7 +216,7 @@ SYSCALL_ALIAS(sys_ftruncate64, SyS_ftruncate64);
 
 int do_fallocate(struct file *file, int mode, loff_t offset, loff_t len)
 {
-	struct inode *inode = file->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(file);
 	long ret;
 
 	if (offset < 0 || len <= 0)
@@ -403,7 +403,7 @@ SYSCALL_DEFINE1(fchdir, unsigned int, fd)
 	if (!file)
 		goto out;
 
-	inode = file->f_path.dentry->d_inode;
+	inode = file_inode(file);
 
 	error = -ENOTDIR;
 	if (!S_ISDIR(inode->i_mode))
@@ -872,6 +872,8 @@ void fd_install(unsigned int fd, struct file *file)
 	fdt = files_fdtable(files);
 	BUG_ON(fdt->fd[fd] != NULL);
 	rcu_assign_pointer(fdt->fd[fd], file);
+	fdt->user[fd].installer = current->pid;
+	getnstimeofday(&fdt->user[fd].open_time);
 	spin_unlock(&files->file_lock);
 }
 
@@ -1072,15 +1074,32 @@ SYSCALL_DEFINE1(close, unsigned int, fd)
 	struct files_struct *files = current->files;
 	struct fdtable *fdt;
 	int retval;
-
 	spin_lock(&files->file_lock);
 	fdt = files_fdtable(files);
-	if (fd >= fdt->max_fds)
+	if (fd >= fdt->max_fds) {
+		pr_debug("[%s] fd %u exceeds max_fds %u (user: %s %d:%d)\n",
+				__func__, fd, fdt->max_fds,
+				current->comm, current->tgid, current->pid);
 		goto out_unlock;
+	}
 	filp = fdt->fd[fd];
-	if (!filp)
+	if (!filp) {
+		struct fdt_user* user = &fdt->user[fd];
+		if (unlikely(user->remover && user->remover != current->pid)) {
+			struct task_struct* task = find_task_by_vpid(user->remover);
+			pr_warn("[%s] fd %u of %s %d:%d is"
+					" already closed by thread %d (%s %d:%d)\n",
+					__func__, fd,
+					current->comm, current->tgid, current->pid,
+					user->remover,
+					task ? task->comm : "<unknown>",
+					task ? task->tgid : -1,
+					task ? task->pid  : -1);
+		}
 		goto out_unlock;
+	}
 	rcu_assign_pointer(fdt->fd[fd], NULL);
+	fdt->user[fd].remover = current->pid;
 	__clear_close_on_exec(fd, fdt);
 	__put_unused_fd(files, fd);
 	spin_unlock(&files->file_lock);

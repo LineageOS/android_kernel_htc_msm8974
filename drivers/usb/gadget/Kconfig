@@ -875,6 +875,28 @@ config USB_G_ANDROID
 	  Each function can be configured and enabled/disabled
 	  dynamically from userspace through a sysfs interface.
 
+config USB_ANDROID_ACM
+	boolean "Android gadget ACM serial function"
+	depends on USB_G_ANDROID
+	help
+	  Provides ACM serial function for android gadget driver.
+
+config USB_ANDROID_PROJECTOR
+	boolean "Android gadget Projector function"
+	depends on USB_G_ANDROID
+	help
+
+config USB_ANDROID_ECM
+	boolean "Android gadget ECM function"
+	depends on USB_G_ANDROID
+	help
+
+
+config USB_ANDROID_NCM
+	boolean "Android gadget NCM function"
+	depends on USB_G_ANDROID
+	help
+
 config USB_CDC_COMPOSITE
 	tristate "CDC Composite Device (Ethernet and ACM)"
 	depends on NET
@@ -1082,3 +1104,7 @@ config RMNET_SDIO_SMD_DATA_CHANNEL
 	  Data SMD channel for transferring network data
 
 endif # USB_GADGET
+
+
+config HTC_USB_DEBUG_FLAG
+	bool "HTC USB debug flag for WDT issue"

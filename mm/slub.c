@@ -32,6 +32,8 @@
 #include <linux/prefetch.h>
 
 #include <trace/events/kmem.h>
+#include <htc_debug/stability/htc_report_meminfo.h>
+
 
 /*
  * Lock order:
@@ -516,10 +518,10 @@ static void set_track(struct kmem_cache *s, void *object,
 		for (i = trace.nr_entries; i < TRACK_ADDRS_COUNT; i++)
 			p->addrs[i] = 0;
 #endif
-		p->addr = addr;
 		p->cpu = smp_processor_id();
 		p->pid = current->pid;
 		p->when = jiffies;
+		p->addr = addr;
 	} else
 		memset(p, 0, sizeof(struct track));
 }
@@ -2395,6 +2397,11 @@ EXPORT_SYMBOL(kmem_cache_alloc_trace);
 void *kmalloc_order_trace(size_t size, gfp_t flags, unsigned int order)
 {
 	void *ret = kmalloc_order(size, flags, order);
+
+	if (ret) {
+		struct page *page = virt_to_page(ret);
+		kmalloc_count(page, 1);
+	}
 	trace_kmalloc(_RET_IP_, ret, size, PAGE_SIZE << order, flags);
 	return ret;
 }
@@ -3473,6 +3480,10 @@ void kfree(const void *x)
 		return;
 
 	page = virt_to_head_page(x);
+	if (unlikely(!page)) {
+        kmemleak_free(x);
+		return;
+	}
 	if (unlikely(!PageSlab(page))) {
 		BUG_ON(!PageCompound(page));
 		kmemleak_free(x);

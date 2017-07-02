@@ -4,6 +4,7 @@
 #include <asm/assembler.h>
 #include <asm/glue-cache.h>
 #include <asm/glue-proc.h>
+
 	.text
 
 /*
@@ -81,6 +82,7 @@ ENDPROC(cpu_resume_after_mmu)
 	.data
 	.align
 ENTRY(cpu_resume)
+
 #ifdef CONFIG_SMP
 	adr	r0, sleep_save_sp
 	ALT_SMP(mrc p15, 0, r1, c0, c0, 5)

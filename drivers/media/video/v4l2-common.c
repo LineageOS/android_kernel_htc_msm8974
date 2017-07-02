@@ -346,10 +346,13 @@ struct v4l2_subdev *v4l2_i2c_new_subdev_board(struct v4l2_device *v4l2_dev,
 	module_put(client->driver->driver.owner);
 
 error:
-	/* If we have a client but no subdev, then something went wrong and
-	   we must unregister the client. */
-	if (client && sd == NULL)
+	if (client && sd == NULL){
 		i2c_unregister_device(client);
+	
+		printk("Patch for klocwork issue 5364, fix me if any problem.");
+		kfree(client);
+	
+	}
 	return sd;
 }
 EXPORT_SYMBOL_GPL(v4l2_i2c_new_subdev_board);
