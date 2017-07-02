@@ -520,6 +520,10 @@ int mdss_misr_set(struct mdss_data_type *mdata,
 	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON, false);
 	if (req->block_id == DISPLAY_MISR_MDP) {
 		mixer = mdss_mdp_mixer_get(ctl, MDSS_MDP_MIXER_MUX_DEFAULT);
+		if (!mixer) {
+			pr_err("mdss_mdp_mixer_get get NULL mixer\n");
+			return -EINVAL;
+		}
 		mixer_num = mixer->num;
 		pr_debug("SET MDP MISR BLK to MDSS_MDP_LP_MISR_SEL_LMIX%d_GC\n",
 			req->block_id);
