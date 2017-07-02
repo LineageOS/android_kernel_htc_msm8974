@@ -643,6 +643,7 @@ static int mdss_mdp_rotator_finish(struct mdss_mdp_rotator_session *rot)
 	int ret = 0;
 	struct msm_sync_pt_data *rot_sync_pt_data;
 	struct work_struct commit_work;
+	struct list_head list;
 
 	if (!rot)
 		return -ENODEV;
@@ -669,9 +670,11 @@ static int mdss_mdp_rotator_finish(struct mdss_mdp_rotator_session *rot)
 
 	rot_sync_pt_data = rot->rot_sync_pt_data;
 	commit_work = rot->commit_work;
+	list = rot->list;
 	memset(rot, 0, sizeof(*rot));
 	rot->rot_sync_pt_data = rot_sync_pt_data;
 	rot->commit_work = commit_work;
+	rot->list = list;
 
 	if (rot_pipe) {
 		struct mdss_mdp_mixer *mixer = rot_pipe->mixer;
@@ -707,6 +710,8 @@ int mdss_mdp_rotator_release_all(void)
 	for (i = 0, cnt = 0; i < MAX_ROTATOR_SESSIONS; i++) {
 		rot = &rotator_session[i];
 		if (rot->ref_cnt) {
+			if (!list_empty(&rot->list))
+				list_del_init(&rot->list);
 			mdss_mdp_rotator_finish(rot);
 			cnt++;
 		}

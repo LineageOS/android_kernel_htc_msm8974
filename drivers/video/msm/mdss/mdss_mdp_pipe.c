@@ -300,7 +300,7 @@ int mdss_mdp_smp_reserve(struct mdss_mdp_pipe *pipe)
 	else
 		nlines = pipe->bwc_mode ? 1 : 2;
 
-	if (pipe->mixer->type == MDSS_MDP_MIXER_TYPE_WRITEBACK)
+	if (pipe->mixer && pipe->mixer->type == MDSS_MDP_MIXER_TYPE_WRITEBACK)
 		wb_mixer = 1;
 
 	force_alloc = pipe->flags & MDP_SMP_FORCE_ALLOC;
@@ -444,8 +444,9 @@ int mdss_mdp_smp_handoff(struct mdss_data_type *mdata)
 			 * such cases, we do not need to do anything
 			 * here.
 			 */
-			pr_debug("smp mmb %d already assigned to pipe %d (client_id %d)"
-				, i, pipe->num, client_id);
+			if (pipe)
+				pr_debug("smp mmb %d already assigned to pipe %d (client_id %d)"
+					, i, pipe->num, client_id);
 			continue;
 		}
 
@@ -866,10 +867,12 @@ int mdss_mdp_pipe_handoff(struct mdss_mdp_pipe *pipe)
 	}
 	pipe->src_fmt = mdss_mdp_get_format_params(src_fmt);
 
-	pr_debug("Pipe settings: src.h=%d src.w=%d dst.h=%d dst.w=%d bpp=%d\n"
-		, pipe->src.h, pipe->src.w, pipe->dst.h, pipe->dst.w,
-		pipe->src_fmt->bpp);
-
+	if (pipe->src_fmt)
+		pr_debug("Pipe settings: src.h=%d src.w=%d dst.h=%d dst.w=%d bpp=%d\n"
+			, pipe->src.h, pipe->src.w, pipe->dst.h, pipe->dst.w,
+			pipe->src_fmt->bpp);
+	else
+		pr_err("pipe->src_fmt was NULL\n");
 	pipe->is_handed_off = true;
 	pipe->play_cnt = 1;
 	kref_init(&pipe->kref);
