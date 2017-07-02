@@ -34,9 +34,7 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Netfilter Core Team <coreteam@netfilter.org>");
 MODULE_DESCRIPTION("IPv4 packet filter");
 
-/*#define DEBUG_IP_FIREWALL*/
-/*#define DEBUG_ALLOW_ALL*/ /* Useful for remote debugging */
-/*#define DEBUG_IP_FIREWALL_USER*/
+ 
 
 #ifdef DEBUG_IP_FIREWALL
 #define dprintf(format, args...) pr_info(format , ## args)
@@ -404,6 +402,14 @@ ipt_do_table(struct sk_buff *skb,
 					verdict = NF_DROP;
 					break;
 				}
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+			if (IS_ERR(stackptr) || (!stackptr) || IS_ERR(e) || (!e) || IS_ERR(jumpstack) || (!jumpstack)) {
+			    printk("[NET] ptr error in %s\n", __func__);
+			    verdict = NF_DROP;
+			    break;
+			}
+#endif
+
 				jumpstack[(*stackptr)++] = e;
 				pr_debug("Pushed %p into pos %u\n",
 					 e, *stackptr - 1);
@@ -1195,6 +1201,11 @@ __do_replace(struct net *net, const char *name, unsigned int valid_hooks,
 
 	t = try_then_request_module(xt_find_table_lock(net, AF_INET, name),
 				    "iptable_%s", name);
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+    if(!strcmp(name, "mangle")) {
+        pr_info("[NET_DEBUG]%s: xt table lock.\n", __func__);
+    }
+#endif
 	if (!t || IS_ERR(t)) {
 		ret = t ? PTR_ERR(t) : -ENOENT;
 		goto free_newinfo_counters_untrans;
@@ -1236,6 +1247,11 @@ __do_replace(struct net *net, const char *name, unsigned int valid_hooks,
 		ret = -EFAULT;
 	vfree(counters);
 	xt_table_unlock(t);
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+    if(!strcmp(name, "mangle")) {
+        pr_info("[NET_DEBUG]%s: xt_table unlock.\n", __func__);
+    }
+#endif
 	return ret;
 
  put_module:
@@ -1243,6 +1259,11 @@ __do_replace(struct net *net, const char *name, unsigned int valid_hooks,
 	xt_table_unlock(t);
  free_newinfo_counters_untrans:
 	vfree(counters);
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+    if(!strcmp(name, "mangle")) {
+        pr_info("[NET_DEBUG]%s: xt_table unlock after vfree.\n", __func__);
+    }
+#endif
  out:
 	return ret;
 }
@@ -1259,7 +1280,12 @@ do_replace(struct net *net, const void __user *user, unsigned int len)
 	if (copy_from_user(&tmp, user, sizeof(tmp)) != 0)
 		return -EFAULT;
 
-	/* overflow check */
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+    if(!strcmp(tmp.name, "mangle")) {
+        pr_info("[NET_DEBUG]%s: %s do replace start, size: %u.\n", __func__, tmp.name, tmp.size);
+    }
+#endif
+    
 	if (tmp.num_counters >= INT_MAX / sizeof(struct xt_counters))
 		return -ENOMEM;
 	tmp.name[sizeof(tmp.name)-1] = 0;
@@ -1286,13 +1312,22 @@ do_replace(struct net *net, const void __user *user, unsigned int len)
 			   tmp.num_counters, tmp.counters);
 	if (ret)
 		goto free_newinfo_untrans;
-	return 0;
-
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+    if(!strcmp(tmp.name, "mangle")) {
+        pr_info("[NET_DEBUG]%s: mangle do replace end\n", __func__);
+    }
+#endif
+    return 0;
  free_newinfo_untrans:
 	xt_entry_foreach(iter, loc_cpu_entry, newinfo->size)
 		cleanup_entry(iter, net);
  free_newinfo:
 	xt_free_table_info(newinfo);
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+    if(!strcmp(tmp.name, "mangle")) {
+        pr_info("[NET_DEBUG]%s: mangle do replace end after free\n", __func__);
+    }
+#endif
 	return ret;
 }
 
@@ -1353,6 +1388,11 @@ do_add_counters(struct net *net, const void __user *user,
 	}
 
 	t = xt_find_table_lock(net, AF_INET, name);
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+    if(!strcmp(tmp.name, "mangle")) {
+        pr_info("[NET_DEBUG]%s: xt_table lock.\n", __func__);
+    }
+#endif
 	if (!t || IS_ERR(t)) {
 		ret = t ? PTR_ERR(t) : -ENOENT;
 		goto free;
@@ -1381,6 +1421,12 @@ do_add_counters(struct net *net, const void __user *user,
 	module_put(t->me);
  free:
 	vfree(paddc);
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+    if(!strcmp(tmp.name, "mangle")) {
+        pr_info("[NET_DEBUG]%s: xt_table unlock end.\n", __func__);
+    }
+#endif
 
 	return ret;
 }

@@ -24,6 +24,7 @@
 #include <media/msmb_isp.h>
 #include <mach/msm_bus.h>
 #include <mach/msm_bus_board.h>
+
 #include "msm_buf_mgr.h"
 
 #define MAX_IOMMU_CTX 2
@@ -63,7 +64,8 @@ enum msm_isp_camif_update_state {
 	NO_UPDATE,
 	ENABLE_CAMIF,
 	DISABLE_CAMIF,
-	DISABLE_CAMIF_IMMEDIATELY
+	DISABLE_CAMIF_IMMEDIATELY,
+	DISABLE_CAMIF_IMMEDIATELY_VFE_RECOVER
 };
 
 enum msm_isp_reset_type {
@@ -278,7 +280,9 @@ struct msm_vfe_axi_stream {
 	uint32_t stream_handle;
 	uint8_t buf_divert;
 	enum msm_vfe_axi_stream_type stream_type;
+	uint32_t vt_enable;
 	uint32_t frame_based;
+	enum msm_vfe_frame_skip_pattern frame_skip_pattern;
 	uint32_t framedrop_period;
 	uint32_t framedrop_pattern;
 	uint32_t num_burst_capture;/*number of frame to capture*/
@@ -299,15 +303,6 @@ struct msm_vfe_axi_stream {
 	uint32_t runtime_num_burst_capture;
 	uint8_t runtime_framedrop_update;
 	uint32_t runtime_output_format;
-	enum msm_vfe_frame_skip_pattern frame_skip_pattern;
-
-};
-
-enum msm_vfe_overflow_state {
-	NO_OVERFLOW,
-	OVERFLOW_DETECTED,
-	HALT_REQUESTED,
-	RESTART_REQUESTED,
 };
 
 struct msm_vfe_axi_composite_info {
@@ -350,7 +345,6 @@ struct msm_vfe_axi_shared_data {
 	struct msm_vfe_src_info src_info[VFE_SRC_MAX];
 	uint16_t stream_handle_cnt;
 	unsigned long event_mask;
-	uint32_t burst_len;
 };
 
 struct msm_vfe_stats_hardware_info {
@@ -393,7 +387,6 @@ struct msm_vfe_stats_shared_data {
 	uint16_t stream_handle_cnt;
 	atomic_t stats_update;
 	uint32_t stats_mask;
-	uint32_t stats_burst_len;
 };
 
 struct msm_vfe_tasklet_queue_cmd {
@@ -405,6 +398,13 @@ struct msm_vfe_tasklet_queue_cmd {
 };
 
 #define MSM_VFE_TASKLETQ_SIZE 200
+
+enum msm_vfe_overflow_state {
+	NO_OVERFLOW,
+	OVERFLOW_DETECTED,
+	HALT_REQUESTED,
+	RESTART_REQUESTED,
+};
 
 struct msm_vfe_error_info {
 	atomic_t overflow_state;
@@ -423,24 +423,6 @@ struct msm_vfe_error_info {
 struct msm_vfe_frame_ts {
 	struct timeval buf_time;
 	uint32_t frame_id;
-};
-
-struct msm_isp_statistics {
-	int32_t imagemaster0_overflow;
-	int32_t imagemaster1_overflow;
-	int32_t imagemaster2_overflow;
-	int32_t imagemaster3_overflow;
-	int32_t imagemaster4_overflow;
-	int32_t imagemaster5_overflow;
-	int32_t imagemaster6_overflow;
-	int32_t be_overflow;
-	int32_t bg_overflow;
-	int32_t bf_overflow;
-	int32_t awb_overflow;
-	int32_t rs_overflow;
-	int32_t cs_overflow;
-	int32_t ihist_overflow;
-	int32_t skinbhist_overflow;
 };
 
 struct vfe_device {
@@ -477,7 +459,8 @@ struct vfe_device {
 	struct list_head tasklet_q;
 	struct tasklet_struct vfe_tasklet;
 	struct msm_vfe_tasklet_queue_cmd
-	tasklet_queue_cmd[MSM_VFE_TASKLETQ_SIZE];
+		tasklet_queue_cmd[MSM_VFE_TASKLETQ_SIZE];
+
 	uint32_t soc_hw_version;
 	uint32_t vfe_hw_version;
 	struct msm_vfe_hardware_info *hw_info;
@@ -491,8 +474,6 @@ struct vfe_device {
 	uint32_t vfe_open_cnt;
 	uint8_t vt_enable;
 	uint8_t ignore_error;
-	struct msm_isp_statistics *stats;
-	uint32_t vfe_ub_size;
 };
 
 #endif

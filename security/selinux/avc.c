@@ -306,15 +306,13 @@ static void avc_operation_decision_free(
 
 static void avc_operation_free(struct avc_operation_node *ops_node)
 {
-	struct avc_operation_decision_node *od_node, *tmp;
+	struct avc_operation_decision_node *od_node;
 
 	if (!ops_node)
 		return;
 
-	list_for_each_entry_safe(od_node, tmp, &ops_node->od_head, od_list) {
-		list_del(&od_node->od_list);
+	list_for_each_entry(od_node, &ops_node->od_head, od_list)
 		avc_operation_decision_free(od_node);
-	}
 	kmem_cache_free(avc_operation_node_cachep, ops_node);
 }
 
@@ -481,6 +479,22 @@ static inline u32 avc_operation_audit_required(u32 requested,
 
 	*deniedp = denied;
 	return audited;
+}
+
+static inline int avc_operation_audit(u32 ssid, u32 tsid, u16 tclass,
+				u32 requested, struct av_decision *avd,
+				struct operation_decision *od,
+				u16 cmd, int result,
+				struct common_audit_data *ad)
+{
+	u32 audited, denied;
+
+	audited = avc_operation_audit_required(
+			requested, avd, od, cmd, result, &denied);
+	if (likely(!audited))
+		return 0;
+	return slow_avc_audit(ssid, tsid, tclass, requested,
+			audited, denied, result, ad, 0);
 }
 
 static void avc_node_free(struct rcu_head *rhead)
@@ -716,9 +730,9 @@ static void avc_audit_pre_callback(struct audit_buffer *ab, void *a)
 {
 	struct common_audit_data *ad = a;
 	audit_log_format(ab, "avc:  %s ",
-			 ad->selinux_audit_data->slad->denied ? "denied" : "granted");
-	avc_dump_av(ab, ad->selinux_audit_data->slad->tclass,
-			ad->selinux_audit_data->slad->audited);
+			 ad->selinux_audit_data->denied ? "denied" : "granted");
+	avc_dump_av(ab, ad->selinux_audit_data->tclass,
+			ad->selinux_audit_data->audited);
 	audit_log_format(ab, " for ");
 }
 
@@ -732,29 +746,26 @@ static void avc_audit_post_callback(struct audit_buffer *ab, void *a)
 {
 	struct common_audit_data *ad = a;
 	audit_log_format(ab, " ");
-	avc_dump_query(ab, ad->selinux_audit_data->slad->ssid,
-			   ad->selinux_audit_data->slad->tsid,
-			   ad->selinux_audit_data->slad->tclass);
-	if (ad->selinux_audit_data->slad->denied) {
+	avc_dump_query(ab, ad->selinux_audit_data->ssid,
+			   ad->selinux_audit_data->tsid,
+			   ad->selinux_audit_data->tclass);
+	if (ad->selinux_audit_data->denied) {
 		audit_log_format(ab, " permissive=%u",
-				 ad->selinux_audit_data->slad->result ? 0 : 1);
+				 ad->selinux_audit_data->result ? 0 : 1);
 	}
 }
 
-/* This is the slow part of avc audit with big stack footprint */
-static noinline int slow_avc_audit(u32 ssid, u32 tsid, u16 tclass,
+noinline int slow_avc_audit(u32 ssid, u32 tsid, u16 tclass,
 		u32 requested, u32 audited, u32 denied, int result,
 		struct common_audit_data *a,
 		unsigned flags)
 {
 	struct common_audit_data stack_data;
-	struct selinux_audit_data sad = {0,};
-	struct selinux_late_audit_data slad;
+	struct selinux_audit_data sad;
 
 	if (!a) {
 		a = &stack_data;
-		COMMON_AUDIT_DATA_INIT(a, NONE);
-		a->selinux_audit_data = &sad;
+		a->type = LSM_AUDIT_DATA_NONE;
 	}
 
 	/*
@@ -768,111 +779,21 @@ static noinline int slow_avc_audit(u32 ssid, u32 tsid, u16 tclass,
 	    (flags & MAY_NOT_BLOCK))
 		return -ECHILD;
 
-	slad.tclass = tclass;
-	slad.requested = requested;
-	slad.ssid = ssid;
-	slad.tsid = tsid;
-	slad.audited = audited;
-	slad.denied = denied;
-	slad.result = result;
+	sad.tclass = tclass;
+	sad.requested = requested;
+	sad.ssid = ssid;
+	sad.tsid = tsid;
+	sad.audited = audited;
+	sad.denied = denied;
+	sad.result = result;
 
-	a->selinux_audit_data->slad = &slad;
+	a->selinux_audit_data = &sad;
+
 	common_lsm_audit(a, avc_audit_pre_callback, avc_audit_post_callback);
 	return 0;
 }
 
-static inline int avc_operation_audit(u32 ssid, u32 tsid, u16 tclass,
-				u32 requested, struct av_decision *avd,
-				struct operation_decision *od,
-				u16 cmd, int result,
-				struct common_audit_data *ad)
-{
-	u32 audited, denied;
-	audited = avc_operation_audit_required(
-			requested, avd, od, cmd, result, &denied);
-	if (likely(!audited))
-		return 0;
-	return slow_avc_audit(ssid, tsid, tclass, requested,
-			      audited, denied, result, ad, 0);
-}
-
-/**
- * avc_audit - Audit the granting or denial of permissions.
- * @ssid: source security identifier
- * @tsid: target security identifier
- * @tclass: target security class
- * @requested: requested permissions
- * @avd: access vector decisions
- * @result: result from avc_has_perm_noaudit
- * @a:  auxiliary audit data
- * @flags: VFS walk flags
- *
- * Audit the granting or denial of permissions in accordance
- * with the policy.  This function is typically called by
- * avc_has_perm() after a permission check, but can also be
- * called directly by callers who use avc_has_perm_noaudit()
- * in order to separate the permission check from the auditing.
- * For example, this separation is useful when the permission check must
- * be performed under a lock, to allow the lock to be released
- * before calling the auditing code.
- */
-inline int avc_audit(u32 ssid, u32 tsid,
-	       u16 tclass, u32 requested,
-	       struct av_decision *avd, int result, struct common_audit_data *a,
-	       unsigned flags)
-{
-	u32 denied, audited;
-	denied = requested & ~avd->allowed;
-	if (unlikely(denied)) {
-		audited = denied & avd->auditdeny;
-		/*
-		 * a->selinux_audit_data->auditdeny is TRICKY!  Setting a bit in
-		 * this field means that ANY denials should NOT be audited if
-		 * the policy contains an explicit dontaudit rule for that
-		 * permission.  Take notice that this is unrelated to the
-		 * actual permissions that were denied.  As an example lets
-		 * assume:
-		 *
-		 * denied == READ
-		 * avd.auditdeny & ACCESS == 0 (not set means explicit rule)
-		 * selinux_audit_data->auditdeny & ACCESS == 1
-		 *
-		 * We will NOT audit the denial even though the denied
-		 * permission was READ and the auditdeny checks were for
-		 * ACCESS
-		 */
-		if (a &&
-		    a->selinux_audit_data->auditdeny &&
-		    !(a->selinux_audit_data->auditdeny & avd->auditdeny))
-			audited = 0;
-	} else if (result)
-		audited = denied = requested;
-	else
-		audited = requested & avd->auditallow;
-	if (likely(!audited))
-		return 0;
-
-	return slow_avc_audit(ssid, tsid, tclass,
-		requested, audited, denied, result,
-		a, flags);
-}
-
-/**
- * avc_add_callback - Register a callback for security events.
- * @callback: callback function
- * @events: security events
- * @ssid: source security identifier or %SECSID_WILD
- * @tsid: target security identifier or %SECSID_WILD
- * @tclass: target security class
- * @perms: permissions
- *
- * Register a callback function for events in the set @events
- * related to the SID pair (@ssid, @tsid) 
- * and the permissions @perms, interpreting
- * @perms based on @tclass.  Returns %0 on success or
- * -%ENOMEM if insufficient memory exists to add the callback.
- */
-int avc_add_callback(int (*callback)(u32 event, u32 ssid, u32 tsid,
+int __init avc_add_callback(int (*callback)(u32 event, u32 ssid, u32 tsid,
 				     u16 tclass, u32 perms,
 				     u32 *out_retained),
 		     u32 events, u32 ssid, u32 tsid,
@@ -881,7 +802,7 @@ int avc_add_callback(int (*callback)(u32 event, u32 ssid, u32 tsid,
 	struct avc_callback_node *c;
 	int rc = 0;
 
-	c = kmalloc(sizeof(*c), GFP_ATOMIC);
+	c = kmalloc(sizeof(*c), GFP_KERNEL);
 	if (!c) {
 		rc = -ENOMEM;
 		goto out;

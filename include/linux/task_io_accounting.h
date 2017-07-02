@@ -42,4 +42,8 @@ struct task_io_accounting {
 	 */
 	u64 cancelled_write_bytes;
 #endif /* CONFIG_TASK_IO_ACCOUNTING */
+
+	/* FS debug dump */
+	u64 acc_bytes[3];
+	unsigned long last_jiffies[3];
 };

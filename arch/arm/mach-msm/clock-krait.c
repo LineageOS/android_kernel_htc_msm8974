@@ -24,10 +24,17 @@
 #include <mach/clk.h>
 #include <mach/clock-generic.h>
 #include <mach/msm-krait-l2-accessors.h>
+#ifdef CONFIG_HTC_DEBUG_FOOTPRINT
+#include <mach/htc_footprint.h>
+#endif
 #include "clock-krait.h"
 #include "avs.h"
 
 static DEFINE_SPINLOCK(kpss_clock_reg_lock);
+
+static struct drv_data drv = {
+	.name = "clock_krait_drv",
+};
 
 #define LPL_SHIFT	8
 static void __kpss_mux_set_sel(struct mux_clk *mux, int sel)
@@ -404,6 +411,11 @@ static int kpss_cpu_pre_set_rate(struct clk *c, unsigned long new_rate)
 
 	if (dscr)
 		AVS_DISABLE(cpu->id);
+
+#ifdef CONFIG_HTC_DEBUG_FOOTPRINT
+	set_acpuclk_footprint(cpu->id, ACPU_AFTER_AVS_DISABLE);
+#endif
+
 	return 0;
 }
 
@@ -417,13 +429,42 @@ static long kpss_core_round_rate(struct clk *c, unsigned long rate)
 
 static int kpss_core_set_rate(struct clk *c, unsigned long rate)
 {
+#ifdef CONFIG_HTC_DEBUG_FOOTPRINT
+	struct kpss_core_clk *cpu = to_kpss_core_clk(c);
+	int ret = 0;
+
+	/* L2 uses this function to set its rate as well and L2 id is not set, says 0.
+	 * We cannot use id to identify whether it is cpu0 or L2.
+	 * The only way to tell the difference is check cp15_iaddr, only L2 sets this field.
+	 */
+	if (c->flags & CLKFLAG_CPU_CLK)
+		set_acpuclk_footprint(cpu->id, ACPU_BEFORE_SET_SPEED);
+
+	ret = clk_set_rate(c->parent, rate);
+
+	if (c->flags & CLKFLAG_CPU_CLK) {
+		set_acpuclk_footprint(cpu->id, ACPU_AFTER_SET_SPEED);
+		set_acpuclk_cpu_freq_footprint(FT_CUR_RATE, cpu->id, rate);
+	}
+	else if (c->flags & CLKFLAG_L2_CLK)
+		set_acpuclk_l2_freq_footprint(FT_CUR_RATE, rate);
+	else
+		WARN(1, "Unexpected clock using %s\n", __func__);
+
+	return ret;
+#else
 	return clk_set_rate(c->parent, rate);
+#endif
 }
 
 static void kpss_cpu_post_set_rate(struct clk *c, unsigned long old_rate)
 {
 	struct kpss_core_clk *cpu = to_kpss_core_clk(c);
 	u32 dscr = find_dscr(cpu->avs_tbl, c->rate);
+
+#ifdef CONFIG_HTC_DEBUG_FOOTPRINT
+	set_acpuclk_footprint(cpu->id, ACPU_BEFORE_AVS_ENABLE);
+#endif
 
 	/*
 	 * FIXME: If AVS enable/disable needs to be done in the
@@ -521,3 +562,21 @@ struct clk_ops clk_ops_kpss_l2 = {
 	.list_rate = kpss_core_list_rate,
 	.handoff = kpss_l2_handoff,
 };
+
+void clock_krait_init(struct device * dev,
+				const struct kpss_core_clk **krait_clk, int krait_clk_size, int speed, int pvs, int rev)
+{
+	drv.dev = dev;
+	drv.krait_clk = kmemdup(krait_clk, krait_clk_size, GFP_KERNEL);
+	BUG_ON(!drv.krait_clk);
+	drv.speed_bin = speed;
+	drv.pvs_bin = pvs;
+	drv.pvs_rev = rev;
+}
+
+unsigned long clock_krait_get_rate(int cpu)
+{
+	if(drv.krait_clk)
+		return drv.krait_clk[cpu]->c.rate;
+	return 0;
+}

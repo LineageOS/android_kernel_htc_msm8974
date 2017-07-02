@@ -36,7 +36,12 @@
 #define NGD_BASE_V1(r)	(((r) % 2) ? 0x800 : 0xA00)
 #define NGD_BASE_V2(r)	(((r) % 2) ? 0x1000 : 0x2000)
 #define NGD_BASE(r, v) ((v) ? NGD_BASE_V2(r) : NGD_BASE_V1(r))
-/* NGD (Non-ported Generic Device) registers */
+
+#undef pr_info
+#undef pr_err
+#define pr_info(fmt, ...) pr_aud_info(fmt, ##__VA_ARGS__)
+#define pr_err(fmt, ...) pr_aud_err(fmt, ##__VA_ARGS__)
+
 enum ngd_reg {
 	NGD_CFG		= 0x0,
 	NGD_STATUS	= 0x4,
@@ -308,7 +313,9 @@ static int ngd_xfer_msg(struct slim_controller *ctrl, struct slim_msg_txn *txn)
 	u8 la = txn->la;
 	u8 txn_mt;
 	u16 txn_mc = txn->mc;
-	u8 wbuf[SLIM_MSGQ_BUF_LEN];
+
+	u8 wbuf[SLIM_MSGQ_BUF_LEN] = {0}; 
+
 	bool report_sat = false;
 	bool sync_wr = true;
 
@@ -545,6 +552,8 @@ static int ngd_xfer_msg(struct slim_controller *ctrl, struct slim_msg_txn *txn)
 					(wbuf[1] + dev->port_b), dev->ver));
 			mutex_unlock(&dev->tx_lock);
 			msm_slim_put_ctrl(dev);
+			if (txn->wbuf == wbuf)
+				txn->wbuf = NULL;
 			return 0;
 		}
 		if (dev->err) {
@@ -680,6 +689,11 @@ static int ngd_xferandwait_ack(struct slim_controller *ctrl,
 			ret = -ETIMEDOUT;
 		else
 			ret = txn->ec;
+	} else if (ret == -EREMOTEIO &&
+			(txn->mc == SLIM_USR_MC_CHAN_CTRL ||
+			 txn->mc == SLIM_USR_MC_DISCONNECT_PORT)) {
+		
+		return 0;
 	}
 
 	if (ret) {
@@ -765,6 +779,8 @@ static int ngd_allocbw(struct slim_device *sb, int *subfrmc, int *clkgear)
 				return -ENXIO;
 			}
 		}
+		if (txn.len >= SLIM_MSGQ_BUF_LEN - 1)
+			return -EINVAL;
 		num_chan++;
 		wbuf[txn.len++] = slc->chan;
 		SLIM_INFO(dev, "slim activate chan:%d, laddr: 0x%x\n",
@@ -806,6 +822,10 @@ static int ngd_allocbw(struct slim_device *sb, int *subfrmc, int *clkgear)
 				return -ENXIO;
 			}
 		}
+		
+		if (txn.len >= SLIM_MSGQ_BUF_LEN - 1)
+			return -EINVAL;
+		
 		wbuf[txn.len++] = slc->chan;
 		SLIM_INFO(dev, "slim remove chan:%d, laddr: 0x%x\n",
 			   slc->chan, sb->laddr);
@@ -848,12 +868,14 @@ static int ngd_get_laddr(struct slim_controller *ctrl, const u8 *ea,
 	u8 wbuf[10];
 	struct slim_msg_txn txn;
 	DECLARE_COMPLETION_ONSTACK(done);
+	pr_info("%s ++\n",__func__);
 	txn.mt = SLIM_MSG_MT_DEST_REFERRED_USER;
 	txn.dt = SLIM_MSG_DEST_LOGICALADDR;
 	txn.la = SLIM_LA_MGR;
 	txn.ec = 0;
 	ret = ngd_get_tid(ctrl, &txn, &wbuf[0], &done);
 	if (ret) {
+		pr_info("%s 2--\n",__func__);
 		return ret;
 	}
 	memcpy(&wbuf[1], ea, elen);
@@ -867,6 +889,7 @@ static int ngd_get_laddr(struct slim_controller *ctrl, const u8 *ea,
 		ret = -ENXIO;
 	else if (!ret)
 		*laddr = txn.la;
+	pr_info("%s --\n",__func__);
 	return ret;
 }
 
@@ -1106,6 +1129,11 @@ static int ngd_slim_power_up(struct msm_slim_ctrl *dev, bool mdm_restart)
 	timeout = wait_for_completion_timeout(&dev->reconf, HZ);
 	if (!timeout) {
 		SLIM_ERR(dev, "Failed to receive master capability\n");
+
+#ifdef CONFIG_HTC_DEBUG_DSP
+		pr_info("%s:trigger ramdump to keep status\n",__func__);
+		BUG();
+#endif
 		return -ETIMEDOUT;
 	}
 	/* mutliple transactions waiting on slimbus to power up? */
@@ -1209,6 +1237,7 @@ static int ngd_notify_slaves(void *data)
 	struct slim_controller *ctrl = &dev->ctrl;
 	struct slim_device *sbdev;
 	struct list_head *pos, *next;
+
 	int ret, i = 0;
 	ret = qmi_svc_event_notifier_register(SLIMBUS_QMI_SVC_ID,
 				SLIMBUS_QMI_SVC_V1,
@@ -1220,8 +1249,14 @@ static int ngd_notify_slaves(void *data)
 
 	while (!kthread_should_stop()) {
 		set_current_state(TASK_INTERRUPTIBLE);
-		wait_for_completion(&dev->qmi.slave_notify);
-		/* Probe devices for first notification */
+		ret = wait_for_completion_timeout(&dev->qmi.slave_notify,
+								HZ);
+		if (!ret) {
+			dev_dbg(dev->dev, "slave thread wait err:%d", ret);
+			continue;
+
+		}
+		
 		if (!i) {
 			i++;
 			dev->err = 0;
@@ -1236,6 +1271,7 @@ static int ngd_notify_slaves(void *data)
 		} else {
 			slim_framer_booted(ctrl);
 		}
+		i++;
 		mutex_lock(&ctrl->m_ctrl);
 		list_for_each_safe(pos, next, &ctrl->devs) {
 			int j;
@@ -1314,6 +1350,8 @@ static int __devinit ngd_slim_probe(struct platform_device *pdev)
 	bool			rxreg_access = false;
 	bool			slim_mdm = false;
 	const char		*ext_modem_id = NULL;
+
+	pr_info("%s ++\n",__func__);
 
 	slim_mem = platform_get_resource_byname(pdev, IORESOURCE_MEM,
 						"slimbus_physical");
@@ -1515,6 +1553,9 @@ static int __devinit ngd_slim_probe(struct platform_device *pdev)
 		dev_err(dev->dev, "Failed to start notifier thread:%d\n", ret);
 		goto err_notify_thread_create_failed;
 	}
+
+	pr_info("%s --\n",__func__);
+
 	SLIM_INFO(dev, "NGD SB controller is up!\n");
 	return 0;
 

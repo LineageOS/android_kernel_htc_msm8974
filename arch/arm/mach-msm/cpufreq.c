@@ -34,6 +34,11 @@
 #include <mach/socinfo.h>
 #include <mach/cpufreq.h>
 
+#ifdef CONFIG_HTC_DEBUG_FOOTPRINT
+#include <mach/htc_footprint.h>
+#include <mach/clk-provider.h>
+#endif
+
 #include "acpuclock.h"
 
 #ifdef CONFIG_DEBUG_FS
@@ -92,6 +97,13 @@ static void update_l2_bw(int *also_cpu)
 		index = max(index, freq_index[cpu]);
 	}
 
+#ifdef CONFIG_HTC_DEBUG_FOOTPRINT
+	if (l2_clk) {
+		set_acpuclk_l2_freq_footprint(FT_PREV_RATE, l2_clk->rate);
+		set_acpuclk_l2_freq_footprint(FT_NEW_RATE, l2_khz[index] * 1000);
+	}
+#endif
+
 	if (l2_clk)
 		rc = clk_set_rate(l2_clk, l2_khz[index] * 1000);
 	if (rc) {
@@ -108,6 +120,9 @@ out:
 	mutex_unlock(&l2bw_lock);
 }
 
+#ifdef CONFIG_ARCH_MSM8974
+static DEFINE_MUTEX(set_cpufreq_lock);
+#endif
 static int set_cpu_freq(struct cpufreq_policy *policy, unsigned int new_freq,
 			unsigned int index)
 {
@@ -117,6 +132,16 @@ static int set_cpu_freq(struct cpufreq_policy *policy, unsigned int new_freq,
 	struct cpufreq_freqs freqs;
 	struct sched_param param = { .sched_priority = MAX_RT_PRIO-1 };
 
+	/*
+	 * The cpu_clk[1..NR_CPUS] are not initialized at sync-cpu platform,
+	 * so for core1~coreN, they don't need to execute this function.
+	 */
+	if (policy->cpu >= 1 && is_sync)
+		return 0;
+
+#ifdef CONFIG_ARCH_MSM8974
+	mutex_lock(&set_cpufreq_lock);
+#endif
 	freqs.old = policy->cur;
 	freqs.new = new_freq;
 	freqs.cpu = policy->cpu;
@@ -137,12 +162,23 @@ static int set_cpu_freq(struct cpufreq_policy *policy, unsigned int new_freq,
 	trace_cpu_frequency_switch_start(freqs.old, freqs.new, policy->cpu);
 	if (is_clk) {
 		unsigned long rate = new_freq * 1000;
+#ifdef CONFIG_HTC_DEBUG_FOOTPRINT
+		set_acpuclk_footprint(policy->cpu, ACPU_ENTER);
+		set_acpuclk_cpu_freq_footprint(FT_PREV_RATE, policy->cpu, policy->cur * 1000);
+		set_acpuclk_cpu_freq_footprint(FT_NEW_RATE, policy->cpu, rate);
+#endif
 		rate = clk_round_rate(cpu_clk[policy->cpu], rate);
 		ret = clk_set_rate(cpu_clk[policy->cpu], rate);
 		if (!ret) {
+#ifdef CONFIG_HTC_DEBUG_FOOTPRINT
+			set_acpuclk_footprint(policy->cpu, ACPU_BEFORE_UPDATE_L2_BW);
+#endif
 			freq_index[policy->cpu] = index;
 			update_l2_bw(NULL);
 		}
+#ifdef CONFIG_HTC_DEBUG_FOOTPRINT
+		set_acpuclk_footprint(policy->cpu, ACPU_LEAVE);
+#endif
 	} else {
 		ret = acpuclk_set_rate(policy->cpu, new_freq, SETRATE_CPUFREQ);
 	}
@@ -157,6 +193,9 @@ static int set_cpu_freq(struct cpufreq_policy *policy, unsigned int new_freq,
 		param.sched_priority = saved_sched_rt_prio;
 		sched_setscheduler_nocheck(current, saved_sched_policy, &param);
 	}
+#ifdef CONFIG_ARCH_MSM8974
+	mutex_unlock(&set_cpufreq_lock);
+#endif
 	return ret;
 }
 
@@ -277,7 +316,10 @@ static int __cpuinit msm_cpufreq_init(struct cpufreq_policy *policy)
 #endif
 
 	if (is_clk)
-		cur_freq = clk_get_rate(cpu_clk[policy->cpu])/1000;
+		if (policy->cpu >= 1 && is_sync)
+			cur_freq = clk_get_rate(cpu_clk[0])/1000;
+		else
+			cur_freq = clk_get_rate(cpu_clk[policy->cpu])/1000;
 	else
 		cur_freq = acpuclk_get_rate(policy->cpu);
 
@@ -343,25 +385,34 @@ static int __cpuinit msm_cpufreq_cpu_callback(struct notifier_block *nfb,
 		}
 		break;
 	case CPU_UP_PREPARE:
+		set_hotplug_on_footprint(cpu, HOF_ENTER_PREPARE);
 		if (is_clk) {
+			set_hotplug_on_footprint(cpu, HOF_BEFORE_PREPARE_L2);
 			rc = clk_prepare(l2_clk);
 			if (rc < 0)
 				return NOTIFY_BAD;
+			set_hotplug_on_footprint(cpu, HOF_BEFORE_PREPARE_CPU);
 			rc = clk_prepare(cpu_clk[cpu]);
 			if (rc < 0)
 				return NOTIFY_BAD;
+			set_hotplug_on_footprint(cpu, HOF_BEFORE_UPDATE_L2_BW);
 			update_l2_bw(&cpu);
 		}
+		set_hotplug_on_footprint(cpu, HOF_LEAVE_PREPARE);
 		break;
 	case CPU_STARTING:
+		set_hotplug_on_footprint(cpu, HOF_ENTER_ENABLE);
 		if (is_clk) {
+			set_hotplug_on_footprint(cpu, HOF_BEFORE_ENABLE_L2);
 			rc = clk_enable(l2_clk);
 			if (rc < 0)
 				return NOTIFY_BAD;
+			set_hotplug_on_footprint(cpu, HOF_BEFORE_ENABLE_CPU);
 			rc = clk_enable(cpu_clk[cpu]);
 			if (rc < 0)
 				return NOTIFY_BAD;
 		}
+		set_hotplug_on_footprint(cpu, HOF_LEAVE_ENABLE);
 		break;
 	default:
 		break;

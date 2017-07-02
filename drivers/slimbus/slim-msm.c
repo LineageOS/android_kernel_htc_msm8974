@@ -16,6 +16,13 @@
 #include <mach/sps.h>
 #include "slim-msm.h"
 
+//htc audio ++
+#undef pr_info
+#undef pr_err
+#define pr_info(fmt, ...) pr_aud_info(fmt, ##__VA_ARGS__)
+#define pr_err(fmt, ...) pr_aud_err(fmt, ##__VA_ARGS__)
+//htc audio --
+
 int msm_slim_rx_enqueue(struct msm_slim_ctrl *dev, u32 *buf, u8 len)
 {
 	spin_lock(&dev->rx_lock);
@@ -1260,6 +1267,10 @@ static int msm_slim_qmi_send_power_request(struct msm_slim_ctrl *dev,
 					&resp_desc, &resp, sizeof(resp), 5000);
 	if (rc < 0) {
 		SLIM_ERR(dev, "%s: QMI send req failed %d\n", __func__, rc);
+#ifdef CONFIG_HTC_DEBUG_DSP
+		pr_err("trigger ramdump to keep status\n");
+		BUG();
+#endif
 		return rc;
 	}
 

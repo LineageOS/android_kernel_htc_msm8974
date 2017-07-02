@@ -459,6 +459,12 @@ int qmi_send_req_wait(struct qmi_handle *handle,
 	mutex_lock(&handle->handle_lock);
 	if (!txn_handle->resp_received) {
 		pr_err("%s: Response Wait Error %d\n", __func__, rc);
+//htc audio ++
+#ifdef CONFIG_HTC_DEBUG_DSP
+		pr_err("[AUD]trigger ramdump to keep status\n");
+		BUG();
+#endif
+//htc audio --
 		if (handle->handle_reset)
 			rc = -ENETRESET;
 		if (rc >= 0)
@@ -601,6 +607,13 @@ int qmi_recv_msg(struct qmi_handle *handle)
 		mutex_unlock(&handle->handle_lock);
 		return rc;
 	}
+
+	/* ++ fix Klocwork */
+	if (!recv_msg) {
+		pr_err("%s: recv_msg is NULL\n", __func__);
+		return rc;
+	}
+	/* -- fix Klocwork */
 
 	/* Decode the header & Handle the req, resp, indication message */
 	decode_qmi_header(recv_msg, &cntl_flag, &txn_id, &msg_id, &msg_len);

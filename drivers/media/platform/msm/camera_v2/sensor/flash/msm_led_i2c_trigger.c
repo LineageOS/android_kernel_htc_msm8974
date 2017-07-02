@@ -138,13 +138,13 @@ int msm_flash_led_release(struct msm_led_flash_ctrl_t *fctrl)
 	struct msm_camera_sensor_board_info *flashdata = NULL;
 	struct msm_camera_power_ctrl_t *power_info = NULL;
 
-	flashdata = fctrl->flashdata;
-	power_info = &flashdata->power_info;
-	CDBG("%s:%d called\n", __func__, __LINE__);
 	if (!fctrl) {
 		pr_err("%s:%d fctrl NULL\n", __func__, __LINE__);
 		return -EINVAL;
 	}
+	flashdata = fctrl->flashdata;
+	power_info = &flashdata->power_info;
+	CDBG("%s:%d called\n", __func__, __LINE__);
 	gpio_set_value_cansleep(
 		power_info->gpio_conf->gpio_num_info->
 		gpio_num[SENSOR_GPIO_FL_EN],
@@ -169,13 +169,13 @@ int msm_flash_led_off(struct msm_led_flash_ctrl_t *fctrl)
 	struct msm_camera_sensor_board_info *flashdata = NULL;
 	struct msm_camera_power_ctrl_t *power_info = NULL;
 
-	flashdata = fctrl->flashdata;
-	power_info = &flashdata->power_info;
-	CDBG("%s:%d called\n", __func__, __LINE__);
 	if (!fctrl) {
 		pr_err("%s:%d fctrl NULL\n", __func__, __LINE__);
 		return -EINVAL;
 	}
+	flashdata = fctrl->flashdata;
+	power_info = &flashdata->power_info;
+	CDBG("%s:%d called\n", __func__, __LINE__);
 	if (fctrl->flash_i2c_client && fctrl->reg_setting) {
 		rc = fctrl->flash_i2c_client->i2c_func_tbl->i2c_write_table(
 			fctrl->flash_i2c_client,
@@ -317,7 +317,7 @@ static int32_t msm_led_get_dt_data(struct device_node *of_node,
 
 			rc = of_property_read_string(flash_src_node,
 				"linux,default-trigger",
-				&fctrl->flash_trigger_name[i]);
+				&fctrl->led_trigger_name[i]);
 			if (rc < 0) {
 				pr_err("failed\n");
 				of_node_put(flash_src_node);
@@ -325,11 +325,11 @@ static int32_t msm_led_get_dt_data(struct device_node *of_node,
 			}
 
 			CDBG("default trigger %s\n",
-				 fctrl->flash_trigger_name[i]);
+				 fctrl->led_trigger_name[i]);
 
 			rc = of_property_read_u32(flash_src_node,
 				"qcom,max-current",
-				&fctrl->flash_op_current[i]);
+				&fctrl->op_current[i]);
 			if (rc < 0) {
 				pr_err("failed rc %d\n", rc);
 				of_node_put(flash_src_node);
@@ -339,11 +339,11 @@ static int32_t msm_led_get_dt_data(struct device_node *of_node,
 			of_node_put(flash_src_node);
 
 			CDBG("max_current[%d] %d\n",
-				i, fctrl->flash_op_current[i]);
+				i, fctrl->op_current[i]);
 
 			led_trigger_register_simple(
-				fctrl->flash_trigger_name[i],
-				&fctrl->flash_trigger[i]);
+				fctrl->led_trigger_name[i],
+				&fctrl->led_trigger[i]);
 		}
 
 	} else { /*Handle LED Flash Ctrl by GPIO*/

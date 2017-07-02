@@ -54,6 +54,13 @@
  */
 #define NUM_WCD9XXX_REG_RET	8
 
+//htc audio ++
+#undef pr_info
+#undef pr_err
+#define pr_info(fmt, ...) pr_aud_info(fmt, ##__VA_ARGS__)
+#define pr_err(fmt, ...) pr_aud_err(fmt, ##__VA_ARGS__)
+//htc audio --
+
 struct wcd9xxx_i2c {
 	struct i2c_client *client;
 	struct i2c_msg xfer_msg[2];
@@ -1510,7 +1517,7 @@ static int wcd9xxx_slim_probe(struct slim_device *slim)
 	int intf_type;
 
 	intf_type = wcd9xxx_get_intf_type();
-
+	pr_info("%s ++\n",__func__);
 	if (intf_type == WCD9XXX_INTERFACE_TYPE_I2C) {
 		dev_dbg(&slim->dev, "%s:Codec is detected in I2C mode\n",
 			__func__);
@@ -1557,7 +1564,7 @@ static int wcd9xxx_slim_probe(struct slim_device *slim)
 	wcd9xxx->dev = &slim->dev;
 	wcd9xxx->mclk_rate = pdata->mclk_rate;
 	wcd9xxx->slim_device_bootup = true;
-
+	pr_info("%s init\n",__func__);
 	ret = wcd9xxx_init_supplies(wcd9xxx, pdata);
 	if (ret) {
 		pr_err("%s: Fail to init Codec supplies %d\n", __func__, ret);
@@ -1583,6 +1590,10 @@ static int wcd9xxx_slim_probe(struct slim_device *slim)
 	if (ret) {
 		pr_err("%s: failed to get slimbus %s logical address: %d\n",
 		       __func__, wcd9xxx->slim->name, ret);
+#ifdef CONFIG_HTC_DEBUG_DSP
+		pr_info("%s:trigger ramdump to keep status\n",__func__);
+		BUG();
+#endif
 		goto err_reset;
 	}
 	wcd9xxx->read_dev = wcd9xxx_slim_read_device;
@@ -1606,6 +1617,10 @@ static int wcd9xxx_slim_probe(struct slim_device *slim)
 	if (ret) {
 		pr_err("%s: failed to get slimbus %s logical address: %d\n",
 		       __func__, wcd9xxx->slim->name, ret);
+#ifdef CONFIG_HTC_DEBUG_DSP
+		pr_info("%s:trigger ramdump to keep status\n",__func__);
+		BUG();
+#endif
 		goto err_slim_add;
 	}
 	wcd9xxx_inf_la = wcd9xxx->slim_slave->laddr;
@@ -1631,7 +1646,7 @@ static int wcd9xxx_slim_probe(struct slim_device *slim)
 		(void *) "poke", &codec_debug_ops);
 	}
 #endif
-
+	pr_info("%s --\n",__func__);
 	return ret;
 
 err_slim_add:
@@ -1667,9 +1682,10 @@ static int wcd9xxx_device_up(struct wcd9xxx *wcd9xxx)
 {
 	int ret = 0;
 	struct wcd9xxx_core_resource *wcd9xxx_res = &wcd9xxx->core_res;
-
+	pr_info("%s ++\n",__func__);
 	if (wcd9xxx->slim_device_bootup) {
 		wcd9xxx->slim_device_bootup = false;
+		pr_info("%s 2--\n",__func__);
 		return 0;
 	}
 
@@ -1682,6 +1698,7 @@ static int wcd9xxx_device_up(struct wcd9xxx *wcd9xxx)
 		if (wcd9xxx->post_reset)
 			ret = wcd9xxx->post_reset(wcd9xxx);
 	}
+	pr_info("%s --\n",__func__);
 	return ret;
 }
 
@@ -1723,10 +1740,14 @@ static int wcd9xxx_slim_device_down(struct slim_device *sldev)
 		pr_err("%s: wcd9xxx is NULL\n", __func__);
 		return -EINVAL;
 	}
+
+	dev_info(wcd9xxx->dev, "%s: device down\n", __func__);
+	pr_info("%s ++\n",__func__);
 	wcd9xxx_irq_exit(&wcd9xxx->core_res);
 	if (wcd9xxx->dev_down)
 		wcd9xxx->dev_down(wcd9xxx);
 	dev_dbg(wcd9xxx->dev, "%s: device down\n", __func__);
+	pr_info("%s --\n",__func__);
 	return 0;
 }
 

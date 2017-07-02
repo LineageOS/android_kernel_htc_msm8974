@@ -785,6 +785,7 @@ submit_page_section(struct dio *dio, struct dio_submit *sdio, struct page *page,
 		 * Read accounting is performed in submit_bio()
 		 */
 		task_io_account_write(len);
+		collect_io_stats(len, WRITE);
 	}
 
 	/*

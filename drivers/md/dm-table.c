@@ -330,11 +330,14 @@ static int open_dev(struct dm_dev_internal *d, dev_t dev,
 	BUG_ON(d->dm_dev.bdev);
 
 	bdev = blkdev_get_by_dev(dev, d->dm_dev.mode | FMODE_EXCL, _claim_ptr);
-	if (IS_ERR(bdev))
+	if (IS_ERR(bdev)) {
+		pr_info("%s blkdev_get_by_dev error\n", __func__);
 		return PTR_ERR(bdev);
+	}
 
 	r = bd_link_disk_holder(bdev, dm_disk(md));
 	if (r) {
+		pr_info("%s bd_link_disk_holder error\n", __func__);
 		blkdev_put(bdev, d->dm_dev.mode | FMODE_EXCL);
 		return r;
 	}
@@ -468,6 +471,7 @@ int dm_get_device(struct dm_target *ti, const char *path, fmode_t mode,
 	BUG_ON(!t);
 
 	if (sscanf(path, "%u:%u%c", &major, &minor, &dummy) == 2) {
+		pr_info("%s get existing dm-device\n", __func__);
 		/* Extract the major/minor numbers */
 		dev = MKDEV(major, minor);
 		if (MAJOR(dev) != major || MINOR(dev) != minor)
@@ -475,9 +479,12 @@ int dm_get_device(struct dm_target *ti, const char *path, fmode_t mode,
 	} else {
 		/* convert the path to a device */
 		struct block_device *bdev = lookup_bdev(path);
+		pr_info("%s create new dm-device\n", __func__);
 
-		if (IS_ERR(bdev))
+		if (IS_ERR(bdev)) {
+			pr_info("%s create new dm-device error\n", __func__);
 			return PTR_ERR(bdev);
+		}
 		dev = bdev->bd_dev;
 		bdput(bdev);
 	}
@@ -493,6 +500,7 @@ int dm_get_device(struct dm_target *ti, const char *path, fmode_t mode,
 
 		if ((r = open_dev(dd, dev, t->md))) {
 			kfree(dd);
+			pr_info("%s open_dev fail, rc = %d\n", __func__, r);
 			return r;
 		}
 

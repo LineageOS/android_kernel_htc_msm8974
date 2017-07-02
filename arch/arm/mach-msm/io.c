@@ -310,6 +310,20 @@ static struct map_desc msm_8974_io_desc[] __initdata = {
 #ifdef CONFIG_DEBUG_MSM8974_UART
 	MSM_DEVICE(DEBUG_UART),
 #endif
+#ifdef CONFIG_HTC_DEBUG_FOOTPRINT
+	{
+		.virtual =  (unsigned long) HTC_DEBUG_FOOTPRINT_BASE,
+		.pfn = __phys_to_pfn(HTC_DEBUG_FOOTPRINT_PHYS),
+		.length =   HTC_DEBUG_FOOTPRINT_SIZE,
+		.type =     MT_DEVICE,
+	},
+#endif
+	{
+		.virtual =  (unsigned long) MSM_MPM_SLEEPTICK_BASE,
+		.pfn = __phys_to_pfn(MSM8974_MPM_SLEEPTICK_PHYS),
+		.length =   MSM8974_MPM_SLEEPTICK_SIZE,
+		.type =     MT_DEVICE,
+	},
 };
 
 void __init msm_map_8974_io(void)
@@ -585,6 +599,20 @@ static struct map_desc msm_8226_io_desc[] __initdata = {
 #ifdef CONFIG_DEBUG_MSM8226_UART
 	MSM_DEVICE(DEBUG_UART),
 #endif
+#ifdef CONFIG_HTC_DEBUG_FOOTPRINT
+        {
+                .virtual =  (unsigned long) HTC_DEBUG_FOOTPRINT_BASE,
+                .pfn = __phys_to_pfn(HTC_DEBUG_FOOTPRINT_PHYS),
+                .length =   HTC_DEBUG_FOOTPRINT_SIZE,
+                .type =     MT_DEVICE,
+        },
+#endif
+        {
+                .virtual =  (unsigned long) MSM_MPM_SLEEPTICK_BASE,
+                .pfn = __phys_to_pfn(MSM8974_MPM_SLEEPTICK_PHYS),
+                .length =   MSM8974_MPM_SLEEPTICK_SIZE,
+                .type =     MT_DEVICE,
+        },
 };
 
 
