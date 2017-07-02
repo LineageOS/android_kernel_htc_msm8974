@@ -408,4 +408,11 @@ int q6asm_send_meta_data(struct audio_client *ac, uint32_t initial_samples,
 int q6asm_stream_send_meta_data(struct audio_client *ac, uint32_t stream_id,
 		uint32_t initial_samples, uint32_t trailing_samples);
 
+/* HTC: Enable Q6 Effect Command */
+int q6asm_enable_effect(struct audio_client *ac, uint32_t module_id,
+			uint32_t param_id, uint32_t payload_size,
+			void *payload);
+int q6asm_stream_sample_rate_to_geq(struct audio_client *ac, uint32_t stream_id,
+			uint32_t module_id, uint32_t param_id, uint32_t sample_rate);
+
 #endif /* __Q6_ASM_H__ */
