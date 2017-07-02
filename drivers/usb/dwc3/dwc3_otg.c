@@ -23,6 +23,77 @@
 #include "dwc3_otg.h"
 #include "io.h"
 #include "xhci.h"
+#include <linux/usb/htc_info.h>
+#include <mach/board.h>
+#include <linux/usb/msm_hsusb.h>
+#include <mach/cable_detect.h>
+
+static struct dwc3_otg *the_dwc3_otg;
+extern int vbus;
+static DEFINE_MUTEX(smwork_sem);
+static DEFINE_MUTEX(notify_sem);
+
+
+int htc_dwc3_chg_det_check_linestate(void *mdwc);
+int htc_dwc3_get_cable_type(void);
+
+
+int htc_dwc3_get_line_state(struct dwc3 *dwc)
+{
+	struct platform_device *pdev_dwc_msm = container_of(dwc->dev->parent, struct platform_device, dev);
+	void *msm = (void *)platform_get_drvdata(pdev_dwc_msm);
+	return htc_dwc3_chg_det_check_linestate(msm);
+
+}
+
+static void send_usb_connect_notify(struct work_struct *w)
+{
+	static struct t_usb_status_notifier *notifier;
+	struct dwc3_otg *dotg = container_of(w, struct dwc3_otg,  notifier_work);
+	if (!dotg)
+		return;
+
+	dotg->connect_type_ready = 1;
+	pr_debug("send connect type %d\n", dotg->connect_type);
+	mutex_lock(&notify_sem);
+	list_for_each_entry(notifier, &g_lh_usb_notifier_list, notifier_link) {
+		if (notifier->func != NULL) {
+			/* Notify other drivers about connect type. */
+			notifier->func(dotg->connect_type);
+		}
+	}
+	mutex_unlock(&notify_sem);
+}
+
+int htc_dwc3_usb_register_notifier(struct t_usb_status_notifier *notifier)
+{
+	if (!notifier || !notifier->name || !notifier->func)
+		return -EINVAL;
+
+	mutex_lock(&notify_sem);
+	list_add(&notifier->notifier_link,
+			&g_lh_usb_notifier_list);
+	mutex_unlock(&notify_sem);
+	return 0;
+}
+
+int usb_is_connect_type_ready(void)
+{
+	if (!the_dwc3_otg)
+		return 0;
+	return the_dwc3_otg->connect_type_ready;
+}
+
+int usb_get_connect_type(void)
+{
+	if (!the_dwc3_otg)
+		return 0;
+#ifdef CONFIG_MACH_VERDI_LTE
+	if (the_dwc3_otg->connect_type == CONNECT_TYPE_USB_9V_AC)
+		return CONNECT_TYPE_9V_AC;
+#endif
+	return the_dwc3_otg->connect_type;
+}
 
 #define VBUS_REG_CHECK_DELAY	(msecs_to_jiffies(1000))
 #define MAX_INVALID_CHRGR_RETRY 3
@@ -246,12 +317,17 @@ static int dwc3_otg_start_host(struct usb_otg *otg, int on)
 			return ret;
 		}
 
+		dotg->connect_type = CONNECT_TYPE_INTERNAL;
+		queue_work(dotg->usb_wq, &dotg->notifier_work);
+
 		/* re-init OTG EVTEN register as XHCI reset clears it */
 		if (ext_xceiv && !ext_xceiv->otg_capability)
 			dwc3_otg_reset(dotg);
 	} else {
 		dev_dbg(otg->phy->dev, "%s: turn off host\n", __func__);
 
+		dotg->connect_type = CONNECT_TYPE_CLEAR;
+		queue_work(dotg->usb_wq, &dotg->notifier_work);
 		ret = regulator_disable(dotg->vbus_otg);
 		if (ret) {
 			dev_err(otg->phy->dev, "unable to disable vbus_otg\n");
@@ -393,12 +469,29 @@ static void dwc3_ext_chg_det_done(struct usb_otg *otg, struct dwc3_charger *chg)
 {
 	struct dwc3_otg *dotg = container_of(otg, struct dwc3_otg, otg);
 
+	switch (chg->chg_type) {
+	case DWC3_DCP_CHARGER:
+	case DWC3_CDP_CHARGER:
+	case DWC3_PROPRIETARY_CHARGER:
+		dotg->connect_type = CONNECT_TYPE_AC;
+		break;
+	case DWC3_UNSUPPORTED_CHARGER:
+		/* ignore QCT re-detect mechanism. use HTC style*/
+		chg->chg_type = DWC3_SDP_CHARGER;
+	default:
+		dotg->connect_type = CONNECT_TYPE_UNKNOWN;
+		dotg->ac_detect_count = 0;
+		queue_delayed_work(system_nrt_wq, &dotg->ac_detect_work, 2 * HZ);
+		break;
+	}
 	/*
 	 * Ignore chg_detection notification if BSV has gone off by this time.
 	 * STOP chg_det as part of !BSV handling would reset the chg_det flags
 	 */
-	if (test_bit(B_SESS_VLD, &dotg->inputs))
+	if (test_bit(B_SESS_VLD, &dotg->inputs)) {
 		queue_delayed_work(system_nrt_wq, &dotg->sm_work, 0);
+		queue_work(dotg->usb_wq, &dotg->notifier_work);
+	}
 }
 
 /**
@@ -535,7 +628,9 @@ static int dwc3_otg_set_power(struct usb_phy *phy, unsigned mA)
 	static int power_supply_type;
 	struct dwc3_otg *dotg = container_of(phy->otg, struct dwc3_otg, otg);
 
-
+#if defined(CONFIG_HTC_BATT_8974)
+	return 0;
+#endif
 	if (!dotg->psy || !dotg->charger) {
 		dev_err(phy->dev, "no usb power supply/charger registered\n");
 		return 0;
@@ -544,19 +639,19 @@ static int dwc3_otg_set_power(struct usb_phy *phy, unsigned mA)
 	if (dotg->charger->charging_disabled)
 		return 0;
 
-	if (dotg->charger->chg_type == DWC3_SDP_CHARGER)
+	if (dotg->charger->chg_type == DWC3_SDP_CHARGER ||
+			dotg->charger->chg_type == DWC3_PROPRIETARY_CHARGER)
 		power_supply_type = POWER_SUPPLY_TYPE_USB;
 	else if (dotg->charger->chg_type == DWC3_CDP_CHARGER)
 		power_supply_type = POWER_SUPPLY_TYPE_USB_CDP;
-	else if (dotg->charger->chg_type == DWC3_DCP_CHARGER ||
-			dotg->charger->chg_type == DWC3_PROPRIETARY_CHARGER)
+	else if (dotg->charger->chg_type == DWC3_DCP_CHARGER )
 		power_supply_type = POWER_SUPPLY_TYPE_USB_DCP;
 	else
 		power_supply_type = POWER_SUPPLY_TYPE_UNKNOWN;
 
 	power_supply_set_supply_type(dotg->psy, power_supply_type);
 
-	if (dotg->charger->chg_type == DWC3_CDP_CHARGER)
+	if ((dotg->charger->chg_type == DWC3_CDP_CHARGER) && mA > 2)
 		mA = DWC3_IDEV_CHG_MAX;
 
 	if (dotg->charger->max_power == mA)
@@ -604,7 +699,7 @@ static irqreturn_t dwc3_otg_interrupt(int irq, void *_dotg)
 	u32 osts, oevt_reg;
 	int ret = IRQ_NONE;
 	int handled_irqs = 0;
-	struct usb_phy *phy = dotg->otg.phy;
+	__maybe_unused struct usb_phy *phy = dotg->otg.phy;
 
 	oevt_reg = dwc3_readl(dotg->regs, DWC3_OEVT);
 
@@ -661,7 +756,7 @@ static irqreturn_t dwc3_otg_interrupt(int irq, void *_dotg)
 void dwc3_otg_init_sm(struct dwc3_otg *dotg)
 {
 	u32 osts = dwc3_readl(dotg->regs, DWC3_OSTS);
-	struct usb_phy *phy = dotg->otg.phy;
+	__maybe_unused struct usb_phy *phy = dotg->otg.phy;
 	struct dwc3_ext_xceiv *ext_xceiv;
 	int ret;
 
@@ -671,7 +766,7 @@ void dwc3_otg_init_sm(struct dwc3_otg *dotg)
 	 * VBUS initial state is reported after PMIC
 	 * driver initialization. Wait for it.
 	 */
-	ret = wait_for_completion_timeout(&dotg->dwc3_xcvr_vbus_init, HZ * 5);
+	ret = wait_for_completion_timeout(&dotg->dwc3_xcvr_vbus_init, HZ * 15);
 	if (!ret) {
 		dev_err(phy->dev, "%s: completion timeout\n", __func__);
 		/* We can safely assume no cable connected */
@@ -680,6 +775,7 @@ void dwc3_otg_init_sm(struct dwc3_otg *dotg)
 
 	ext_xceiv = dotg->ext_xceiv;
 	dwc3_otg_reset(dotg);
+#if 0
 	if (ext_xceiv && !ext_xceiv->otg_capability) {
 		if (osts & DWC3_OTG_OSTS_CONIDSTS)
 			set_bit(ID, &dotg->inputs);
@@ -691,6 +787,7 @@ void dwc3_otg_init_sm(struct dwc3_otg *dotg)
 		else
 			clear_bit(B_SESS_VLD, &dotg->inputs);
 	}
+#endif
 }
 
 /**
@@ -710,6 +807,7 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 	int ret = 0;
 	unsigned long delay = 0;
 
+	mutex_lock(&smwork_sem);
 	pm_runtime_resume(phy->dev);
 	dev_dbg(phy->dev, "%s state\n", otg_state_string(phy->state));
 
@@ -736,6 +834,10 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 			work = 1;
 		} else {
 			phy->state = OTG_STATE_B_IDLE;
+			if (dotg->connect_type != CONNECT_TYPE_NONE) {
+				dotg->connect_type = CONNECT_TYPE_NONE;
+				queue_work(dotg->usb_wq, &dotg->notifier_work);
+			}
 			dev_dbg(phy->dev, "No device, trying to suspend\n");
 			pm_runtime_put_sync(phy->dev);
 		}
@@ -746,6 +848,12 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 			dev_dbg(phy->dev, "!id\n");
 			phy->state = OTG_STATE_A_IDLE;
 			work = 1;
+			__cancel_delayed_work(&dotg->ac_detect_work);
+			if (dotg->connect_type != CONNECT_TYPE_NONE) {
+				dotg->connect_type = CONNECT_TYPE_NONE;
+				queue_work(dotg->usb_wq, &dotg->notifier_work);
+			}
+
 			dotg->charger_retry_count = 0;
 			if (charger) {
 				if (charger->chg_type == DWC3_INVALID_CHARGER)
@@ -760,8 +868,13 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 			if (charger) {
 				/* Has charger been detected? If no detect it */
 				switch (charger->chg_type) {
+				case DWC3_STOP_CHARGE_CASE:
+					/* !!we never test this function in dwc3 driver. we should do it if we get this accessory. */
+					dev_dbg(phy->dev, "lpm, invalid charger\n");
+					dwc3_otg_set_power(phy, 0);
+					pm_runtime_put_sync(phy->dev);
+					break;
 				case DWC3_DCP_CHARGER:
-				case DWC3_PROPRIETARY_CHARGER:
 					dev_dbg(phy->dev, "lpm, DCP charger\n");
 					dwc3_otg_set_power(phy,
 							DWC3_IDEV_CHG_MAX);
@@ -776,6 +889,11 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 					work = 1;
 					break;
 				case DWC3_SDP_CHARGER:
+				case DWC3_PROPRIETARY_CHARGER:
+					dev_dbg(phy->dev, "usb_disable = %d\n",
+							dotg->charger->usb_disable);
+					if (dotg->charger->usb_disable)
+						break;
 					dwc3_otg_start_peripheral(&dotg->otg,
 									1);
 					phy->state = OTG_STATE_B_PERIPHERAL;
@@ -794,6 +912,19 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 					 * calling start_detection() with false
 					 * and then with true argument.
 					 */
+					if (dotg->charger_retry_count ==
+						max_chgr_retry_count) {
+						dwc3_otg_set_power(phy, 0);
+						pm_runtime_put_sync(phy->dev);
+						break;
+					}
+					charger->start_detection(dotg->charger,
+									false);
+					dev_dbg(phy->dev, "chg_det started\n");
+					charger->start_detection(charger, true);
+					break;
+				case DWC3_UNSUPPORTED_CHARGER:
+					dotg->charger_retry_count++;
 					if (dotg->charger_retry_count ==
 						max_chgr_retry_count) {
 						dwc3_otg_set_power(phy, 0);
@@ -824,11 +955,19 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 				}
 			}
 		} else {
+			__cancel_delayed_work(&dotg->ac_detect_work);
 			if (charger)
 				charger->start_detection(dotg->charger, false);
 
 			dotg->charger_retry_count = 0;
 			dwc3_otg_set_power(phy, 0);
+			if (dotg->connect_type != CONNECT_TYPE_NONE) {
+				if (charger)
+					if (vbus && dotg->charger->usb_disable)
+						break;
+				dotg->connect_type = CONNECT_TYPE_NONE;
+				queue_work(dotg->usb_wq, &dotg->notifier_work);
+			}
 			dev_dbg(phy->dev, "No device, trying to suspend\n");
 			pm_runtime_put_sync(phy->dev);
 		}
@@ -837,6 +976,12 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 	case OTG_STATE_B_PERIPHERAL:
 		if (!test_bit(B_SESS_VLD, &dotg->inputs) ||
 				!test_bit(ID, &dotg->inputs)) {
+			dotg->ac_detect_count = 0;
+			cancel_delayed_work_sync(&dotg->ac_detect_work);
+			if (dotg->connect_type != CONNECT_TYPE_NONE && !dotg->charger->usb_disable) {
+				dotg->connect_type = CONNECT_TYPE_NONE;
+				queue_work(dotg->usb_wq, &dotg->notifier_work);
+			}
 			dev_dbg(phy->dev, "!id || !bsv\n");
 			dwc3_otg_start_peripheral(&dotg->otg, 0);
 			phy->state = OTG_STATE_B_IDLE;
@@ -874,7 +1019,7 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 				 */
 				dev_dbg(phy->dev, "enter lpm as\n"
 					"unable to start A-device\n");
-				phy->state = OTG_STATE_A_IDLE;
+				phy->state = OTG_STATE_UNDEFINED;
 				pm_runtime_put_sync(phy->dev);
 				return;
 			}
@@ -886,6 +1031,15 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 			dev_dbg(phy->dev, "id\n");
 			dwc3_otg_start_host(&dotg->otg, 0);
 			phy->state = OTG_STATE_B_IDLE;
+			/*
+ 			 * For specific unknown AC charger, it'll pull low USB id
+ 			 * pin to ground and pull up Vbus. The USB driver will enter
+ 			 * host mode and set B_SESS_VLD bit due to pull low USB id pin
+ 			 * and pull up Vbus. The B_SESS_VLD bit will make otg state
+ 			 * machine enter worng state while unplug this unknown AC charger.
+ 			 * Clear B_SESS_VLD bit while host mode enter peripheral.
+ 			 */
+			clear_bit(B_SESS_VLD, &dotg->inputs);
 			dotg->vbus_retry_count = 0;
 			work = 1;
 		}
@@ -896,6 +1050,7 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 
 	}
 
+	mutex_unlock(&smwork_sem);
 	if (work)
 		queue_delayed_work(system_nrt_wq, &dotg->sm_work, delay);
 }
@@ -942,6 +1097,166 @@ static void dwc3_otg_reset(struct dwc3_otg *dotg)
 		dwc3_writel(dotg->regs, DWC3_OEVTEN,
 				DWC3_OEVTEN_OTGCONIDSTSCHNGEVNT |
 				DWC3_OEVTEN_OTGBDEVVBUSCHNGEVNT);
+}
+
+static void dwc3_notify_usb_attached(struct usb_phy *phy)
+{
+	struct usb_otg *otg = phy->otg;
+	struct dwc3_otg *dotg = container_of(otg, struct dwc3_otg, otg);
+
+	if (dotg->connect_type != CONNECT_TYPE_USB) {
+		dotg->connect_type = CONNECT_TYPE_USB;
+		queue_work(dotg->usb_wq, &dotg->notifier_work);
+	}
+
+	dotg->ac_detect_count = 0;
+	__cancel_delayed_work(&dotg->ac_detect_work);
+}
+
+/* The dedicated 9V detection GPIO will be high if VBUS is in and over 6V.
+ * Since D+/D- status is not involved, there is no timing issue between
+ * D+/D- and VBUS. 9V AC should NOT be found here.
+ */
+static void ac_detect_expired_work(struct work_struct *w)
+{
+/* !!we never test this function in dwc3 driver. we should do it if we get this accessory. */
+	struct delayed_work *dw = container_of(w, struct delayed_work, work);
+	struct dwc3_otg *dotg = container_of(dw, struct dwc3_otg, ac_detect_work);
+	u32 line_state;
+/*	u32 delay = 0;*/
+
+	line_state = htc_dwc3_get_line_state(dotg->dwc);
+	pr_debug("%s: count = %d, connect_type = %d\n", __func__,
+			dotg->ac_detect_count, dotg->connect_type);
+
+	if (dotg->connect_type == CONNECT_TYPE_USB || dotg->ac_detect_count >= 10)
+		return;
+
+	printk("[USB] %s: line state = %x\n",__func__,(line_state & (3 << 8)));
+	/* detect shorted D+/D-, indicating AC power */
+	if (line_state != (3 << 8)) {
+		/* Some carkit can't be recognized as AC mode.
+		 * Add SW solution here to notify battery driver should
+		 * work as AC charger when car mode activated.
+		 */
+#ifdef CONFIG_CABLE_DETECT_ACCESSORY
+		if (cable_get_accessory_type() == DOCK_STATE_CAR
+			||cable_get_accessory_type() == DOCK_STATE_AUDIO_DOCK) {
+				pr_debug("car/audio dock mode charger\n");
+				dotg->connect_type = CONNECT_TYPE_AC;
+				if (dotg->charger)
+					dotg->charger->chg_type = DWC3_DCP_CHARGER;
+				dotg->ac_detect_count = 0;
+				dotg->otg.phy->state = OTG_STATE_B_IDLE;
+
+				dwc3_otg_start_peripheral(&dotg->otg, 0);
+				queue_delayed_work(system_nrt_wq, &dotg->sm_work, 0);
+				queue_work(dotg->usb_wq, &dotg->notifier_work);
+				return;
+		}
+		{
+			int dock_result = check_three_pogo_dock();
+			if (dock_result == 2) {
+				pr_debug("three pogo dock AC type\n");
+				dotg->connect_type = CONNECT_TYPE_AC;
+				if (dotg->charger)
+					dotg->charger->chg_type = DWC3_DCP_CHARGER;
+				dotg->ac_detect_count = 0;
+				dotg->otg.phy->state = OTG_STATE_B_IDLE;
+				dwc3_otg_start_peripheral(&dotg->otg, 0);
+
+				queue_delayed_work(system_nrt_wq, &dotg->sm_work, 0);
+				queue_work(dotg->usb_wq, &dotg->notifier_work);
+				return;
+			} else if (dock_result == 1) {
+				pr_debug("three pogo dock USB type\n");
+				dotg->connect_type = CONNECT_TYPE_NONE;
+				if (dotg->charger)
+					dotg->charger->chg_type = DWC3_STOP_CHARGE_CASE;
+				dotg->ac_detect_count = 0;
+				dotg->otg.phy->state = OTG_STATE_B_IDLE;
+				dwc3_otg_start_peripheral(&dotg->otg, 0);
+				/* no schedule sm_work */
+				queue_delayed_work(system_nrt_wq, &dotg->sm_work, 0);
+				queue_work(dotg->usb_wq, &dotg->notifier_work);
+				return;
+			}
+		}
+#endif
+		dotg->ac_detect_count++;
+/*
+		if (dotg->ac_detect_count == 1)
+			delay = 5 * HZ;
+		else if (dotg->ac_detect_count == 2)
+			delay = 10 * HZ;
+*/
+		queue_delayed_work(system_nrt_wq, &dotg->ac_detect_work, 2 * HZ);
+	} else {
+		pr_debug("AC charger\n");
+		dotg->connect_type = CONNECT_TYPE_AC;
+		if (dotg->charger)
+			dotg->charger->chg_type = DWC3_DCP_CHARGER;
+		dotg->ac_detect_count = 0;
+		dotg->otg.phy->state = OTG_STATE_B_IDLE;
+		dwc3_otg_start_peripheral(&dotg->otg, 0);
+
+		queue_delayed_work(system_nrt_wq, &dotg->sm_work, 0);
+		queue_work(dotg->usb_wq, &dotg->notifier_work);
+	}
+}
+
+int htc_dwc3_get_cable_type(void)
+{
+	if (!the_dwc3_otg)
+		return 0;
+
+	return the_dwc3_otg->charger->chg_type;
+}
+
+static const char *event_string(enum usb_otg_event event)
+{
+	switch (event) {
+	case OTG_EVENT_DEV_CONN_TMOUT:
+		return "DEV_CONN_TMOUT";
+	case OTG_EVENT_NO_RESP_FOR_HNP_ENABLE:
+		return "NO_RESP_FOR_HNP_ENABLE";
+	case OTG_EVENT_HUB_NOT_SUPPORTED:
+		return "HUB_NOT_SUPPORTED";
+	case OTG_EVENT_DEV_NOT_SUPPORTED:
+		return "DEV_NOT_SUPPORTED";
+	case OTG_EVENT_HNP_FAILED:
+		return "HNP_FAILED";
+	case OTG_EVENT_NO_RESP_FOR_SRP:
+		return "NO_RESP_FOR_SRP";
+	case OTG_EVENT_INSUFFICIENT_POWER:
+		return "DEV_NOT_SUPPORTED";
+	default:
+		return "UNDEFINED";
+	}
+}
+
+static int dwc3_otg_send_event(struct usb_otg *otg, enum usb_otg_event event)
+{
+	char module_name[16];
+	char udev_event[128];
+	char *envp[] = { module_name, udev_event, NULL };
+	int ret = 0;
+	/* we only broadcast customize event now*/
+	switch (event) {
+		case OTG_EVENT_INSUFFICIENT_POWER:
+		case OTG_EVENT_DEV_NOT_SUPPORTED:
+			printk(KERN_INFO "[USB] sending %s event\n", event_string(event));
+			snprintf(module_name, 16, "MODULE=%s", "dwc3");
+			snprintf(udev_event, 128, "EVENT=%s", event_string(event));
+			ret = kobject_uevent_env(&otg->phy->dev->kobj, KOBJ_CHANGE, envp);
+			if (ret < 0)
+				printk(KERN_INFO "[USB] uevent sending failed with ret = %d\n", ret);
+			break;
+		default:
+			break;
+	}
+	return ret;
+
 }
 
 /**
@@ -993,9 +1308,12 @@ int dwc3_otg_init(struct dwc3 *dwc)
 
 	dotg->otg.set_peripheral = dwc3_otg_set_peripheral;
 	dotg->otg.set_host = dwc3_otg_set_host;
+	dotg->otg.send_event = dwc3_otg_send_event;
 
 	/* This reference is used by dwc3 modules for checking otg existance */
 	dwc->dotg = dotg;
+	the_dwc3_otg = dotg;
+	dotg->connect_type_ready = 0;
 
 	dotg->otg.phy = kzalloc(sizeof(struct usb_phy), GFP_KERNEL);
 	if (!dotg->otg.phy) {
@@ -1009,6 +1327,10 @@ int dwc3_otg_init(struct dwc3 *dwc)
 	dotg->otg.phy->dev = dwc->dev;
 	dotg->otg.phy->set_power = dwc3_otg_set_power;
 	dotg->otg.phy->set_suspend = dwc3_otg_set_suspend;
+	dotg->otg.phy->notify_usb_attached = dwc3_notify_usb_attached;
+
+	dotg->ac_detect_count = 0;
+	set_bit(ID, &dotg->inputs);
 	dotg->otg.phy->set_phy_autosuspend = dwc3_otg_set_autosuspend;
 
 	ret = usb_set_transceiver(dotg->otg.phy);
@@ -1023,6 +1345,14 @@ int dwc3_otg_init(struct dwc3 *dwc)
 
 	init_completion(&dotg->dwc3_xcvr_vbus_init);
 	INIT_DELAYED_WORK(&dotg->sm_work, dwc3_otg_sm_work);
+	INIT_DELAYED_WORK(&dotg->ac_detect_work, ac_detect_expired_work);
+
+	dotg->usb_wq = create_singlethread_workqueue("msm_hsusb");
+	if (dotg->usb_wq == 0) {
+		pr_err("fail to create workqueue\n");
+		goto err3;
+	}
+	INIT_WORK(&dotg->notifier_work, send_usb_connect_notify);
 
 	ret = request_irq(dotg->irq, dwc3_otg_interrupt, IRQF_SHARED,
 				"dwc3_otg", dotg);

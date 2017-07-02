@@ -3326,7 +3326,6 @@ hub_port_init (struct usb_hub *hub, struct usb_device *udev, int port1,
 			}
 			udev->descriptor.bMaxPacketSize0 =
 					buf->bMaxPacketSize0;
-			kfree(buf);
 
 			/*
 			 * If it is a HSET Test device, we don't issue a
@@ -3345,6 +3344,9 @@ hub_port_init (struct usb_hub *hub, struct usb_device *udev, int port1,
 					goto fail;
 				}
 			}
+
+			kfree(buf);
+
 			if (r) {
 				dev_err(&udev->dev,
 					"device descriptor read/64, error %d\n",

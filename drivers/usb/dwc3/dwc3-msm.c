@@ -46,7 +46,9 @@
 #include <mach/rpm-regulator-smd.h>
 #include <mach/msm_bus.h>
 #include <mach/clk.h>
+#include <mach/cable_detect.h>
 
+#include "dwc3-msm.h"
 #include "dwc3_otg.h"
 #include "core.h"
 #include "gadget.h"
@@ -172,87 +174,6 @@ struct dwc3_msm_req_complete {
 			      struct usb_request *req);
 };
 
-struct dwc3_msm {
-	struct device *dev;
-	void __iomem *base;
-	struct resource *io_res;
-	struct platform_device	*dwc3;
-	int dbm_num_eps;
-	u8 ep_num_mapping[DBM_MAX_EPS];
-	const struct usb_ep_ops *original_ep_ops[DWC3_ENDPOINTS_NUM];
-	struct list_head req_complete_list;
-	struct clk		*xo_clk;
-	struct clk		*ref_clk;
-	struct clk		*core_clk;
-	struct clk		*iface_clk;
-	struct clk		*sleep_clk;
-	struct clk		*hsphy_sleep_clk;
-	struct clk		*utmi_clk;
-	unsigned int		utmi_clk_rate;
-	struct clk		*utmi_clk_src;
-	struct regulator	*hsusb_3p3;
-	struct regulator	*hsusb_1p8;
-	struct regulator	*hsusb_vddcx;
-	struct regulator	*ssusb_1p8;
-	struct regulator	*ssusb_vddcx;
-	struct regulator	*dwc3_gdsc;
-
-	/* VBUS regulator if no OTG and running in host only mode */
-	struct regulator	*vbus_otg;
-	struct dwc3_ext_xceiv	ext_xceiv;
-	bool			resume_pending;
-	atomic_t                pm_suspended;
-	atomic_t		in_lpm;
-	int			hs_phy_irq;
-	int			hsphy_init_seq;
-	int			deemphasis_val;
-	bool			lpm_irq_seen;
-	struct delayed_work	resume_work;
-	struct work_struct	restart_usb_work;
-	bool			in_restart;
-	struct dwc3_charger	charger;
-	struct usb_phy		*otg_xceiv;
-	struct delayed_work	chg_work;
-	enum usb_chg_state	chg_state;
-	int			pmic_id_irq;
-	struct work_struct	id_work;
-	struct qpnp_adc_tm_btm_param	adc_param;
-	struct qpnp_adc_tm_chip *adc_tm_dev;
-	struct delayed_work	init_adc_work;
-	bool			id_adc_detect;
-	struct qpnp_vadc_chip	*vadc_dev;
-	u8			dcd_retries;
-	u32			bus_perf_client;
-	struct msm_bus_scale_pdata	*bus_scale_table;
-	struct power_supply	usb_psy;
-	struct power_supply	*ext_vbus_psy;
-	unsigned int		online;
-	unsigned int		host_mode;
-	unsigned int		voltage_max;
-	unsigned int		current_max;
-	unsigned int		vdd_no_vol_level;
-	unsigned int		vdd_low_vol_level;
-	unsigned int		vdd_high_vol_level;
-	unsigned int		tx_fifo_size;
-	unsigned int		qdss_tx_fifo_size;
-	bool			vbus_active;
-	bool			ext_inuse;
-	enum dwc3_id_state	id_state;
-	unsigned long		lpm_flags;
-#define MDWC3_PHY_REF_AND_CORECLK_OFF	BIT(0)
-#define MDWC3_TCXO_SHUTDOWN		BIT(1)
-#define MDWC3_ASYNC_IRQ_WAKE_CAPABILITY	BIT(2)
-
-	u32 qscratch_ctl_val;
-	dev_t ext_chg_dev;
-	struct cdev ext_chg_cdev;
-	struct class *ext_chg_class;
-	struct device *ext_chg_device;
-	bool ext_chg_opened;
-	bool ext_chg_active;
-	struct completion ext_chg_wait;
-};
-
 #define USB_HSPHY_3P3_VOL_MIN		3050000 /* uV */
 #define USB_HSPHY_3P3_VOL_MAX		3300000 /* uV */
 #define USB_HSPHY_3P3_HPM_LOAD		16000	/* uA */
@@ -265,7 +186,13 @@ struct dwc3_msm {
 #define USB_SSPHY_1P8_VOL_MAX		1800000 /* uV */
 #define USB_SSPHY_1P8_HPM_LOAD		23000	/* uA */
 
+static struct dwc3_msm *context = NULL;
+
 static struct usb_ext_notification *usb_ext;
+
+static int htc_usb_disable;
+static int htc_vbus_backup;
+static int htc_id_backup;
 
 /**
  *
@@ -1140,8 +1067,8 @@ void msm_dwc3_restart_usb_session(struct usb_gadget *gadget)
 
 	if (!mdwc)
 		return;
-
-	dev_dbg(mdwc->dev, "%s\n", __func__);
+	if (mdwc)
+		dev_dbg(mdwc->dev, "%s\n", __func__);
 	queue_work(system_nrt_wq, &mdwc->restart_usb_work);
 }
 EXPORT_SYMBOL(msm_dwc3_restart_usb_session);
@@ -1238,6 +1165,7 @@ devote_3p3:
 static int dwc3_hsusb_ldo_enable(struct dwc3_msm *dwc, int on)
 {
 	int rc = 0;
+	static int l24_keep = 0;
 
 	dev_dbg(dwc->dev, "reg (%s)\n", on ? "HPM" : "LPM");
 
@@ -1263,19 +1191,19 @@ static int dwc3_hsusb_ldo_enable(struct dwc3_msm *dwc, int on)
 		goto disable_1p8;
 	}
 
-	rc = regulator_enable(dwc->hsusb_3p3);
-	if (rc) {
-		dev_err(dwc->dev, "Unable to enable HSUSB_3p3\n");
-		goto put_3p3_lpm;
+	if (l24_keep == 0) {
+		l24_keep = 1;
+
+		rc = regulator_enable(dwc->hsusb_3p3);
+		if (rc) {
+			dev_err(dwc->dev, "Unable to enable HSUSB_3p3\n");
+			goto put_3p3_lpm;
+		}
 	}
 
 	return 0;
 
 disable_regulators:
-	rc = regulator_disable(dwc->hsusb_3p3);
-	if (rc)
-		dev_err(dwc->dev, "Unable to disable HSUSB_3p3\n");
-
 put_3p3_lpm:
 	rc = regulator_set_optimum_mode(dwc->hsusb_3p3, 0);
 	if (rc < 0)
@@ -1438,6 +1366,8 @@ static int dwc3_msm_link_clk_reset(struct dwc3_msm *mdwc, bool assert)
 static void dwc3_msm_ss_phy_reg_init(struct dwc3_msm *mdwc)
 {
 	u32 data = 0;
+
+	return;
 
 	/*
 	 * WORKAROUND: There is SSPHY suspend bug due to which USB enumerates
@@ -1695,6 +1625,20 @@ static bool dwc3_chg_det_check_linestate(struct dwc3_msm *mdwc)
 
 	chg_det = dwc3_msm_read_reg(mdwc->base, CHARGING_DET_OUTPUT_REG);
 	return chg_det & (3 << 8);
+}
+
+int htc_dwc3_chg_det_check_linestate(void *raw)
+{
+	u32 chg_det;
+	struct dwc3_msm *mdwc = (struct dwc3_msm *)raw;
+
+	if (!atomic_read(&mdwc->in_lpm))
+		chg_det = dwc3_msm_read_reg(mdwc->base, CHARGING_DET_OUTPUT_REG);
+	else {
+		pr_debug("%s: Already suspended, can't get linestate\n", __func__);
+		chg_det = 0;
+	}
+	return (chg_det & (3 << 8));
 }
 
 static bool dwc3_chg_det_check_output(struct dwc3_msm *mdwc)
@@ -2349,8 +2293,53 @@ static irqreturn_t msm_dwc3_irq(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
+void htc_dwc3_disable_usb(int state)
+{
+	struct dwc3_msm *mdwc = context;
+	printk(KERN_INFO "[USB] %s state : %d\n",__func__,state);
+
+	if (state == 1) {
+		htc_usb_disable = 1;
+		mdwc->charger.usb_disable = htc_usb_disable;
+		flush_delayed_work_sync(&mdwc->resume_work);
+		if (!atomic_read(&mdwc->in_lpm)) {
+			mdwc->ext_xceiv.bsv = 0;
+			mdwc->ext_xceiv.id = DWC3_ID_FLOAT;
+			if (mdwc->otg_xceiv)
+				mdwc->ext_xceiv.notify_ext_events(mdwc->otg_xceiv->otg, DWC3_EVENT_XCEIV_STATE);
+		}
+	} else {
+		htc_usb_disable = 0;
+		mdwc->charger.usb_disable = htc_usb_disable;
+		mdwc->ext_xceiv.bsv = htc_vbus_backup;
+		mdwc->ext_xceiv.id = htc_id_backup;
+		queue_delayed_work(system_nrt_wq, &mdwc->resume_work, 20);
+	}
+}
+
+void htc_dwc3_msm_otg_set_vbus_state(int online)
+{
+	struct dwc3_msm *mdwc = context;
+	struct dwc3_otg *dotg;
+	dev_dbg(mdwc->dev, "%s: notify xceiv event\n", __func__);
+
+	if (mdwc->otg_xceiv) {
+		dotg = container_of(mdwc->otg_xceiv->otg, struct dwc3_otg, otg);
+		mdwc->ext_xceiv.bsv = online;
+		htc_vbus_backup = online;
+		queue_delayed_work(system_nrt_wq, &mdwc->resume_work, 20);
+	}
+	if (dotg && dotg->connect_type == 0 && online == 1) {
+		dotg->connect_type = CONNECT_TYPE_NOTIFY;
+		queue_work(dotg->usb_wq, &dotg->notifier_work);
+	}
+	mdwc->vbus_active = online;
+
+	wake_lock_timeout(&mdwc->cable_detect_wlock, 3*HZ);
+}
+
 static int
-get_prop_usbin_voltage_now(struct dwc3_msm *mdwc)
+__maybe_unused get_prop_usbin_voltage_now(struct dwc3_msm *mdwc)
 {
 	int rc = 0;
 	struct qpnp_vadc_result results;
@@ -2370,6 +2359,7 @@ get_prop_usbin_voltage_now(struct dwc3_msm *mdwc)
 	}
 }
 
+#if !(defined(CONFIG_HTC_BATT_8974))
 static int dwc3_msm_power_get_property_usb(struct power_supply *psy,
 				  enum power_supply_property psp,
 				  union power_supply_propval *val)
@@ -2511,6 +2501,7 @@ static enum power_supply_property dwc3_msm_pm_power_props_usb[] = {
 	POWER_SUPPLY_PROP_SCOPE,
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 };
+#endif
 
 static void dwc3_init_adc_work(struct work_struct *w);
 
@@ -2661,6 +2652,42 @@ static void dwc3_init_adc_work(struct work_struct *w)
 	mdwc->id_adc_detect = true;
 }
 
+int64_t  htc_qpnp_adc_get_usbid_adc(void)
+{
+
+	struct dwc3_msm *mdwc = context;
+	struct qpnp_vadc_result result;
+	int err = 0, adc = 0;
+
+	if (!context)
+		return -EAGAIN;
+
+	if(!mdwc->vadc_chip) {
+		mdwc->vadc_chip = qpnp_get_vadc(mdwc->dev, "dwc_usb3");
+		if (IS_ERR(mdwc->vadc_chip)) {
+			err = PTR_ERR(mdwc->vadc_chip);
+			pr_err("%s : qpnp_get_vadc return error code %d\n",__func__,err);
+			mdwc->vadc_chip = NULL;
+			return -EAGAIN;
+		}
+	}
+
+	pr_debug("%s : vadc_chip %x\n",__func__,(unsigned int)mdwc->vadc_chip);
+
+	err = qpnp_vadc_read(mdwc->vadc_chip, LR_MUX10_USB_ID_LV, &result);
+	if (err < 0) {
+		pr_info("[CABLE] %s: get adc fail, err %d\n", __func__, err);
+		return err;
+	}
+
+	adc = result.physical;
+	adc /= 1000;
+	pr_info("[CABLE] chan=%d, adc_code=%d, measurement=%lld, \
+			physical=%lld translate voltage %d\n", result.chan, result.adc_code,
+			result.measurement, result.physical, adc);
+	return adc;
+}
+
 static ssize_t adc_enable_show(struct device *dev,
 			       struct device_attribute *attr, char *buf)
 {
@@ -2697,6 +2724,38 @@ static ssize_t adc_enable_store(struct device *dev,
 
 static DEVICE_ATTR(adc_enable, S_IRUGO | S_IWUSR, adc_enable_show,
 		adc_enable_store);
+
+void dwc3_otg_set_id_state(int id)
+{
+	struct dwc3_msm *dwc3_msm = context;
+
+	if (!id) {
+		pr_debug("[USB] PMIC: ID set\n");
+		dwc3_msm->id_state = DWC3_ID_GROUND;
+		htc_id_backup = DWC3_ID_GROUND;
+	} else {
+		pr_debug("[USB] PMIC: ID clear\n");
+		dwc3_msm->id_state = DWC3_ID_FLOAT;
+		htc_id_backup = DWC3_ID_FLOAT;
+	}
+
+	wake_lock_timeout(&dwc3_msm->cable_detect_wlock, 3*HZ);
+	queue_work(system_nrt_wq, &dwc3_msm->id_work);
+}
+
+static void usb_host_cable_detect(bool cable_in)
+{
+	if (cable_in)
+		dwc3_otg_set_id_state(0);
+	else
+		dwc3_otg_set_id_state(1);
+}
+
+static struct t_usb_host_status_notifier usb_host_status_notifier = {
+	.name = "usb_host",
+	.func = usb_host_cable_detect,
+};
+
 
 static int dwc3_msm_ext_chg_open(struct inode *inode, struct file *file)
 {
@@ -2882,6 +2941,7 @@ unreg_chrdev:
 	return ret;
 }
 
+extern int rom_stockui;
 static int __devinit dwc3_msm_probe(struct platform_device *pdev)
 {
 	struct device_node *node = pdev->dev.of_node, *dwc3_node;
@@ -2893,6 +2953,10 @@ static int __devinit dwc3_msm_probe(struct platform_device *pdev)
 	int len = 0;
 	u32 tmp[3];
 
+	htc_usb_disable = 0;
+	htc_vbus_backup = 0;
+	htc_id_backup = 1;
+
 	mdwc = devm_kzalloc(&pdev->dev, sizeof(*mdwc), GFP_KERNEL);
 	if (!mdwc) {
 		dev_err(&pdev->dev, "not enough memory\n");
@@ -2900,8 +2964,10 @@ static int __devinit dwc3_msm_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, mdwc);
+	context = mdwc;
 	mdwc->dev = &pdev->dev;
 
+	wake_lock_init(&mdwc->cable_detect_wlock, WAKE_LOCK_SUSPEND, "msm_usb_cable");
 	INIT_LIST_HEAD(&mdwc->req_complete_list);
 	INIT_DELAYED_WORK(&mdwc->chg_work, dwc3_chg_detect_work);
 	INIT_DELAYED_WORK(&mdwc->resume_work, dwc3_resume_work);
@@ -2913,7 +2979,7 @@ static int __devinit dwc3_msm_probe(struct platform_device *pdev)
 	ret = dwc3_msm_config_gdsc(mdwc, 1);
 	if (ret) {
 		dev_err(&pdev->dev, "unable to configure usb3 gdsc\n");
-		return ret;
+		goto destroy_wlock;
 	}
 
 	mdwc->xo_clk = clk_get(&pdev->dev, "xo");
@@ -3111,7 +3177,7 @@ static int __devinit dwc3_msm_probe(struct platform_device *pdev)
 		}
 	}
 
-	if (mdwc->ext_xceiv.otg_capability) {
+	if (0) {
 		mdwc->pmic_id_irq =
 			platform_get_irq_byname(pdev, "pmic_id_irq");
 		if (mdwc->pmic_id_irq > 0) {
@@ -3192,11 +3258,16 @@ static int __devinit dwc3_msm_probe(struct platform_device *pdev)
 
 	mdwc->io_res = res; /* used to calculate chg block offset */
 
+	if (of_property_read_u32(node, "usb_stock_ui_check", &rom_stockui))
+		dev_dbg(&pdev->dev, "unable to read rom type\n");
+
 	if (of_property_read_u32(node, "qcom,dwc-hsphy-init",
 						&mdwc->hsphy_init_seq))
 		dev_dbg(&pdev->dev, "unable to read hsphy init seq\n");
 	else if (!mdwc->hsphy_init_seq)
 		dev_warn(&pdev->dev, "incorrect hsphyinitseq.Using PORvalue\n");
+
+	dev_dbg(&pdev->dev, "hsphy_init_seq 0x%x\n",mdwc->hsphy_init_seq);
 
 	if (of_property_read_u32(node, "qcom,dwc-ssphy-deemphasis-value",
 						&mdwc->deemphasis_val))
@@ -3240,6 +3311,7 @@ static int __devinit dwc3_msm_probe(struct platform_device *pdev)
 		goto disable_hs_ldo;
 	}
 
+#if !(defined(CONFIG_HTC_BATT_8974))
 	/* usb_psy required only for vbus_notifications or charging support */
 	if (mdwc->ext_xceiv.otg_capability ||
 			!mdwc->charger.charging_disabled) {
@@ -3267,6 +3339,7 @@ static int __devinit dwc3_msm_probe(struct platform_device *pdev)
 			goto disable_hs_ldo;
 		}
 	}
+#endif
 
 	ret = of_platform_populate(node, NULL, NULL, &pdev->dev);
 	if (ret) {
@@ -3346,7 +3419,9 @@ static int __devinit dwc3_msm_probe(struct platform_device *pdev)
 	device_init_wakeup(mdwc->dev, 1);
 	pm_stay_awake(mdwc->dev);
 	dwc3_msm_debugfs_init(mdwc);
+	usb_host_detect_register_notifier(&usb_host_status_notifier);
 
+	mdwc->charger.usb_disable = htc_usb_disable;
 	return 0;
 
 put_xcvr:
@@ -3389,7 +3464,8 @@ put_xo:
 	clk_put(mdwc->xo_clk);
 disable_dwc3_gdsc:
 	dwc3_msm_config_gdsc(mdwc, 0);
-
+destroy_wlock:
+	wake_lock_destroy(&mdwc->cable_detect_wlock);
 	return ret;
 }
 
@@ -3420,6 +3496,7 @@ static int __devexit dwc3_msm_remove(struct platform_device *pdev)
 
 	pm_runtime_disable(mdwc->dev);
 	device_init_wakeup(mdwc->dev, 0);
+	wake_lock_destroy(&mdwc->cable_detect_wlock);
 
 	dwc3_hsusb_ldo_enable(mdwc, 0);
 	dwc3_hsusb_ldo_init(mdwc, 0);
