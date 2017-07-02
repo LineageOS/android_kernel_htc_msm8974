@@ -33,6 +33,9 @@
 
 #include "internal.h"
 
+#ifdef CONFIG_HTC_FD_MONITOR
+extern int in_fd_list(const int fd, const int mid);
+#endif
 int do_truncate(struct dentry *dentry, loff_t length, unsigned int time_attrs,
 	struct file *filp)
 {
@@ -216,7 +219,7 @@ SYSCALL_ALIAS(sys_ftruncate64, SyS_ftruncate64);
 
 int do_fallocate(struct file *file, int mode, loff_t offset, loff_t len)
 {
-	struct inode *inode = file->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(file);
 	long ret;
 
 	if (offset < 0 || len <= 0)
@@ -403,7 +406,7 @@ SYSCALL_DEFINE1(fchdir, unsigned int, fd)
 	if (!file)
 		goto out;
 
-	inode = file->f_path.dentry->d_inode;
+	inode = file_inode(file);
 
 	error = -ENOTDIR;
 	if (!S_ISDIR(inode->i_mode))
@@ -872,6 +875,8 @@ void fd_install(unsigned int fd, struct file *file)
 	fdt = files_fdtable(files);
 	BUG_ON(fdt->fd[fd] != NULL);
 	rcu_assign_pointer(fdt->fd[fd], file);
+	fdt->user[fd].installer = current->pid;
+	getnstimeofday(&fdt->user[fd].open_time);
 	spin_unlock(&files->file_lock);
 }
 
@@ -970,6 +975,22 @@ struct file *file_open_root(struct dentry *dentry, struct vfsmount *mnt,
 }
 EXPORT_SYMBOL(file_open_root);
 
+extern int get_logfile_prealloc_size(void);
+static int pre_allocate(struct file *f)
+{
+	int prealloc_size = 0;
+	if (!f->f_op->fallocate || !(f->f_mode & FMODE_WRITE))
+		return 0;
+
+	if (f->f_path.dentry && f->f_path.dentry->d_parent &&
+			!strcmp(f->f_path.dentry->d_parent->d_name.name, "htclog"))
+		prealloc_size = get_logfile_prealloc_size();
+
+	if (prealloc_size)
+		do_fallocate(f, FALLOC_FL_KEEP_SIZE, 0, prealloc_size);
+	return 0;
+}
+
 long do_sys_open(int dfd, const char __user *filename, int flags, umode_t mode)
 {
 	struct open_flags op;
@@ -987,6 +1008,7 @@ long do_sys_open(int dfd, const char __user *filename, int flags, umode_t mode)
 			} else {
 				fsnotify_open(f);
 				fd_install(fd, f);
+				pre_allocate(f);
 			}
 		}
 		putname(tmp);
@@ -1072,15 +1094,41 @@ SYSCALL_DEFINE1(close, unsigned int, fd)
 	struct files_struct *files = current->files;
 	struct fdtable *fdt;
 	int retval;
-
 	spin_lock(&files->file_lock);
 	fdt = files_fdtable(files);
-	if (fd >= fdt->max_fds)
+	if (fd >= fdt->max_fds) {
+		pr_debug("[%s] fd %u exceeds max_fds %u (user: %s %d:%d)\n",
+				__func__, fd, fdt->max_fds,
+				current->comm, current->tgid, current->pid);
 		goto out_unlock;
+	}
 	filp = fdt->fd[fd];
-	if (!filp)
+	if (!filp) {
+		struct fdt_user* user = &fdt->user[fd];
+		if (unlikely(user->remover && user->remover != current->pid)) {
+			struct task_struct* task = find_task_by_vpid(user->remover);
+			pr_warn("[%s] fd %u of %s %d:%d is"
+					" already closed by thread %d (%s %d:%d)\n",
+					__func__, fd,
+					current->comm, current->tgid, current->pid,
+					user->remover,
+					task ? task->comm : "<unknown>",
+					task ? task->tgid : -1,
+					task ? task->pid  : -1);
+		}
 		goto out_unlock;
+	}
+#ifdef CONFIG_HTC_FD_MONITOR
+	if (in_fd_list(fd, 0) == 1) {
+		printk("fd error: %s(%d) tries to close fd=%d illegally\n", current->comm, current->pid, fd);
+		force_sig(SIGABRT, current);
+		spin_unlock(&files->file_lock);
+		force_sig(SIGABRT, current);
+		return 0xBADFD;
+	}
+#endif
 	rcu_assign_pointer(fdt->fd[fd], NULL);
+	fdt->user[fd].remover = current->pid;
 	__clear_close_on_exec(fd, fdt);
 	__put_unused_fd(files, fd);
 	spin_unlock(&files->file_lock);

@@ -1,0 +1,88 @@
+comment "HTC Debugging Features"
+menuconfig HTC_DEBUG
+	bool "HTC Debugging Feature Switch"
+	default n
+	help
+	  Enable collection of debug features.
+	  This feature is enabled in defconfig.
+
+config HTC_DEBUG_RAMCONSOLE
+	bool "HTC style ram console debug features"
+	depends on ANDROID_RAM_CONSOLE
+	help
+	  Say Y here if you want the HTC style ram console debug features
+
+comment "HTC features"
+menuconfig HTC_FEATURES
+        bool "HTC Implement Features"
+        default n
+        help
+          Enable collection of HTC features.
+          This feature is enabled in defconfig.
+
+config HTC_FEATURES_FINAL_EFS_SYNC
+	bool "Final EFS SYNC"
+	depends on HTC_FEATURES
+	default n
+	help
+	  Enable the trigger of final efs sync before shutdown/reboot
+	  This feature is enabled in defconfig.
+
+config HTC_FEATURES_SSR
+       bool "HTC style ssr features"
+       depends on HTC_FEATURES && MSM_SUBSYSTEM_RESTART
+       default n
+       help
+         Say Y here if you want the HTC style ssr features
+
+config HTC_FEATURES_SSR_MODEM_ENABLE
+       bool "HTC style modem ssr features"
+       depends on HTC_FEATURES_SSR
+       default n
+       help
+         Say Y here if you want the HTC style for modem ssr features
+
+config HTC_FEATURES_SSR_LPASS_ENABLE
+       bool "HTC style lpass ssr features"
+       depends on HTC_FEATURES_SSR
+       default n
+       help
+         Say Y here if you want the HTC style for lpass ssr features
+
+config HTC_FEATURES_SSR_WCNSS_ENABLE
+       bool "HTC style wcnss ssr features"
+       depends on HTC_FEATURES_SSR
+       default n
+       help
+
+config HTC_DEFAULT_ENABLED_FEATURES
+	bool "Select default enabled config for HTC projects"
+	default y
+	select COMPACTION
+	help
+	  Default y to select other configs which should be enabled by default
+	  for HTC projects.
+
+config HTC_BUILD_EDIAG
+        bool "Build in embedded diag fixes"
+        default n
+        help
+          For embedded diag we need to do some additional fixes.
+
+config ENLARGE_RADIO_BUFFER
+        bool "Enlarge radio buffer"
+        default n
+        help
+          Enlarge radio buffer for two rild project.
+
+config HTC_RPM_CMD
+	bool "HTC homebrew command interface"
+	depends on MSM_RPM || MSM_RPM_SMD
+	default n
+	help
+	  This expose HTC RPM command interface for different purpose.
+
+config HTC_POWER_HACK
+       bool "HTC POWER HACK"
+       help
+         Say Y here if HTC POWER HACK

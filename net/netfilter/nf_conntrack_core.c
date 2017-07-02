@@ -968,7 +968,9 @@ nf_conntrack_in(struct net *net, u_int8_t pf, unsigned int hooknum,
 	/* It may be an special packet, error, unclean...
 	 * inverse of the return code tells to the netfilter
 	 * core what to do with the packet. */
-	if (l4proto->error != NULL) {
+    /* add check for l4proto as __nf_ct_l4proto_find will
+     * return NULL for some scenario */
+	if (l4proto != NULL && l4proto->error != NULL) {
 		ret = l4proto->error(net, tmpl, skb, dataoff, &ctinfo,
 				     pf, hooknum);
 		if (ret <= 0) {

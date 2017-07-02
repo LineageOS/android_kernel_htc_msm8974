@@ -778,6 +778,12 @@ static int bam_rmnet_remove(struct platform_device *pdev)
 			break;
 	}
 
+       /*+SSD_RIL: fix klocwork, Buffer Overflow */
+       if (i >= RMNET_DEVICE_COUNT) {
+               return 0;
+       }
+       /*-SSD_RIL: fix klocwork, Buffer Overflow */
+
 	p = netdev_priv(netdevs[i]);
 	p->in_reset = 1;
 	if (p->waiting_for_ul_skb != NULL) {

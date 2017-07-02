@@ -1226,7 +1226,6 @@ static int ice40_bus_resume(struct usb_hcd *hcd)
 	struct ice40_hcd *ihcd = hcd_to_ihcd(hcd);
 	u8 ctrl0;
 	int ret, i;
-
 	pm_stay_awake(&ihcd->spi->dev);
 	trace_ice40_bus_resume(0); /* start */
 	/*
@@ -1234,7 +1233,6 @@ static int ice40_bus_resume(struct usb_hcd *hcd)
 	 * Re-program the previous settings. For now we need to
 	 * update the device address only.
 	 */
-
 	for (i = 0; i < 3; i++) {
 		ret = ice40_spi_load_fw(ihcd);
 		if (!ret)

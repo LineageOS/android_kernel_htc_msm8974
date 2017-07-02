@@ -47,11 +47,23 @@ skip_pc_debug3:
 	sub     r1, r1, r2
 
 	add     r1, r1, r0, LSL #2       /* locate boot vector for our cpu */
+
 	ldr     pc, [r1]                 /* jump                           */
 
 3:	.long	.
-
 	.data
+
+	.globl msm_pm_pc_pgd
+msm_pm_pc_pgd:
+	.long	0x0
+
+	.globl msm_saved_state
+msm_saved_state:
+	.long	0x0
+
+	.globl msm_saved_state_phys
+msm_saved_state_phys:
+	.long	0x0
 
 	.globl msm_pm_boot_vector
 msm_pm_boot_vector:

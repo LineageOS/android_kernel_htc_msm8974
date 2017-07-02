@@ -39,6 +39,8 @@ struct q6v5_data {
 	bool is_booted;
 	struct pil_desc desc;
 	bool self_auth;
+
+	phys_addr_t *rmb_base_phys;
 };
 
 int pil_q6v5_make_proxy_votes(struct pil_desc *pil);

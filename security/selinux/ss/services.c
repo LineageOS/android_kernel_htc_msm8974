@@ -278,7 +278,7 @@ static int constraint_expr_eval(struct context *scontext,
 	struct role_datum *r1, *r2;
 	struct mls_level *l1, *l2;
 	struct constraint_expr *e;
-	int s[CEXPR_MAXDEPTH];
+	int s[CEXPR_MAXDEPTH] = {0};
 	int sp = -1;
 
 	for (e = cexpr; e; e = e->next) {
@@ -1181,9 +1181,11 @@ static int context_struct_to_string(struct context *context, char **scontext, u3
 
 	if (context->len) {
 		*scontext_len = context->len;
-		*scontext = kstrdup(context->str, GFP_ATOMIC);
-		if (!(*scontext))
-			return -ENOMEM;
+		if (scontext) {
+			*scontext = kstrdup(context->str, GFP_ATOMIC);
+			if (!(*scontext))
+				return -ENOMEM;
+		}
 		return 0;
 	}
 
@@ -1202,10 +1204,7 @@ static int context_struct_to_string(struct context *context, char **scontext, u3
 		return -ENOMEM;
 	*scontext = scontextp;
 
-	/*
-	 * Copy the user name, role name and type name into the context.
-	 */
-	sprintf(scontextp, "%s:%s:%s",
+	snprintf(scontextp, *scontext_len, "%s:%s:%s",
 		sym_name(&policydb, SYM_USERS, context->user - 1),
 		sym_name(&policydb, SYM_ROLES, context->role - 1),
 		sym_name(&policydb, SYM_TYPES, context->type - 1));
