@@ -51,6 +51,7 @@ EXPORT_SYMBOL_GPL(rtc_read_time);
 int rtc_set_time(struct rtc_device *rtc, struct rtc_time *tm)
 {
 	int err;
+	unsigned long secs;
 
 	err = rtc_valid_tm(tm);
 	if (err != 0)
@@ -73,7 +74,11 @@ int rtc_set_time(struct rtc_device *rtc, struct rtc_time *tm)
 		err = -EINVAL;
 
 	mutex_unlock(&rtc->ops_lock);
-	/* A timer might have just expired */
+	rtc_tm_to_time(tm, &secs);
+	pr_info("rtc: %s (%d:%d) set RTC time %lu secs to RTC device %s (err=%d)\n",
+			current->comm, current->tgid, current->pid, secs, rtc->name, err);
+	dump_stack();
+	
 	schedule_work(&rtc->irqwork);
 	return err;
 }
@@ -323,6 +328,10 @@ int rtc_read_alarm(struct rtc_device *rtc, struct rtc_wkalrm *alarm)
 }
 EXPORT_SYMBOL_GPL(rtc_read_alarm);
 
+#ifdef CONFIG_HTC_POWERSAVE_MODE_ALARM
+extern int powersave_enabled;
+#endif
+
 static int __rtc_set_alarm(struct rtc_device *rtc, struct rtc_wkalrm *alarm)
 {
 	struct rtc_time tm;
@@ -350,8 +359,15 @@ static int __rtc_set_alarm(struct rtc_device *rtc, struct rtc_wkalrm *alarm)
 		err = -ENODEV;
 	else if (!rtc->ops->set_alarm)
 		err = -EINVAL;
-	else
+	else {
+#ifdef CONFIG_HTC_POWERSAVE_MODE_ALARM
+		if ((powersave_enabled == 2) && (alarm->time.tm_sec > 0)) {
+			alarm->time.tm_sec = 0;
+			alarm->time.tm_min++;
+		}
+#endif
 		err = rtc->ops->set_alarm(rtc->dev.parent, alarm);
+	}
 
 	return err;
 }

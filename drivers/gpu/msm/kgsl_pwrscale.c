@@ -465,6 +465,8 @@ int kgsl_pwrscale_init(struct device *dev, const char *governor)
 
 	ret = sysfs_create_link(&device->dev->kobj,
 			&devfreq->dev.kobj, "devfreq");
+	if(ret)
+		pr_err("kgsl: sysfs_create_link-devfreq fail\n");
 
 	pwrscale->devfreq_wq = create_freezable_workqueue("kgsl_devfreq_wq");
 	INIT_WORK(&pwrscale->devfreq_suspend_ws, do_devfreq_suspend);

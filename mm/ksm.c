@@ -195,6 +195,7 @@ static bool use_deferred_timer;
 #define KSM_RUN_STOP	0
 #define KSM_RUN_MERGE	1
 #define KSM_RUN_UNMERGE	2
+
 static unsigned int ksm_run = KSM_RUN_STOP;
 
 static DECLARE_WAIT_QUEUE_HEAD(ksm_thread_wait);
@@ -1407,6 +1408,7 @@ next_mm:
 		goto next_mm;
 
 	ksm_scan.seqnr++;
+
 	return NULL;
 }
 
@@ -1467,7 +1469,8 @@ out:
 
 static int ksmd_should_run(void)
 {
-	return (ksm_run & KSM_RUN_MERGE) && !list_empty(&ksm_mm_head.mm_list);
+	int ret = (ksm_run & KSM_RUN_MERGE) && !list_empty(&ksm_mm_head.mm_list);
+	return ret;
 }
 
 static int ksm_scan_thread(void *nothing)
@@ -1497,6 +1500,7 @@ static int ksm_scan_thread(void *nothing)
 	}
 	return 0;
 }
+
 
 int ksm_madvise(struct vm_area_struct *vma, unsigned long start,
 		unsigned long end, int advice, unsigned long *vm_flags)
@@ -2087,6 +2091,7 @@ static int __init ksm_init(void)
 	 */
 	hotplug_memory_notifier(ksm_memory_callback, 100);
 #endif
+
 	return 0;
 
 out_free:

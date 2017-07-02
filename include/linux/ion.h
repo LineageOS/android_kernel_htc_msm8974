@@ -131,6 +131,8 @@ struct ion_platform_data {
 
 #ifdef CONFIG_ION
 
+int ion_iommu_heap_dump_size(void);
+
 /**
  * ion_reserve() - reserve memory for ion heaps if applicable
  * @data:	platform data specifying starting physical address and

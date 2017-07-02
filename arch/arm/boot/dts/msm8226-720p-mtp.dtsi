@@ -9,8 +9,9 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
-
+/*
 /include/ "msm8226-camera-sensor-mtp.dtsi"
+*/
 
 &soc {
 	serial@f991f000 {
@@ -30,8 +31,6 @@
 			synaptics,button-map = <139 102 158>;
 			synaptics,fw-image-name = "PR1468813.img";
 			synaptics,i2c-pull-up;
-			synaptics,power-down;
-			synaptics,disable-gpios;
 		};
 	};
 
@@ -41,57 +40,25 @@
 			reg = <0x0e>;
 			qcom,irq-gpio = <&msmgpio 21 0x00>;
 			qcom,dis-gpio = <&msmgpio 20 0x00>;
-			qcom,clk-src = "BBCLK2";
-			qcom,clk-en-gpio = <&msmgpio 0 0x00>;
 			interrupt-parent = <&msmgpio>;
 			interrupts = <21 0>;
 			qcom,clk-gpio = <&pm8226_gpios 3 0>;
 		};
 	};
-	gpio_keys {
-		compatible = "gpio-keys";
-		input-name = "gpio-keys";
 
-		camera_focus {
-			label = "camera_focus";
-			gpios = <&msmgpio 108 0x1>;
-			linux,input-type = <1>;
-			linux,code = <0x210>;
-			gpio-key,wakeup;
-			debounce-interval = <15>;
-		};
 
-		camera_snapshot {
-			label = "camera_snapshot";
-			gpios = <&msmgpio 107 0x1>;
-			linux,input-type = <1>;
-			linux,code = <0x2fe>;
-			gpio-key,wakeup;
-			debounce-interval = <15>;
-		};
-
-		vol_up {
-			label = "volume_up";
-			gpios = <&msmgpio 106 0x1>;
-			linux,input-type = <1>;
-			linux,code = <115>;
-			gpio-key,wakeup;
-			debounce-interval = <15>;
-		};
-	};
-
-	spi@f9923000 {
-		ethernet-switch@3 {
-			compatible = "micrel,ks8851";
-			reg = <3>;
-			interrupt-parent = <&msmgpio>;
-			interrupts = <115 0x8>;
-			spi-max-frequency = <4800000>;
-			rst-gpio = <&msmgpio 114 0>;
-			vdd-io-supply = <&pm8226_lvs1>;
-			vdd-phy-supply = <&pm8226_lvs1>;
-		};
-	};
+//	spi@f9923000 {
+//		ethernet-switch@3 {
+//			compatible = "micrel,ks8851";
+//			reg = <3>;
+//			interrupt-parent = <&msmgpio>;
+//			interrupts = <115 0x8>;
+//			spi-max-frequency = <4800000>;
+//			rst-gpio = <&msmgpio 114 0>;
+//			vdd-io-supply = <&pm8226_lvs1>;
+//			vdd-phy-supply = <&pm8226_lvs1>;
+//		};
+//	};
 
 	sound {
 		qcom,audio-routing =
@@ -111,6 +78,17 @@
 		qcom,cdc-mclk-gpios = <&pm8226_gpios 1 0>;
 		qcom,cdc-vdd-spkr-gpios = <&pm8226_gpios 2 0>;
 		qcom,cdc-us-euro-gpios = <&msmgpio 69 0>;
+	};
+
+	qcom,pm8226@1 {
+		qcom,vib@c000 {
+			status = "okay";
+			compatible = "qcom,qpnp-vibrator";
+			reg = <0xc000 0x1000>;
+			label = "vibrator";
+			qcom,qpnp-vib-timeout-ms = <15000>;
+			qcom,qpnp-vib-vtg-level-mV = <3100>;
+		};
 	};
 
 	sound-9302 {
@@ -150,118 +128,10 @@
 	qcom,hsusb-otg-mpm-dmsehv-int = <58>;
 };
 
-&sdcc1 {
-	vdd-supply = <&pm8226_l17>;
-	qcom,vdd-voltage-level = <2950000 2950000>;
-	qcom,vdd-current-level = <800 500000>;
-
-	vdd-io-supply = <&pm8226_l6>;
-	qcom,vdd-io-always-on;
-	qcom,vdd-io-voltage-level = <1800000 1800000>;
-	qcom,vdd-io-current-level = <250 154000>;
-
-	qcom,pad-pull-on = <0x0 0x3 0x3>; /* no-pull, pull-up, pull-up */
-	qcom,pad-pull-off = <0x0 0x3 0x3>; /* no-pull, pull-up, pull-up */
-	qcom,pad-drv-on = <0x4 0x4 0x4>; /* 10mA, 10mA, 10mA */
-	qcom,pad-drv-off = <0x0 0x0 0x0>; /* 2mA, 2mA, 2mA */
-
-	qcom,clk-rates = <400000 25000000 50000000 100000000 200000000>;
-	qcom,sup-voltages = <2950 2950>;
-
-	qcom,bus-speed-mode = "HS200_1p8v", "DDR_1p8v";
-	qcom,nonremovable;
-
-	status = "disabled";
-};
-
-&sdhc_1 {
-	vdd-supply = <&pm8226_l17>;
-	qcom,vdd-voltage-level = <2950000 2950000>;
-	qcom,vdd-current-level = <800 500000>;
-
-	vdd-io-supply = <&pm8226_l6>;
-	qcom,vdd-io-always-on;
-	qcom,vdd-io-voltage-level = <1800000 1800000>;
-	qcom,vdd-io-current-level = <250 154000>;
-
-	qcom,pad-pull-on = <0x0 0x3 0x3>; /* no-pull, pull-up, pull-up */
-	qcom,pad-pull-off = <0x0 0x3 0x3>; /* no-pull, pull-up, pull-up */
-	qcom,pad-drv-on = <0x4 0x4 0x4>; /* 10mA, 10mA, 10mA */
-	qcom,pad-drv-off = <0x0 0x0 0x0>; /* 2mA, 2mA, 2mA */
-
-	qcom,clk-rates = <400000 25000000 50000000 100000000 200000000>;
-	qcom,bus-speed-mode = "HS200_1p8v", "DDR_1p8v";
-	qcom,nonremovable;
-
-	status = "ok";
-};
-
-&sdcc2 {
-	vdd-supply = <&pm8226_l18>;
-	qcom,vdd-voltage-level = <2950000 2950000>;
-	qcom,vdd-current-level = <9000 800000>;
-
-	vdd-io-supply = <&pm8226_l21>;
-	qcom,vdd-io-voltage-level = <1800000 2950000>;
-	qcom,vdd-io-current-level = <6 22000>;
-
-	qcom,pad-pull-on = <0x0 0x3 0x3>; /* no-pull, pull-up, pull-up */
-	qcom,pad-pull-off = <0x0 0x3 0x3>; /* no-pull, pull-up, pull-up */
-	qcom,pad-drv-on = <0x4 0x4 0x4>; /* 10mA, 10mA, 10mA */
-	qcom,pad-drv-off = <0x0 0x0 0x0>; /* 2mA, 2mA, 2mA */
-
-	qcom,clk-rates = <400000 25000000 50000000 100000000 200000000>;
-	qcom,sup-voltages = <2950 2950>;
-
-	qcom,xpc;
-	qcom,bus-speed-mode = "SDR12", "SDR25", "SDR50", "DDR50", "SDR104";
-	qcom,current-limit = <600>; #address-cells = <0>; interrupt-parent = <&sdcc2>;
-	interrupts = <0 1 2>;
-	#interrupt-cells = <1>;
-	interrupt-map-mask = <0xffffffff>;
-	interrupt-map = <0 &intc 0 125 0
-			1 &intc 0 220 0
-			2 &msmgpio 38 0x3>;
-	interrupt-names = "core_irq", "bam_irq", "status_irq";
-	cd-gpios = <&msmgpio 38 0x1>;
-
-	status = "disabled";
-};
-
-&sdhc_2 {
-	vdd-supply = <&pm8226_l18>;
-	qcom,vdd-voltage-level = <2950000 2950000>;
-	qcom,vdd-current-level = <9000 800000>;
-
-	vdd-io-supply = <&pm8226_l21>;
-	qcom,vdd-io-voltage-level = <1800000 2950000>;
-	qcom,vdd-io-current-level = <6 22000>;
-
-	qcom,pad-pull-on = <0x0 0x3 0x3>; /* no-pull, pull-up, pull-up */
-	qcom,pad-pull-off = <0x0 0x3 0x3>; /* no-pull, pull-up, pull-up */
-	qcom,pad-drv-on = <0x4 0x4 0x4>; /* 10mA, 10mA, 10mA */
-	qcom,pad-drv-off = <0x0 0x0 0x0>; /* 2mA, 2mA, 2mA */
-
-	qcom,clk-rates = <400000 25000000 50000000 100000000 200000000>;
-
-	#address-cells = <0>;
-	interrupt-parent = <&sdhc_2>;
-	interrupts = <0 1 2>;
-	#interrupt-cells = <1>;
-	interrupt-map-mask = <0xffffffff>;
-	interrupt-map = <0 &intc 0 125 0
-			1 &intc 0 221 0
-			2 &msmgpio 38 0x3>;
-	interrupt-names = "hc_irq", "pwr_irq", "status_irq";
-	cd-gpios = <&msmgpio 38 0x1>;
-
-	status = "ok";
-};
-
 &spmi_bus {
 	qcom,pm8226@0 {
 		qcom,leds@a100 {
-			status = "okay";
+			status = "disabled";
 			qcom,led_mpp_2 {
 				label = "mpp";
 				linux,name = "button-backlight";
@@ -281,7 +151,6 @@
 			qcom,led_mpp_4 {
 				label = "mpp";
 				linux,name = "green";
-				linux,default-trigger = "battery-full";
 				qcom,default-state = "off";
 				qcom,max-current = <40>;
 				qcom,current-setting = <5>;
@@ -291,15 +160,7 @@
 				qcom,source-sel = <8>;
 				qcom,mode-ctrl = <0x60>;
 				qcom,pwm-channel = <0>;
-				qcom,start-idx = <1>;
-				qcom,ramp-step-ms = <120>;
-				qcom,duty-pcts = [00 00 00 00 00
-						  00 00 00 00 00
-						  50 00 00 00 00
-						  00 00 00 00 00
-						  00];
-				qcom,use-blink;
-				qcom,in-order-command-processing;
+				qcom,pwm_coefficient = <255>;
 			};
 		};
 
@@ -307,8 +168,7 @@
 			status = "okay";
 			qcom,led_mpp_6 {
 				label = "mpp";
-				linux,name = "red";
-				linux,default-trigger = "battery-charging";
+				linux,name = "amber";
 				qcom,default-state = "off";
 				qcom,max-current = <40>;
 				qcom,current-setting = <5>;
@@ -318,15 +178,7 @@
 				qcom,mode-ctrl = <0x60>;
 				qcom,source-sel = <10>;
 				qcom,pwm-channel = <5>;
-				qcom,start-idx = <1>;
-				qcom,ramp-step-ms = <120>;
-				qcom,duty-pcts = [00 00 00 00 00
-						  00 00 00 00 00
-						  50 00 00 00 00
-						  00 00 00 00 00
-						  00];
-				qcom,use-blink;
-				qcom,in-order-command-processing;
+				qcom,pwm_coefficient = <255>;
 			};
 		};
 	};
@@ -387,11 +239,13 @@
 	};
 
 	gpio@c200 { /* GPIO 3 */
-		qcom,mode = <0>;		/* QPNP_PIN_MODE_DIG_IN */
-		qcom,pull = <5>;		/* QPNP_PIN_PULL_NO */
-		qcom,vin-sel = <2>;		/* QPNP_PIN_VIN2 */
-		qcom,src-sel = <2>;		/* QPNP_PIN_SEL_FUNC_1 */
-		qcom,master-en = <1>;
+		/*HTC_CSP_START,remove GPIO 3 config since it has been config in hboot*/
+		//qcom,mode = <0>;		/* QPNP_PIN_MODE_DIG_IN */
+		//qcom,pull = <5>;		/* QPNP_PIN_PULL_NO */
+		//qcom,vin-sel = <2>;		/* QPNP_PIN_VIN2 */
+		//qcom,src-sel = <2>;		/* QPNP_PIN_SEL_FUNC_1 */
+		//qcom,master-en = <1>;
+		/*HTC_CSP_END*/
 	};
 
 	gpio@c300 { /* GPIO 4 */
@@ -477,8 +331,10 @@
 		qcom,rpull-up-kohm = <100>;
 		qcom,vref-batt-therm = <1800000>;
 
+/* disable it due to conflit with htc batterydata
 		/include/ "batterydata-palladium.dtsi"
 		/include/ "batterydata-mtp-3000mah.dtsi"
+*/
 	};
 };
 
@@ -488,7 +344,7 @@
 	qcom,min-fcc-learning-soc = <20>;
 	qcom,min-fcc-ocv-pc = <30>;
 	qcom,min-fcc-learning-samples = <5>;
-	qcom,fcc-resolution = <10>;
+	qcom,fcc-resolution = <13>;
 	qcom,battery-data = <&mtp_batterydata>;
 };
 
@@ -509,9 +365,5 @@
 };
 
 &mdss_dsi0 {
-	qcom,dsi-pref-prim-pan = <&dsi_nt35590_720_vid>;
-};
-
-&dsi_nt35590_720_vid {
-	qcom,cont-splash-enabled;
+       qcom,dsi-pref-prim-pan = <>;
 };

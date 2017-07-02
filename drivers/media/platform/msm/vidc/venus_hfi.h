@@ -226,6 +226,9 @@ struct venus_hfi_device {
 	struct msm_vidc_platform_resources *res;
 	struct regulator *gdsc;
 	enum venus_hfi_state state;
+	/* HTC_START: Print ION alloc/import/free logs to debug ION memory leak on kernel space */
+	struct msm_vidc_inst *inst;
+	/* HTC_END */
 };
 
 void venus_hfi_delete_device(void *device);

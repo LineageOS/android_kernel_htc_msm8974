@@ -377,10 +377,11 @@ fail:
 
 int msm_iommu_sec_program_iommu(int sec_id)
 {
+	static unsigned long prev_fail = 0;
 	struct msm_scm_sec_cfg {
 		unsigned int id;
 		unsigned int spare;
-	} cfg;
+	} cfg = {0};
 	int ret, scm_ret = 0;
 
 	cfg.id = sec_id;
@@ -389,6 +390,10 @@ int msm_iommu_sec_program_iommu(int sec_id)
 			&scm_ret, sizeof(scm_ret));
 	if (ret || scm_ret) {
 		pr_err("scm call IOMMU_SECURE_CFG failed\n");
+		if (prev_fail && time_before(jiffies, prev_fail + HZ)) {
+			panic("TZ/scm_call fatal");
+		}
+		prev_fail = jiffies;
 		return ret ? ret : -EINVAL;
 	}
 
@@ -636,11 +641,12 @@ static void msm_iommu_detach_dev(struct iommu_domain *domain,
 	struct msm_iommu_drvdata *iommu_drvdata;
 	struct msm_iommu_ctx_drvdata *ctx_drvdata;
 
+	if (!dev)
+		goto fail_no_lock;
+
 	msm_iommu_detached(dev->parent);
 
 	iommu_access_ops->iommu_lock_acquire(0);
-	if (!dev)
-		goto fail;
 
 	iommu_drvdata = dev_get_drvdata(dev->parent);
 	ctx_drvdata = dev_get_drvdata(dev);
@@ -655,6 +661,8 @@ static void msm_iommu_detach_dev(struct iommu_domain *domain,
 	--iommu_drvdata->ctx_attach_count;
 fail:
 	iommu_access_ops->iommu_lock_release(0);
+fail_no_lock:
+	return;
 }
 
 static int get_drvdata(struct iommu_domain *domain,
