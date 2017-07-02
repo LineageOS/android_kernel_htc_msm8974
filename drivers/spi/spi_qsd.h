@@ -287,7 +287,7 @@ struct msm_spi_bam {
 	void __iomem            *base;
 	u32                      phys_addr;
 	u32                      handle;
-	u32                      irq;
+	int                      irq;
 	struct msm_spi_bam_pipe  prod;
 	struct msm_spi_bam_pipe  cons;
 	bool                     deregister_required;

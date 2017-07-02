@@ -36,6 +36,8 @@
 #include <asm/dma-contiguous.h>
 #include <asm/dma-iommu.h>
 
+#include <htc_debug/stability/htc_report_meminfo.h>
+
 #include "mm.h"
 
 /*
@@ -217,6 +219,8 @@ static struct page *__dma_alloc_buffer(struct device *dev, size_t size, gfp_t gf
 
 	__dma_clear_buffer(page, size, NULL);
 
+	add_meminfo_total_pages(NR_DMA_PAGES, size >> PAGE_SHIFT);
+
 	return page;
 }
 
@@ -231,6 +235,8 @@ static void __dma_free_buffer(struct page *page, size_t size)
 		__free_page(page);
 		page++;
 	}
+
+	sub_meminfo_total_pages(NR_DMA_PAGES, size >> PAGE_SHIFT);
 }
 
 #ifdef CONFIG_MMU

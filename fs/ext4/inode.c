@@ -2204,6 +2204,10 @@ static int ext4_da_writepages(struct address_space *mapping,
 	if (unlikely(sbi->s_mount_flags & EXT4_MF_FS_ABORTED))
 		return -EROFS;
 
+	/* return immediately if filesystem is mounted RDONLY */
+	if (unlikely(inode->i_sb->s_flags & MS_RDONLY))
+		return -EROFS;
+
 	if (wbc->range_start == 0 && wbc->range_end == LLONG_MAX)
 		range_whole = 1;
 
@@ -2755,7 +2759,7 @@ static void ext4_end_io_dio(struct kiocb *iocb, loff_t offset,
 			    ssize_t size, void *private, int ret,
 			    bool is_async)
 {
-	struct inode *inode = iocb->ki_filp->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(iocb->ki_filp);
         ext4_io_end_t *io_end = iocb->private;
 	struct workqueue_struct *wq;
 	unsigned long flags;
@@ -3338,7 +3342,7 @@ int ext4_can_truncate(struct inode *inode)
 
 int ext4_punch_hole(struct file *file, loff_t offset, loff_t length)
 {
-	struct inode *inode = file->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(file);
 	if (!S_ISREG(inode->i_mode))
 		return -EOPNOTSUPP;
 
@@ -3724,6 +3728,9 @@ struct inode *ext4_iget(struct super_block *sb, unsigned long ino)
 		ei->i_extra_isize = le16_to_cpu(raw_inode->i_extra_isize);
 		if (EXT4_GOOD_OLD_INODE_SIZE + ei->i_extra_isize >
 		    EXT4_INODE_SIZE(inode->i_sb)) {
+			EXT4_ERROR_INODE(inode, "bad extra_isize (%u != %u)",
+				EXT4_GOOD_OLD_INODE_SIZE + ei->i_extra_isize,
+				EXT4_INODE_SIZE(inode->i_sb));
 			ret = -EIO;
 			goto bad_inode;
 		}
@@ -4594,7 +4601,7 @@ int ext4_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf)
 	unsigned long len;
 	int ret;
 	struct file *file = vma->vm_file;
-	struct inode *inode = file->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(file);
 	struct address_space *mapping = inode->i_mapping;
 	handle_t *handle;
 	get_block_t *get_block;

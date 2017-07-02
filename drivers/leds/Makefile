@@ -55,6 +55,7 @@ obj-$(CONFIG_LEDS_QCIBL)		+= leds-qci-backlight.o
 obj-$(CONFIG_LEDS_MSM_PDM)		+= leds-msm-pdm.o
 obj-$(CONFIG_LEDS_MSM_TRICOLOR)		+= leds-msm-tricolor.o
 obj-$(CONFIG_LEDS_MSM_GPIO_FLASH)	+= leds-msm-gpio-flash.o
+obj-$(CONFIG_LEDS_LM3697)		+= leds-lm3697.o
 
 # LED SPI Drivers
 obj-$(CONFIG_LEDS_DAC124S085)		+= leds-dac124s085.o
@@ -67,3 +68,12 @@ obj-$(CONFIG_LEDS_TRIGGER_BACKLIGHT)	+= ledtrig-backlight.o
 obj-$(CONFIG_LEDS_TRIGGER_GPIO)		+= ledtrig-gpio.o
 obj-$(CONFIG_LEDS_TRIGGER_DEFAULT_ON)	+= ledtrig-default-on.o
 obj-$(CONFIG_LEDS_TRIGGER_SLEEP)	+= ledtrig-sleep.o
+
+# FLASHLIGHT Drivers
+obj-$(CONFIG_FLASHLIGHT_TPS61310)       += tps61310_flashlight.o
+obj-$(CONFIG_FLASHLIGHT_TPS61310_FRONT)       += tps61310_flashlight_front.o
+obj-$(CONFIG_FLASHLIGHT_LM3643)       += lm3643_flashlight.o
+obj-$(CONFIG_FRONT_FLASHLIGHT_COMMON)       += front_flashlight_common.o
+
+# lp5521 LED control chip
+obj-$(CONFIG_LEDS_LP5521_HTC)           += leds-lp5521_htc.o

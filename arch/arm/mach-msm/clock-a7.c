@@ -363,6 +363,7 @@ static int clock_a7_probe(struct platform_device *pdev)
 	 */
 	WARN(clk_prepare_enable(&a7ssmux.c),
 		"Unable to turn on CPU clock");
+
 	return 0;
 }
 

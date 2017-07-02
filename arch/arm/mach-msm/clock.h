@@ -60,16 +60,29 @@ extern struct clock_init_data msmkrypton_clock_init_data;
 
 int msm_clock_init(struct clock_init_data *data);
 int find_vdd_level(struct clk *clk, unsigned long rate);
+void keep_dig_voltage_low_in_idle(bool on);
 
 #ifdef CONFIG_DEBUG_FS
 int clock_debug_register(struct clk_lookup *t, size_t s);
 void clock_debug_print_enabled(void);
+#ifdef CONFIG_HTC_POWER_DEBUG
+int list_clocks_show(struct seq_file *m, void *unused);
+#endif
 #else
 static inline int clock_debug_register(struct clk_lookup *t, size_t s)
 {
 	return 0;
 }
 static inline void clock_debug_print_enabled(void) { return; }
+
+#ifdef CONFIG_HTC_POWER_DEBUG
+static int list_clocks_show(struct seq_file *m, void *unused){ return 0; }
+#endif
+#endif
+
+#ifdef CONFIG_HTC_POWER_DEBUG
+void clock_blocked_print(void);
+int clock_blocked_register(struct clk_lookup *t, size_t s);
 #endif
 
 #endif

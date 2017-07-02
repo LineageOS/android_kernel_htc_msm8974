@@ -74,6 +74,16 @@ static struct kobj_attribute _name##_attr = {	\
 	.store	= _name##_store,		\
 }
 
+#define power_ro_attr(_name)			\
+static struct kobj_attribute _name##_attr = {	\
+	.attr	= {				\
+		.name = __stringify(_name),	\
+		.mode = 0444,			\
+	},					\
+	.show	= _name##_show,			\
+	.store	= NULL,				\
+}
+
 /* Preferred image size in bytes (default 500 MB) */
 extern unsigned long image_size;
 /* Size of memory reserved for drivers (default SPARE_PAGES x PAGE_SIZE) */
@@ -226,10 +236,17 @@ enum {
 
 extern int pm_test_level;
 
+extern void suspend_sys_sync_queue(void);
+extern int suspend_sys_sync_wait(void);
+
 #ifdef CONFIG_SUSPEND_FREEZER
 static inline int suspend_freeze_processes(void)
 {
 	int error;
+
+	error = suspend_sys_sync_wait();
+	if (error)
+		return error;
 
 	error = freeze_processes();
 	/*
@@ -291,3 +308,4 @@ extern int pm_wake_lock(const char *buf);
 extern int pm_wake_unlock(const char *buf);
 
 #endif /* !CONFIG_PM_WAKELOCKS */
+
