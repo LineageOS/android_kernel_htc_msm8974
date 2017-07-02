@@ -62,7 +62,7 @@ int wcd9xxx_init_slimslave(struct wcd9xxx *wcd9xxx, u8 wcd9xxx_pgd_la,
 		goto err;
 	}
 
-	if (wcd9xxx->rx_chs) {
+	if (wcd9xxx->rx_chs && rx_slot != NULL) {
 		wcd9xxx->num_rx_port = rx_num;
 		for (i = 0; i < rx_num; i++) {
 			wcd9xxx->rx_chs[i].ch_num = rx_slot[i];
@@ -84,7 +84,7 @@ int wcd9xxx_init_slimslave(struct wcd9xxx *wcd9xxx, u8 wcd9xxx_pgd_la,
 			wcd9xxx->num_rx_port);
 	}
 
-	if (wcd9xxx->tx_chs) {
+	if (wcd9xxx->tx_chs && tx_slot != NULL) {
 		wcd9xxx->num_tx_port = tx_num;
 		for (i = 0; i < tx_num; i++) {
 			wcd9xxx->tx_chs[i].ch_num = tx_slot[i];

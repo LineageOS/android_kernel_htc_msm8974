@@ -55,6 +55,17 @@ static char msm_nand_names[MSM_MAX_PARTITIONS * 16];
 
 extern struct flash_platform_data msm_nand_data;
 
+int get_partition_num_by_name(char *name)
+{
+	struct mtd_partition *ptn = msm_nand_partitions;
+	int i;
+
+	for (i = 0; i < MSM_MAX_PARTITIONS && ptn->name; i++, ptn++) {
+		  if (strcmp(ptn->name, name) == 0)
+			  return ptn->offset;
+	}
+}
+
 static int __init parse_tag_msm_partition(const struct tag *tag)
 {
 	struct mtd_partition *ptn = msm_nand_partitions;

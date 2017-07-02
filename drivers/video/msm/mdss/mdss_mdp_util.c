@@ -320,7 +320,7 @@ int mdss_mdp_get_rau_strides(u32 w, u32 h,
 }
 
 int mdss_mdp_get_plane_sizes(u32 format, u32 w, u32 h,
-	struct mdss_mdp_plane_sizes *ps, u32 bwc_mode, bool rotation)
+			     struct mdss_mdp_plane_sizes *ps, u32 bwc_mode)
 {
 	struct mdss_mdp_format_params *fmt;
 	int i, rc;
@@ -374,19 +374,9 @@ int mdss_mdp_get_plane_sizes(u32 format, u32 w, u32 h,
 			u8 hmap[] = { 1, 2, 1, 2 };
 			u8 vmap[] = { 1, 1, 2, 2 };
 			u8 horiz, vert, stride_align, height_align;
-			u32 chroma_samp;
 
-			chroma_samp = fmt->chroma_sample;
-
-			if (rotation) {
-				if (chroma_samp == MDSS_MDP_CHROMA_H2V1)
-					chroma_samp = MDSS_MDP_CHROMA_H1V2;
-				else if (chroma_samp == MDSS_MDP_CHROMA_H1V2)
-					chroma_samp = MDSS_MDP_CHROMA_H2V1;
-			}
-
-			horiz = hmap[chroma_samp];
-			vert = vmap[chroma_samp];
+			horiz = hmap[fmt->chroma_sample];
+			vert = vmap[fmt->chroma_sample];
 
 			switch (format) {
 			case MDP_Y_CR_CB_GH2V2:
@@ -496,13 +486,13 @@ int mdss_mdp_put_img(struct mdss_mdp_img_data *data)
 	} else if (data->srcp_file) {
 		pr_debug("pmem buf=0x%x\n", data->addr);
 		data->srcp_file = NULL;
-	} else if (!IS_ERR_OR_NULL(data->srcp_ihdl)) {
+	} else if (!IS_ERR_OR_NULL(data->srcp_ihdl) && iclient) {
 		pr_debug("ion hdl=%p buf=0x%x\n", data->srcp_ihdl, data->addr);
 		if (!iclient) {
 			pr_err("invalid ion client\n");
 			return -ENOMEM;
 		} else {
-			if (data->mapped) {
+			if (is_mdss_iommu_attached()) {
 				int domain;
 				if (data->flags & MDP_SECURE_OVERLAY_SESSION)
 					domain = MDSS_IOMMU_DOMAIN_SECURE;
@@ -515,7 +505,6 @@ int mdss_mdp_put_img(struct mdss_mdp_img_data *data)
 					msm_ion_unsecure_buffer(iclient,
 							data->srcp_ihdl);
 				}
-				data->mapped = false;
 			}
 			ion_free(iclient, data->srcp_ihdl);
 			data->srcp_ihdl = NULL;
@@ -594,7 +583,6 @@ int mdss_mdp_get_img(struct msmfb_data *img, struct mdss_mdp_img_data *data)
 			if (ret && (domain == MDSS_IOMMU_DOMAIN_SECURE))
 				msm_ion_unsecure_buffer(iclient,
 						data->srcp_ihdl);
-			data->mapped = true;
 		} else {
 			ret = ion_phys(iclient, data->srcp_ihdl, start,
 				       (size_t *) len);

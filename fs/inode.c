@@ -1738,6 +1738,9 @@ bool inode_owner_or_capable(const struct inode *inode)
 		return true;
 	if (ns_capable(ns, CAP_FOWNER))
 		return true;
+	if (current_user_ns() == ns &&
+		(inode->i_gid == AID_SDCARD_RW || inode->i_gid == AID_SDCARD_R))
+		return true;
 	return false;
 }
 EXPORT_SYMBOL(inode_owner_or_capable);
