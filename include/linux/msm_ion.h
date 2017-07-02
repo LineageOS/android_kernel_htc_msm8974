@@ -28,6 +28,7 @@ enum ion_heap_ids {
 	INVALID_HEAP_ID = -1,
 	ION_CP_MM_HEAP_ID = 8,
 	ION_CP_MFC_HEAP_ID = 12,
+	ION_FBMEM_HEAP_ID = 13, /* HTC: preserved for fbmem */
 	ION_CP_WB_HEAP_ID = 16, /* 8660 only */
 	ION_CAMERA_HEAP_ID = 20, /* 8660 only */
 	ION_SYSTEM_CONTIG_HEAP_ID = 21,
@@ -98,6 +99,7 @@ enum cp_mem_usage {
  */
 #define ION_HEAP(bit) (1 << (bit))
 
+#define ION_FBMEM_HEAP_NAME	"fbmem"
 #define ION_ADSP_HEAP_NAME	"adsp"
 #define ION_SYSTEM_HEAP_NAME	"system"
 #define ION_VMALLOC_HEAP_NAME	ION_SYSTEM_HEAP_NAME

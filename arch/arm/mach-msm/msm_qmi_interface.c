@@ -602,6 +602,13 @@ int qmi_recv_msg(struct qmi_handle *handle)
 		return rc;
 	}
 
+	/* ++ fix Klocwork */
+	if (!recv_msg) {
+		pr_err("%s: recv_msg is NULL\n", __func__);
+		return rc;
+	}
+	/* -- fix Klocwork */
+
 	/* Decode the header & Handle the req, resp, indication message */
 	decode_qmi_header(recv_msg, &cntl_flag, &txn_id, &msg_id, &msg_len);
 

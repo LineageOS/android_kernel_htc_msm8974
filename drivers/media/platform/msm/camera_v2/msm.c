@@ -218,6 +218,10 @@ int msm_create_stream(unsigned int session_id,
 	spin_lock_init(&stream->stream_lock);
 	msm_enqueue(&session->stream_q, &stream->list);
 	session->stream_q.len++;
+	// HTC start
+	stream->num_total = 0;
+	stream->num_lend = 0;
+	// HTC end
 
 	INIT_LIST_HEAD(&stream->queued_list);
 

@@ -155,6 +155,7 @@ static int of_batterydata_read_single_row_lut(struct device_node *data_node,
 	return 0;
 }
 
+#if !(defined(CONFIG_HTC_BATT_8960))
 static int of_batterydata_read_batt_id_kohm(const struct device_node *np,
 				const char *propname, struct batt_ids *batt_ids)
 {
@@ -183,6 +184,7 @@ static int of_batterydata_read_batt_id_kohm(const struct device_node *np,
 
 	return 0;
 }
+#endif
 
 #define OF_PROP_READ(property, qpnp_dt_property, node, rc, optional)	\
 do {									\
@@ -222,6 +224,14 @@ static int of_batterydata_load_battery_data(struct device_node *node,
 	if (rc)
 		return rc;
 
+	/* This is a optional table for estimating sw ocv value. */
+	rc = of_batterydata_read_sf_lut(node, "qcom,rbatt_est_ocv_lut",
+			batt_data->rbatt_est_ocv_lut);
+	if (rc) {
+		pr_info("read rbatt_est_ocv_lut failed, rc=%d\n", rc);
+		rc = 0;
+	}
+
 	OF_PROP_READ(batt_data->fcc, "fcc-mah", node, rc, false);
 	OF_PROP_READ(batt_data->default_rbatt_mohm,
 			"default-rbatt-mohm", node, rc, false);
@@ -233,12 +243,15 @@ static int of_batterydata_load_battery_data(struct device_node *node,
 			"max-voltage-uv", node, rc, true);
 	OF_PROP_READ(batt_data->cutoff_uv, "v-cutoff-uv", node, rc, true);
 	OF_PROP_READ(batt_data->iterm_ua, "chg-term-ua", node, rc, true);
+	OF_PROP_READ(batt_data->qc20_ibatmax_ma, "qc20-ibatmax-ma", node, rc, true);
+	OF_PROP_READ(batt_data->qc20_ibatsafe_ma, "qc20-ibatsafe-ma", node, rc, true);
 
 	batt_data->batt_id_kohm = best_id_kohm;
 
 	return rc;
 }
 
+#if !(defined(CONFIG_HTC_BATT_8960))
 static int64_t of_batterydata_convert_battery_id_kohm(int batt_id_uv,
 				int rpull_up, int vadc_vdd)
 {
@@ -301,6 +314,49 @@ int of_batterydata_read_data(struct device_node *batterydata_container_node,
 				best_id_kohm = batt_ids.kohm[i];
 			}
 		}
+		pr_debug("delta:%d, best_delta:%d, id_kohm:%d\n", delta, best_delta, batt_id_kohm);
+	}
+
+	if (best_node == NULL) {
+		pr_err("No battery data found\n");
+		return -ENODATA;
+	}
+	pr_info("battdata node: %s, batt_id_kohm:%d, batt_id_uv:%d uV\n",
+							best_node->name, batt_id_kohm, batt_id_uv);
+
+	return of_batterydata_load_battery_data(best_node,
+					best_id_kohm, batt_data);
+}
+
+#else
+int of_batterydata_read_data_by_id_result(struct device_node *batterydata_container_node,
+				struct bms_battery_data *batt_data,
+				int id_result)
+{
+	struct device_node *node, *best_node = NULL;
+	int id_from_dt;
+	int rc = 0;
+
+	node = batterydata_container_node;
+
+	/*
+	 * Find the battery data with a battery id detect result closest to this one
+	 */
+	for_each_child_of_node(batterydata_container_node, node) {
+		best_node = node;
+
+		rc = of_property_read_u32(node, "htc,batt_id", &id_from_dt);
+		if (rc) {
+			pr_warn("get batt_id from dt failed rc=%d\n", rc);
+			continue;
+		}
+
+		/*get correct batterydata node otherwise loading unknown battery params*/
+		if (id_result == id_from_dt)
+			break;
+
+		pr_debug("current node: %s, id_result:%d, id_from_dt:%d\n",
+				best_node->name, id_result, id_from_dt);
 	}
 
 	if (best_node == NULL) {
@@ -308,8 +364,11 @@ int of_batterydata_read_data(struct device_node *batterydata_container_node,
 		return -ENODATA;
 	}
 
-	return of_batterydata_load_battery_data(best_node,
-					best_id_kohm, batt_data);
+	pr_info("batterydata node: %s, id_from_dt:%d, id_result:%d\n",
+				best_node->name, id_from_dt, id_result);
+
+	return of_batterydata_load_battery_data(best_node, id_from_dt, batt_data);
 }
+#endif
 
 MODULE_LICENSE("GPL v2");
