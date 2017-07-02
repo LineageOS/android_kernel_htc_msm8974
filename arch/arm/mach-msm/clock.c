@@ -24,6 +24,7 @@
 #include <linux/list.h>
 #include <linux/regulator/consumer.h>
 #include <linux/mutex.h>
+#include <linux/delay.h>
 #include <trace/events/power.h>
 #include <mach/clk-provider.h>
 #include "clock.h"
@@ -41,6 +42,10 @@ struct handoff_vdd {
 static LIST_HEAD(handoff_vdd_list);
 
 static DEFINE_MUTEX(msm_clock_init_lock);
+
+#ifdef CONFIG_ARCH_MSM8226
+extern int pming;
+#endif
 
 /* Find the voltage level required for a given rate. */
 int find_vdd_level(struct clk *clk, unsigned long rate)
@@ -179,6 +184,7 @@ out:
 /* Vote for a voltage level corresponding to a clock's rate. */
 static int vote_rate_vdd(struct clk *clk, unsigned long rate)
 {
+	int ret;
 	int level;
 
 	if (!clk->vdd_class)
@@ -188,7 +194,12 @@ static int vote_rate_vdd(struct clk *clk, unsigned long rate)
 	if (level < 0)
 		return level;
 
-	return vote_vdd_level(clk->vdd_class, level);
+	ret = vote_vdd_level(clk->vdd_class, level);
+
+	if (clk->flags & CLKFLAG_VOTE_VDD_DELAY)
+		udelay(60);
+
+	return ret;
 }
 
 /* Remove vote for a voltage level corresponding to a clock's rate. */
@@ -382,6 +393,10 @@ int clk_enable(struct clk *clk)
 			goto err_enable_clock;
 	}
 	clk->count++;
+#ifdef CONFIG_ARCH_MSM8226
+	if (!strcmp(clk->dbg_name, "a7sspll") && pming)
+		pr_info("[PP2]%s: Enable a7sspll clock, count = %d\n", __func__, clk->count);
+#endif
 	spin_unlock_irqrestore(&clk->lock, flags);
 
 	return 0;
@@ -420,6 +435,10 @@ void clk_disable(struct clk *clk)
 		clk_disable(parent);
 	}
 	clk->count--;
+#ifdef CONFIG_ARCH_MSM8226
+	if (!strcmp(clk->dbg_name, "a7sspll") && pming)
+		pr_info("[PP2]%s: Disable a7sspll clock, count = %d\n", __func__, clk->count);
+#endif
 out:
 	spin_unlock_irqrestore(&clk->lock, flags);
 }
@@ -793,6 +812,11 @@ EXPORT_SYMBOL(msm_clock_register);
  */
 int __init msm_clock_init(struct clock_init_data *data)
 {
+#ifdef CONFIG_HTC_POWER_DEBUG
+	struct clk_lookup *clock_tbl;
+	size_t num_clocks;
+#endif
+
 	if (!data)
 		return -EINVAL;
 
@@ -809,6 +833,12 @@ int __init msm_clock_init(struct clock_init_data *data)
 	if (data->post_init)
 		data->post_init();
 
+#ifdef CONFIG_HTC_POWER_DEBUG
+	clock_tbl = data->table;
+	num_clocks = data->size;
+
+	clock_blocked_register(clock_tbl, num_clocks);
+#endif
 	return 0;
 }
 

@@ -133,7 +133,7 @@ static int ramdump_read(struct file *filep, char __user *buf, size_t count,
 
 	/* EOF check */
 	if (data_left == 0) {
-		pr_debug("Ramdump(%s): Ramdump complete. %lld bytes read.",
+		pr_info("Ramdump(%s): Ramdump complete. %lld bytes read.",
 			rd_dev->name, *pos);
 		rd_dev->ramdump_status = 0;
 		ret = 0;
@@ -215,7 +215,7 @@ void *create_ramdump_device(const char *dev_name, struct device *parent)
 		return NULL;
 	}
 
-	snprintf(rd_dev->name, ARRAY_SIZE(rd_dev->name), "ramdump_%s",
+	snprintf(rd_dev->name, ARRAY_SIZE(rd_dev->name) - 1, "ramdump_%s",
 		 dev_name);
 
 	init_completion(&rd_dev->ramdump_complete);
@@ -264,6 +264,7 @@ static int _do_ramdump(void *handle, struct ramdump_segment *segments,
 		return -EPIPE;
 	}
 
+	pr_info("Ramdump(%s)\n", rd_dev->name);
 	for (i = 0; i < nsegments; i++)
 		segments[i].size = PAGE_ALIGN(segments[i].size);
 
@@ -317,6 +318,11 @@ static int _do_ramdump(void *handle, struct ramdump_segment *segments,
 	if (!ret) {
 		pr_err("Ramdump(%s): Timed out waiting for userspace.\n",
 			rd_dev->name);
+
+#if defined(CONFIG_HTC_DEBUG_SSR)
+		if (!strcmp(rd_dev->name,"ramdump_modem") || !strcmp(rd_dev->name,"ramdump_pronto"))
+			BUG();
+#endif
 		ret = -EPIPE;
 	} else
 		ret = (rd_dev->ramdump_status == 0) ? 0 : -EPIPE;

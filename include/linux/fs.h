@@ -230,35 +230,21 @@ struct inodes_stat_t {
 #define MS_MGC_VAL 0xC0ED0000
 #define MS_MGC_MSK 0xffff0000
 
-/* Inode flags - they have nothing to superblock flags now */
 
-#define S_SYNC		1	/* Writes are synced at once */
-#define S_NOATIME	2	/* Do not update access times */
-#define S_APPEND	4	/* Append-only file */
-#define S_IMMUTABLE	8	/* Immutable file */
-#define S_DEAD		16	/* removed, but still open directory */
-#define S_NOQUOTA	32	/* Inode is not counted to quota */
-#define S_DIRSYNC	64	/* Directory modifications are synchronous */
-#define S_NOCMTIME	128	/* Do not update file c/mtime */
-#define S_SWAPFILE	256	/* Do not truncate: swapon got its bmaps */
-#define S_PRIVATE	512	/* Inode is fs-internal */
-#define S_IMA		1024	/* Inode has an associated IMA struct */
-#define S_AUTOMOUNT	2048	/* Automount/referral quasi-directory */
-#define S_NOSEC		4096	/* no suid or xattr security attributes */
+#define S_SYNC		1	
+#define S_NOATIME	2	
+#define S_APPEND	4	
+#define S_IMMUTABLE	8	
+#define S_DEAD		16	
+#define S_NOQUOTA	32	
+#define S_DIRSYNC	64	
+#define S_NOCMTIME	128	
+#define S_SWAPFILE	256	
+#define S_PRIVATE	512	
+#define S_IMA		1024	
+#define S_AUTOMOUNT	2048	
+#define S_NOSEC		4096	
 
-/*
- * Note that nosuid etc flags are inode-specific: setting some file-system
- * flags just means all the inodes inherit those flags by default. It might be
- * possible to override it selectively if you really wanted to with some
- * ioctl() that is not currently implemented.
- *
- * Exception: MS_RDONLY is always applied to the entire file system.
- *
- * Unfortunately, it is possible to change a filesystems flags with it mounted
- * with files in use.  This means that all of the inodes will not have their
- * i_flags updated.  Hence, i_flags no longer inherit the superblock mount
- * flags, so these have to be checked separately. -- rmk@arm.uk.linux.org
- */
 #define __IS_FLG(inode,flg) ((inode)->i_sb->s_flags & (flg))
 
 #define IS_RDONLY(inode) ((inode)->i_sb->s_flags & MS_RDONLY)
@@ -754,11 +740,9 @@ struct posix_acl;
 #define IOP_LOOKUP	0x0002
 #define IOP_NOFOLLOW	0x0004
 
-/*
- * Keep mostly read-only and often accessed (especially for
- * the RCU path lookup and 'stat' data) fields at the beginning
- * of the 'struct inode'
- */
+#define AID_SDCARD_RW 1015
+#define AID_SDCARD_R  1028
+
 struct inode {
 	umode_t			i_mode;
 	unsigned short		i_opflags;
@@ -1508,6 +1492,10 @@ struct super_block {
 
 	/* Being remounted read-only */
 	int s_readonly_remount;
+
+	
+#define FLAG_ASYNC_FSYNC       0x1
+	unsigned int fsync_flags;
 };
 
 /* superblock cache pruning functions */
@@ -2228,29 +2216,18 @@ static inline bool execute_ok(struct inode *inode)
 	return (inode->i_mode & S_IXUGO) || S_ISDIR(inode->i_mode);
 }
 
-/*
- * get_write_access() gets write permission for a file.
- * put_write_access() releases this write permission.
- * This is used for regular files.
- * We cannot support write (and maybe mmap read-write shared) accesses and
- * MAP_DENYWRITE mmappings simultaneously. The i_writecount field of an inode
- * can have the following values:
- * 0: no writers, no VM_DENYWRITE mappings
- * < 0: (-i_writecount) vm_area_structs with VM_DENYWRITE set exist
- * > 0: (i_writecount) users are writing to the file.
- *
- * Normally we operate on that counter with atomic_{inc,dec} and it's safe
- * except for the cases where we don't hold i_writecount yet. Then we need to
- * use {get,deny}_write_access() - these functions check the sign and refuse
- * to do the change if sign is wrong.
- */
+static inline struct inode *file_inode(struct file *f)
+{
+	return f->f_path.dentry->d_inode;
+}
+
 static inline int get_write_access(struct inode *inode)
 {
 	return atomic_inc_unless_negative(&inode->i_writecount) ? 0 : -ETXTBSY;
 }
 static inline int deny_write_access(struct file *file)
 {
-	struct inode *inode = file->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(file);
 	return atomic_dec_unless_positive(&inode->i_writecount) ? 0 : -ETXTBSY;
 }
 static inline void put_write_access(struct inode * inode)
@@ -2260,7 +2237,7 @@ static inline void put_write_access(struct inode * inode)
 static inline void allow_write_access(struct file *file)
 {
 	if (file)
-		atomic_inc(&file->f_path.dentry->d_inode->i_writecount);
+		atomic_inc(&file_inode(file)->i_writecount);
 }
 #ifdef CONFIG_IMA
 static inline void i_readcount_dec(struct inode *inode)
@@ -2681,5 +2658,14 @@ static inline void inode_has_no_xattr(struct inode *inode)
 		inode->i_flags |= S_NOSEC;
 }
 
-#endif /* __KERNEL__ */
-#endif /* _LINUX_FS_H */
+struct fs_dbg_threshold {
+	uint64_t	threshold;
+	char		type[8];
+};
+#define FS_DBG_TYPE_READ		0
+#define FS_DBG_TYPE_WRITE		1
+#define FS_DBG_TYPE_ERASE		2
+extern void fs_debug_dump(unsigned int type, size_t bytes);
+
+#endif 
+#endif 

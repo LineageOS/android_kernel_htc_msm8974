@@ -221,7 +221,8 @@ static int mmc_decode_scr(struct mmc_card *card)
  */
 static int mmc_read_ssr(struct mmc_card *card)
 {
-	unsigned int au, es, et, eo;
+	unsigned int au, es, et, eo, spd_cls;
+	unsigned char card_spd_val[5] = {0, 2, 4, 6, 10};
 	int err, i;
 	u32 *ssr;
 
@@ -251,8 +252,8 @@ static int mmc_read_ssr(struct mmc_card *card)
 	 * bitfield positions accordingly.
 	 */
 	au = UNSTUFF_BITS(ssr, 428 - 384, 4);
-	if (au > 0 || au <= 9) {
-		card->ssr.au = 1 << (au + 4);
+	if (au > 0 && au <= 9) {
+		card->ssr.au = 1 << (au + 3);
 		es = UNSTUFF_BITS(ssr, 408 - 384, 16);
 		et = UNSTUFF_BITS(ssr, 402 - 384, 6);
 		eo = UNSTUFF_BITS(ssr, 400 - 384, 2);
@@ -260,9 +261,19 @@ static int mmc_read_ssr(struct mmc_card *card)
 			card->ssr.erase_timeout = (et * 1000) / es;
 			card->ssr.erase_offset = eo * 1000;
 		}
+		printk(KERN_INFO "%s: au : %d KB\n", mmc_hostname(card->host), card->ssr.au);
 	} else {
 		pr_warning("%s: SD Status: Invalid Allocation Unit "
 			"size.\n", mmc_hostname(card->host));
+	}
+	spd_cls = UNSTUFF_BITS(ssr, 440 - 384, 8);
+	if (spd_cls < 5 && spd_cls > 0) {
+		printk(KERN_INFO "%s: speed class type is CLASS %d\n", mmc_hostname(card->host), card_spd_val[spd_cls]);
+		card->speed_class = card_spd_val[spd_cls];
+	}
+	else {
+		printk(KERN_INFO "%s: Unknown speed class type\n", mmc_hostname(card->host));
+		card->speed_class = -1;
 	}
 out:
 	kfree(ssr);
@@ -374,6 +385,8 @@ int mmc_sd_switch_hs(struct mmc_card *card)
 {
 	int err;
 	u8 *status;
+
+	card->sw_caps.uhs_max_dtr = 0;
 
 	if (card->scr.sda_vsn < SCR_SPEC_VER_1)
 		return 0;
@@ -1007,7 +1020,7 @@ static int mmc_sd_init_card(struct mmc_host *host, u32 ocr,
 	struct mmc_card *oldcard)
 {
 	struct mmc_card *card;
-	int err;
+	int err = 0, status = 0;
 	u32 cid[4];
 	u32 rocr = 0;
 
@@ -1115,6 +1128,12 @@ static int mmc_sd_init_card(struct mmc_host *host, u32 ocr,
 		}
 	}
 
+	err = mmc_send_status(card, &status);
+	printk(KERN_INFO "%s: %s status : %#x, err = %#x, speed : %d\n",
+		mmc_hostname(host), __func__, status, err,
+		card->sw_caps.uhs_max_dtr ?
+			card->sw_caps.uhs_max_dtr : card->sw_caps.hs_max_dtr);
+
 	return 0;
 
 free_card:
@@ -1133,6 +1152,8 @@ static void mmc_sd_remove(struct mmc_host *host)
 {
 	BUG_ON(!host);
 	BUG_ON(!host->card);
+	printk(KERN_INFO "%s: %s, claimed : %d, claim_cnt : %d\n", mmc_hostname(host),
+		__func__, host->claimed, host->claim_cnt);
 
 	mmc_exit_clk_scaling(host);
 	mmc_remove_card(host->card);
@@ -1140,6 +1161,8 @@ static void mmc_sd_remove(struct mmc_host *host)
 	mmc_claim_host(host);
 	host->card = NULL;
 	mmc_release_host(host);
+	printk(KERN_INFO "%s: %s, claimed : %d, claim_cnt : %d\n", mmc_hostname(host),
+		__func__, host->claimed, host->claim_cnt);
 }
 
 /*
@@ -1147,7 +1170,7 @@ static void mmc_sd_remove(struct mmc_host *host)
  */
 static int mmc_sd_alive(struct mmc_host *host)
 {
-	return mmc_send_status(host->card, NULL);
+	return !host->ops->get_cd(host);
 }
 
 /*
@@ -1155,21 +1178,19 @@ static int mmc_sd_alive(struct mmc_host *host)
  */
 static void mmc_sd_detect(struct mmc_host *host)
 {
-	int err = 0;
-#ifdef CONFIG_MMC_PARANOID_SD_INIT
+	int ret = 0;
+	const unsigned char ejected = 1;
+#if 0
         int retries = 5;
 #endif
 
 	BUG_ON(!host);
 	BUG_ON(!host->card);
-
-	mmc_rpm_hold(host, &host->card->dev);
+	printk(KERN_INFO "%s: %s, claimed : %d, claim_cnt : %d\n", mmc_hostname(host),
+	       __func__, host->claimed, host->claim_cnt);
 	mmc_claim_host(host);
 
-	/*
-	 * Just check if our card has been removed.
-	 */
-#ifdef CONFIG_MMC_PARANOID_SD_INIT
+#if 0
 	while(retries) {
 		err = mmc_send_status(host->card, NULL);
 		if (err) {
@@ -1184,25 +1205,21 @@ static void mmc_sd_detect(struct mmc_host *host)
 		       __func__, mmc_hostname(host), err);
 		err = _mmc_detect_card_removed(host);
 	}
-#else
-	err = _mmc_detect_card_removed(host);
 #endif
+	ret = _mmc_detect_card_removed(host);
+
 	mmc_release_host(host);
 
-	/*
-	 * if detect fails, the device would be removed anyway;
-	 * the rpm framework would mark the device state suspended.
-	 */
-	if (!err)
-		mmc_rpm_release(host, &host->card->dev);
-
-	if (err) {
+	if (ret == ejected) {
+		remove_card(host);
+#if 0
 		mmc_sd_remove(host);
 
 		mmc_claim_host(host);
 		mmc_detach_bus(host);
 		mmc_power_off(host);
 		mmc_release_host(host);
+#endif
 	}
 }
 
@@ -1214,17 +1231,15 @@ static int mmc_sd_suspend(struct mmc_host *host)
 	BUG_ON(!host);
 	BUG_ON(!host->card);
 
-	/*
-	 * Disable clock scaling before suspend and enable it after resume so
-	 * as to avoid clock scaling decisions kicking in during this window.
-	 */
-	mmc_disable_clk_scaling(host);
 
+	mmc_disable_clk_scaling(host);
+	mmc_rpm_hold(host, &host->class_dev);
 	mmc_claim_host(host);
 	if (!mmc_host_is_spi(host))
 		mmc_deselect_cards(host);
 	host->card->state &= ~MMC_STATE_HIGHSPEED;
 	mmc_release_host(host);
+	mmc_rpm_release(host, &host->class_dev);
 
 	return 0;
 }
@@ -1240,25 +1255,36 @@ static int mmc_sd_resume(struct mmc_host *host)
 	int err;
 #ifdef CONFIG_MMC_PARANOID_SD_INIT
 	int retries;
+	int delayTime;
 #endif
 
 	BUG_ON(!host);
 	BUG_ON(!host->card);
 
+	host->crc_count = 0;
+	
+	host->caps |= host->caps_uhs;
 	mmc_claim_host(host);
 #ifdef CONFIG_MMC_PARANOID_SD_INIT
 	retries = 5;
+	delayTime = 5;
 	while (retries) {
+		if (host->ops->get_cd && host->ops->get_cd(host) == 0) {
+			printk(KERN_ERR "%s(%s): find no card. Stop trying\n",
+				__func__, mmc_hostname(host));
+			break;
+		}
 		err = mmc_sd_init_card(host, host->ocr, host->card);
 
 		if (err) {
 			printk(KERN_ERR "%s: Re-init card rc = %d (retries = %d)\n",
 			       mmc_hostname(host), err, retries);
-			retries--;
 			mmc_power_off(host);
-			usleep_range(5000, 5500);
+			usleep_range(delayTime*1000, delayTime*1000+500);
 			mmc_power_up(host);
 			mmc_select_voltage(host, host->ocr);
+			retries--;
+			delayTime *= 2;
 			continue;
 		}
 		break;
@@ -1336,6 +1362,7 @@ int mmc_attach_sd(struct mmc_host *host)
 	u32 ocr;
 #ifdef CONFIG_MMC_PARANOID_SD_INIT
 	int retries;
+	int delayTime;
 #endif
 
 	BUG_ON(!host);
@@ -1401,18 +1428,21 @@ int mmc_attach_sd(struct mmc_host *host)
 	 */
 #ifdef CONFIG_MMC_PARANOID_SD_INIT
 	retries = 5;
-	/*
-	 * Some bad cards may take a long time to init, give preference to
-	 * suspend in those cases.
-	 */
-	while (retries && !host->rescan_disable) {
+	delayTime = 5;
+	while (retries) {
 		err = mmc_sd_init_card(host, host->ocr, NULL);
 		if (err) {
+			if (host->ops->get_cd && host->ops->get_cd(host) == 0) {
+				printk(KERN_ERR "%s(%s): find no card (%d). Stop trying\n",
+					__func__, mmc_hostname(host), err);
+				goto err;
+			}
 			retries--;
 			mmc_power_off(host);
-			usleep_range(5000, 5500);
+			usleep_range(delayTime*1000, delayTime*1000+500);
 			mmc_power_up(host);
 			mmc_select_voltage(host, host->ocr);
+			delayTime *= 2;
 			continue;
 		}
 		break;
@@ -1423,9 +1453,6 @@ int mmc_attach_sd(struct mmc_host *host)
 		       mmc_hostname(host), err);
 		goto err;
 	}
-
-	if (host->rescan_disable)
-		goto err;
 #else
 	err = mmc_sd_init_card(host, host->ocr, NULL);
 	if (err)
@@ -1449,9 +1476,9 @@ remove_card:
 	mmc_claim_host(host);
 err:
 	mmc_detach_bus(host);
-	if (err)
-		pr_err("%s: error %d whilst initialising SD card: rescan: %d\n",
-		       mmc_hostname(host), err, host->rescan_disable);
+
+	pr_err("%s: error %d whilst initialising SD card\n",
+		mmc_hostname(host), err);
 
 	return err;
 }

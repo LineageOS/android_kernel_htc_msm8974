@@ -38,6 +38,12 @@
 #include <media/radio-iris.h>
 #include <asm/unaligned.h>
 
+#ifdef CONFIG_VIDEO_PANASONIC
+#include <linux/regulator/consumer.h>
+#include <linux/of_gpio.h>
+#define FM_FULLSEG_ANT_SW 24
+#endif
+
 static unsigned int rds_buf = 100;
 static int oda_agt;
 static int grp_mask;
@@ -2746,7 +2752,7 @@ static inline void hci_ev_radio_text(struct radio_hci_dev *hdev,
 
 	while ((skb->data[len+RDS_OFFSET] != 0x0d) && (len < MAX_RT_LENGTH))
 		len++;
-	data = kmalloc(len+RDS_OFFSET, GFP_ATOMIC);
+	data = kmalloc(len + RDS_OFFSET + 1, GFP_ATOMIC);
 	if (!data) {
 		FMDERR("Failed to allocate memory");
 		return;
@@ -2761,7 +2767,7 @@ static inline void hci_ev_radio_text(struct radio_hci_dev *hdev,
 	memcpy(data+RDS_OFFSET, &skb->data[RDS_OFFSET], len);
 	data[len+RDS_OFFSET] = 0x00;
 
-	iris_q_evt_data(radio, data, len+RDS_OFFSET, IRIS_BUF_RT_RDS);
+	iris_q_evt_data(radio, data, len + RDS_OFFSET + 1, IRIS_BUF_RT_RDS);
 
 	kfree(data);
 }
@@ -4811,7 +4817,15 @@ static int iris_vidioc_g_frequency(struct file *file, void *priv,
 		struct v4l2_frequency *freq)
 {
 	struct iris_device *radio = video_get_drvdata(video_devdata(file));
+        int retval = 0;
 	if ((freq != NULL) && (radio != NULL)) {
+            if (radio->mode == FM_RECV) {
+                retval = hci_cmd(HCI_FM_GET_STATION_PARAM_CMD, radio->fm_hdev);
+                    if (retval < 0) {
+                        FMDERR("Get FREQ Failed");
+                        return -EINVAL;
+                    }
+            }
 		freq->frequency =
 			radio->fm_st_rsp.station_rsp.station_freq * TUNE_PARAM;
 	} else
@@ -5113,6 +5127,14 @@ static struct video_device *video_get_dev(void)
 	return priv_videodev;
 }
 
+#ifdef CONFIG_VIDEO_PANASONIC
+extern int fm_ant_power_fullseg(int on);
+#endif
+
+#ifdef CONFIG_VIDEO_NMI
+extern int fm_ant_power(int on);
+#endif
+
 static int __init iris_probe(struct platform_device *pdev)
 {
 	struct iris_device *radio;
@@ -5140,6 +5162,28 @@ static int __init iris_probe(struct platform_device *pdev)
 		kfree(radio);
 		return -ENOMEM;
 	}
+#ifdef CONFIG_VIDEO_NMI
+	fm_ant_power(1);
+#endif
+
+#ifdef CONFIG_VIDEO_PANASONIC
+	fm_ant_power_fullseg(1);
+/*
+	fm_fullseg_antenna_sw_power_enable("8941_l17", 2850000, &reg_8941_l17);
+
+	ret = gpio_request( FM_FULLSEG_ANT_SW, "fm_fullseg_ant_sw");
+	if (ret < 0) {
+		pr_err("[FULLSEG] %s: gpio_request failed %d\n", __func__, ret);
+		return ret;
+	}
+	ret = gpio_direction_output( FM_FULLSEG_ANT_SW, 1);
+	if (ret < 0) {
+		pr_err("[FULLSEG] %s: gpio_direction_output failed %d\n", __func__, ret);
+		gpio_free( FM_FULLSEG_ANT_SW);
+		return ret;
+	}
+*/
+#endif
 
 	memcpy(radio->videodev, &iris_viddev_template,
 	  sizeof(iris_viddev_template));
@@ -5218,6 +5262,14 @@ static int __devexit iris_remove(struct platform_device *pdev)
 		FMDERR(":radio is null");
 		return -EINVAL;
 	}
+#ifdef CONFIG_VIDEO_NMI
+	fm_ant_power(0);
+#endif
+
+#ifdef CONFIG_VIDEO_PANASONIC
+	fm_ant_power_fullseg(0);
+#endif
+
 	video_unregister_device(radio->videodev);
 
 	for (i = 0; i < IRIS_BUF_MAX; i++)

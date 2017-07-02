@@ -1788,7 +1788,7 @@ static int swap_show(struct seq_file *swap, void *v)
 	len = seq_path(swap, &file->f_path, " \t\n\\");
 	seq_printf(swap, "%*s%s\t%u\t%u\t%d\n",
 			len < 40 ? 40 - len : 1, " ",
-			S_ISBLK(file->f_path.dentry->d_inode->i_mode) ?
+			S_ISBLK(file_inode(file)->i_mode) ?
 				"partition" : "file\t",
 			si->pages << (PAGE_SHIFT - 10),
 			si->inuse_pages << (PAGE_SHIFT - 10),
@@ -2408,6 +2408,9 @@ int add_swap_count_continuation(swp_entry_t entry, gfp_t gfp_mask)
 	 * will not corrupt the GFP_ATOMIC caller's atomic pagetable kmaps.
 	 */
 	head = vmalloc_to_page(si->swap_map + offset);
+    if (!head) {
+        goto out;
+    }
 	offset &= ~PAGE_MASK;
 
 	/*
@@ -2469,6 +2472,9 @@ static bool swap_count_continued(struct swap_info_struct *si,
 	unsigned char *map;
 
 	head = vmalloc_to_page(si->swap_map + offset);
+    if (!head) {
+        return false;
+    }
 	if (page_private(head) != SWP_CONTINUED) {
 		BUG_ON(count & COUNT_CONTINUED);
 		return false;		/* need to add count continuation */
@@ -2549,7 +2555,9 @@ static void free_swap_count_continuations(struct swap_info_struct *si)
 	for (offset = 0; offset < si->max; offset += PAGE_SIZE) {
 		struct page *head;
 		head = vmalloc_to_page(si->swap_map + offset);
-		if (page_private(head)) {
+		if (!head)
+            continue;
+        if (page_private(head)) {
 			struct list_head *this, *next;
 			list_for_each_safe(this, next, &head->lru) {
 				struct page *page;

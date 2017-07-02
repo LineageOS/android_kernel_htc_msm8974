@@ -39,6 +39,7 @@
 #include <mach/rpm-regulator-smd.h>
 #include <linux/regulator/consumer.h>
 #include <linux/msm_thermal_ioctl.h>
+#include <mach/devices_dtb.h>
 #include <mach/rpm-smd.h>
 #include <mach/scm.h>
 #include <linux/sched.h>
@@ -1306,6 +1307,8 @@ static void __ref do_freq_control(long temp)
 		if (limit_idx < limit_idx_low)
 			limit_idx = limit_idx_low;
 		max_freq = table[limit_idx].frequency;
+		pr_info("msm_thermal: TSENS sensor %ld C\n", temp);
+
 	} else if (temp < msm_thermal_info.limit_temp_degC -
 		 msm_thermal_info.temp_hysteresis_degC) {
 		if (limit_idx == limit_idx_high)
@@ -3240,6 +3243,14 @@ static int __devinit msm_thermal_dev_probe(struct platform_device *pdev)
 
 	key = "qcom,freq-control-mask";
 	ret = of_property_read_u32(node, key, &data.bootup_freq_control_mask);
+
+#if defined(CONFIG_MACH_EYE_UL)
+	if(get_kernel_flag() & KERNEL_FLAG_KEEP_CHARG_ON) {
+		data.poll_ms = 100;
+		data.bootup_freq_step = 4;
+		printk("[Thermal-Driver]Polling time changed to:%dms, bootup_freq_step changed to:%d \n", data.poll_ms, data.bootup_freq_step);
+	}
+#endif
 
 	ret = probe_cc(node, &data, pdev);
 
