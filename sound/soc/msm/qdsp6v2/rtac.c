@@ -155,6 +155,7 @@ struct mutex			rtac_adm_apr_mutex;
 struct mutex			rtac_asm_apr_mutex;
 struct mutex			rtac_voice_mutex;
 struct mutex			rtac_voice_apr_mutex;
+struct mutex			rtac_ioctl_mutex;
 
 int rtac_clear_mapping(uint32_t cal_type)
 {
@@ -396,9 +397,6 @@ static void add_popp_v2(u32 dev_idx, u32 port_id, u32 popp_id)
 	}
 	rtac_adm_data_v2.device[dev_idx].popp[
 		rtac_adm_data_v2.device[dev_idx].num_of_popp].popp = popp_id;
-	rtac_adm_data_v2.device[dev_idx].popp[
-		rtac_adm_data_v2.device[dev_idx].num_of_popp++].popp_topology =
-		get_asm_topology();
 done:
 	return;
 }
@@ -443,9 +441,15 @@ static void rtac_add_adm_device_v2(u32 port_id, u32 copp_id, u32 path_id,
 	rtac_adm_data_v2.device[i].copp = copp_id;
 	rtac_adm_data_v2.device[i].popp[
 		rtac_adm_data_v2.device[i].num_of_popp].popp = popp_id;
-	rtac_adm_data_v2.device[i].popp[
-		rtac_adm_data_v2.device[i].num_of_popp++].popp_topology =
-		get_asm_topology();
+	if(popp_id < SESSION_MAX)
+		rtac_adm_data_v2.device[i].popp[
+			rtac_adm_data_v2.device[i].num_of_popp++].popp_topology =
+			get_asm_topology(popp_id);
+	else
+		rtac_adm_data_v2.device[i].popp[
+			rtac_adm_data_v2.device[i].num_of_popp++].popp_topology =
+			get_asm_topology(0);
+
 done:
 	return;
 }
@@ -1107,7 +1111,7 @@ u32 send_rtac_asm_apr(void *buf, u32 opcode)
 		if (data_size > rtac_cal[ASM_RTAC_CAL].map_data.map_size) {
 			pr_err("%s: Invalid data size = %d\n",
 				__func__, data_size);
-			goto done;
+			goto err;
 		}
 		payload_size = 4 * sizeof(u32);
 
@@ -1126,7 +1130,7 @@ u32 send_rtac_asm_apr(void *buf, u32 opcode)
 		if (payload_size > MAX_PAYLOAD_SIZE) {
 			pr_err("%s: Invalid payload size = %d\n",
 				__func__, payload_size);
-			goto done;
+			goto err;
 		}
 
 		/* Copy buffer to in-band payload */
@@ -1145,6 +1149,10 @@ u32 send_rtac_asm_apr(void *buf, u32 opcode)
 	asm_params.pkt_size = APR_PKT_SIZE(APR_HDR_SIZE,
 		payload_size);
 	asm_params.src_svc = q6asm_get_apr_service_id(session_id);
+	if (asm_params.src_svc == -EINVAL) {
+		pr_err("%s: Could not get service id form session %d", __func__, session_id);
+		goto err;
+	}
 	asm_params.src_domain = APR_DOMAIN_APPS;
 	asm_params.src_port = (session_id << 8) | 0x0001;
 	asm_params.dest_svc = APR_SVC_ASM;
@@ -1434,6 +1442,7 @@ static long rtac_ioctl(struct file *f,
 		goto done;
 	}
 
+	mutex_lock(&rtac_ioctl_mutex);
 	switch (cmd) {
 	case AUDIO_GET_RTAC_ADM_INFO:
 		if (copy_to_user((void *)arg, &rtac_adm_data,
@@ -1490,6 +1499,7 @@ static long rtac_ioctl(struct file *f,
 		pr_err("%s: Invalid IOCTL, command = %d!\n",
 		       __func__, cmd);
 	}
+	mutex_unlock(&rtac_ioctl_mutex);
 done:
 	return result;
 }
@@ -1570,6 +1580,8 @@ static int __init rtac_init(void)
 		kzfree(rtac_asm_buffer);
 		goto nomem;
 	}
+
+	mutex_init(&rtac_ioctl_mutex);
 
 	return misc_register(&rtac_misc);
 nomem:
