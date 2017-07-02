@@ -555,7 +555,7 @@ static const struct file_operations zones_show_fops = {
 	.open = ocmem_zones_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
-	.release = seq_release,
+	.release = single_release,
 };
 
 static int ocmem_stats_show(struct seq_file *f, void *dummy)
@@ -584,7 +584,7 @@ static const struct file_operations stats_show_fops = {
 	.open = ocmem_stats_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
-	.release = seq_release,
+	.release = single_release,
 };
 
 static int ocmem_timing_show(struct seq_file *f, void *dummy)
@@ -612,7 +612,7 @@ static const struct file_operations timing_show_fops = {
 	.open = ocmem_timing_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
-	.release = seq_release,
+	.release = single_release,
 };
 
 static int ocmem_zone_init(struct platform_device *pdev)
@@ -633,6 +633,7 @@ static int ocmem_zone_init(struct platform_device *pdev)
 	for (i = 0; i < pdata->nr_parts; i++) {
 		struct ocmem_partition *part = &pdata->parts[i];
 		zone = get_zone(part->id);
+		BUG_ON(!zone);
 		zone->active = false;
 
 		dev_dbg(dev, "Partition %d, start %lx, size %lx for %s\n",
