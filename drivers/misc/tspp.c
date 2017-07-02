@@ -48,6 +48,14 @@
 #include <linux/string.h>
 #include <mach/msm_bus.h>
 
+//++ DTV_PCN1000001_HTC_POWER_CUNSUMPTION
+/* [HTC]  Power consumption */
+#if defined(CONFIG_FB)
+#include <linux/notifier.h>
+#include <linux/fb.h>
+#endif
+//-- DTV_PCN1000001_HTC_POWER_CUNSUMPTION
+
 /*
  * General defines
  */
@@ -463,6 +471,12 @@ struct tspp_device {
 
 	struct dentry *dent;
 	struct dentry *debugfs_regs[ARRAY_SIZE(debugfs_tspp_regs)];
+//++ DTV_PCN1000001_HTC_POWER_CUNSUMPTION
+/* [HTC]  Power consumption */
+#if defined(CONFIG_FB)
+        struct notifier_block fb_notif;
+#endif
+//-- DTV_PCN1000001_HTC_POWER_CUNSUMPTION 
 };
 
 
@@ -488,6 +502,30 @@ static const struct file_operations tspp_fops = {
 	.release = tspp_release,
 	.unlocked_ioctl   = tspp_ioctl,
 };
+
+//++ DTV_PCN1000001_HTC_POWER_CUNSUMPTION
+/* [HTC]  Power consumption */
+static void enable_tspp_interrupt(struct tspp_device *tsppdev, int enable)
+{
+	if (enable)
+	{
+		/* enable TSPP INTERRUPT */
+		enable_irq(tsppdev->tspp_irq);
+		enable_irq(tsppdev->tsif[0].tsif_irq);
+		enable_irq(tsppdev->tsif[1].tsif_irq);
+		enable_irq(tsppdev->bam_irq);
+		printk("%s, enable TSPP INTERRUPT\n", __func__);
+	}else
+	{
+	        /* disable TSPP INTERRUPT */
+		disable_irq(tsppdev->tspp_irq);
+		disable_irq(tsppdev->tsif[0].tsif_irq);
+		disable_irq(tsppdev->tsif[1].tsif_irq);
+		disable_irq(tsppdev->bam_irq);
+		printk("%s, disable TSPP INTERRUPT\n", __func__);
+	}
+}
+//-- DTV_PCN1000001_HTC_POWER_CUNSUMPTION
 
 /*** IRQ ***/
 static irqreturn_t tspp_isr(int irq, void *dev)
@@ -2540,6 +2578,13 @@ static ssize_t tspp_open(struct inode *inode, struct file *filp)
 	filp->private_data = channel;
 	dev = channel->pdev->pdev->id;
 
+	//++ DTV_PCN1000001_HTC_POWER_CUNSUMPTION
+	/* [HTC]  Power consumption */
+	/* enabe TSPP INTERRUPT */
+	printk("%s, enabe TSPP INTERRUPT\n", __func__);
+	enable_tspp_interrupt(channel->pdev, 1);
+	//-- DTV_PCN1000001_HTC_POWER_CUNSUMPTION
+
 	/* if this channel is already in use, quit */
 	if (channel->used) {
 		pr_err("tspp channel %i already in use",
@@ -2580,6 +2625,13 @@ static ssize_t tspp_release(struct inode *inode, struct file *filp)
 	struct tspp_channel *channel = filp->private_data;
 	u32 dev = channel->pdev->pdev->id;
 	TSPP_DEBUG("tspp_release");
+
+	//++ DTV_PCN1000001_HTC_POWER_CUNSUMPTION
+	/* [HTC]  Power consumption */
+	/* disable TSPP INTERRUPT */
+	printk("%s, disable TSPP INTERRUPT\n", __func__);
+	enable_tspp_interrupt(channel->pdev, 0);
+	//-- DTV_PCN1000001_HTC_POWER_CUNSUMPTION
 
 	tspp_close_channel(dev, channel->id);
 
@@ -2982,6 +3034,38 @@ static int msm_tspp_map_irqs(struct platform_device *pdev,
 	return 0;
 }
 
+//++ DTV_PCN1000001_HTC_POWER_CUNSUMPTION
+/* [HTC]  Power consumption */
+#if defined(CONFIG_FB)
+static int fb_notifier_callback(struct notifier_block *self,
+                                 unsigned long event, void *data)
+{
+        struct fb_event *evdata = data;
+        int *blank;
+
+        struct tspp_device *tspp_device_data = container_of(self, struct tspp_device, fb_notif);
+
+        if (evdata && evdata->data && tspp_device_data && tspp_device_data->tsif_bus_client) {
+                if (event == FB_EVENT_BLANK) {
+                        blank = evdata->data;
+                        if (*blank == FB_BLANK_UNBLANK)
+			{
+				printk("%s, enable_tspp_interrupt\n", __func__);
+                                enable_tspp_interrupt(tspp_device_data, 1);
+			}
+                        else if (*blank == FB_BLANK_POWERDOWN)
+			{
+				printk("%s, disable_tspp_interrupt\n", __func__);
+                                enable_tspp_interrupt(tspp_device_data, 0);
+			}
+                }
+        }
+
+        return 0;
+}
+#endif
+//-- DTV_PCN1000001_HTC_POWER_CUNSUMPTION
+
 static int __devinit msm_tspp_probe(struct platform_device *pdev)
 {
 	int rc = -ENODEV;
@@ -3153,6 +3237,13 @@ static int __devinit msm_tspp_probe(struct platform_device *pdev)
 		goto err_irq;
 	device->req_irqs = false;
 
+	//++ DTV_PCN1000001_HTC_POWER_CUNSUMPTION
+	/* [HTC]  Power consumption */
+	/* disable TSPP INTERRUPT */
+	printk("%s, disable TSPP INTERRUPT\n", __func__);
+	enable_tspp_interrupt(device, 0);
+	//-- DTV_PCN1000001_HTC_POWER_CUNSUMPTION
+
 	/* power management */
 	pm_runtime_set_active(&pdev->dev);
 	pm_runtime_enable(&pdev->dev);
@@ -3216,6 +3307,21 @@ static int __devinit msm_tspp_probe(struct platform_device *pdev)
 
 	/* everything is ok, so add the device to the list */
 	list_add_tail(&(device->devlist), &tspp_devices);
+
+//++ DTV_PCN1000001_HTC_POWER_CUNSUMPTION
+/* [HTC]  Power consumption */
+#if defined(CONFIG_FB)
+	{
+        int error;
+
+        device->fb_notif.notifier_call = fb_notifier_callback;
+        error = fb_register_client(&device->fb_notif);
+
+        if (error)
+                pr_err("Unable to register fb_notifier: %d\n", error);
+	}
+#endif
+//-- DTV_PCN1000001_HTC_POWER_CUNSUMPTION
 
 	return 0;
 
@@ -3310,15 +3416,49 @@ static int __devexit msm_tspp_remove(struct platform_device *pdev)
 
 /*** power management ***/
 
-static int tspp_runtime_suspend(struct device *dev)
+static int tspp_runtime_suspend(struct device *dev_)
 {
-	dev_dbg(dev, "pm_runtime: suspending...");
+	//++ DTV_PCN1000001_HTC_POWER_CUNSUMPTION
+	/* [HTC]  Power consumption */
+	struct platform_device *pdev;
+	struct tspp_device *tsppdev;
+	//-- DTV_PCN1000001_HTC_POWER_CUNSUMPTION
+
+	dev_dbg(dev_, "pm_runtime: suspending...");
+
+	//++ DTV_PCN1000001_HTC_POWER_CUNSUMPTION
+	/* [HTC]  Power consumption */
+	pdev = container_of(dev_, struct platform_device, dev);
+	tsppdev = platform_get_drvdata(pdev);
+
+	/* disable TSPP INTERRUPT */
+	printk("%s, disable TSPP INTERRUPT\n", __func__);
+	enable_tspp_interrupt(tsppdev, 0);
+	//-- DTV_PCN1000001_HTC_POWER_CUNSUMPTION
+
 	return 0;
 }
 
-static int tspp_runtime_resume(struct device *dev)
+static int tspp_runtime_resume(struct device *dev_)
 {
-	dev_dbg(dev, "pm_runtime: resuming...");
+	//++ DTV_PCN1000001_HTC_POWER_CUNSUMPTION
+	/* [HTC]  Power consumption */
+	struct platform_device *pdev;
+	struct tspp_device *tsppdev;
+	//-- DTV_PCN1000001_HTC_POWER_CUNSUMPTION
+
+	dev_dbg(dev_, "pm_runtime: resuming...");
+
+	//++ DTV_PCN1000001_HTC_POWER_CUNSUMPTION
+	/* [HTC]  Power consumption */
+	pdev = container_of(dev_, struct platform_device, dev);
+	tsppdev = platform_get_drvdata(pdev);
+
+	/* enable TSPP INTERRUPT */
+	printk("%s, enable TSPP INTERRUPT\n", __func__);
+	enable_tspp_interrupt(tsppdev, 1);
+	//-- DTV_PCN1000001_HTC_POWER_CUNSUMPTION
+
 	return 0;
 }
 
@@ -3341,7 +3481,6 @@ static struct platform_driver msm_tspp_driver = {
 		.of_match_table = msm_match_table,
 	},
 };
-
 
 static int __init mod_init(void)
 {

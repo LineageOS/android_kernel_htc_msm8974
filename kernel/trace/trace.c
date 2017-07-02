@@ -1119,6 +1119,15 @@ static void trace_save_cmdline(struct task_struct *tsk)
 
 	memcpy(&saved_cmdlines[idx], tsk->comm, TASK_COMM_LEN);
 
+	/* Add check for tsk->comm corruption */
+	if (strlen(saved_cmdlines[idx]) >= TASK_COMM_LEN) {
+		/* This means source of comm was incorrect */
+		pr_info("%s: tsk->comm has invalid length! %d:%s len=%d\n",
+			__func__, tsk->pid, tsk->comm, strlen(tsk->comm));
+		/* Let's fix it now */
+		saved_cmdlines[idx][TASK_COMM_LEN-1] = '\0';
+	}
+
 	arch_spin_unlock(&trace_cmdline_lock);
 }
 
@@ -1127,17 +1136,17 @@ void trace_find_cmdline(int pid, char comm[])
 	unsigned map;
 
 	if (!pid) {
-		strcpy(comm, "<idle>");
+		strncpy(comm, "<idle>", TASK_COMM_LEN);
 		return;
 	}
 
 	if (WARN_ON_ONCE(pid < 0)) {
-		strcpy(comm, "<XXX>");
+		strncpy(comm, "<XXX>", TASK_COMM_LEN);
 		return;
 	}
 
 	if (pid > PID_MAX_DEFAULT) {
-		strcpy(comm, "<...>");
+		strncpy(comm, "<...>", TASK_COMM_LEN);
 		return;
 	}
 
@@ -1145,12 +1154,21 @@ void trace_find_cmdline(int pid, char comm[])
 	arch_spin_lock(&trace_cmdline_lock);
 	map = map_pid_to_cmdline[pid];
 	if (map != NO_CMDLINE_MAP)
-		strcpy(comm, saved_cmdlines[map]);
+		strncpy(comm, saved_cmdlines[map], TASK_COMM_LEN);
 	else
-		strcpy(comm, "<...>");
+		strncpy(comm, "<...>", TASK_COMM_LEN);
 
 	arch_spin_unlock(&trace_cmdline_lock);
 	preempt_enable();
+
+	/* Add more protection here to prevent saved_cmdlines from corruption */
+	if (strlen(comm) >= TASK_COMM_LEN) {
+		/* This means saved_cmdline was corrupted... */
+		pr_info("%s: saved_cmdline has invalid length! comm:%s\n",
+			__func__, comm);
+		/* Let's fix it now */
+		comm[TASK_COMM_LEN-1] = '\0';
+	}
 }
 
 void tracing_record_cmdline(struct task_struct *tsk)
@@ -2962,7 +2980,7 @@ tracing_set_trace_read(struct file *filp, char __user *ubuf,
 
 	mutex_lock(&trace_types_lock);
 	if (current_trace)
-		r = sprintf(buf, "%s\n", current_trace->name);
+		r = scnprintf(buf, sizeof(buf), "%s\n", current_trace->name);
 	else
 		r = sprintf(buf, "\n");
 	mutex_unlock(&trace_types_lock);

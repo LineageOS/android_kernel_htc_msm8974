@@ -20,6 +20,7 @@
 #include "msm_venc.h"
 #include "msm_vidc_common.h"
 #include "msm_smem.h"
+#include "htc_msm_smem.h"
 #include <linux/delay.h>
 #include "vidc_hfi_api.h"
 
@@ -512,6 +513,12 @@ int map_and_register_buf(struct msm_vidc_inst *inst, struct v4l2_buffer *b)
 			binfo->handle[i] = same_fd_handle;
 		} else {
 			if (inst->map_output_buffer) {
+				
+				dprintk(VIDC_WARN,
+					"[Vidc_Mem][%p] Import_%s: UsrAddr(%x) FD(%d)\n",
+					inst, ((get_hal_buffer_type(inst, b) == HAL_BUFFER_INPUT)? "I":"O"),
+					binfo->uvaddr[i], b->m.planes[i].reserved[0]);
+				
 				binfo->handle[i] =
 					map_buffer(inst, &b->m.planes[i],
 						get_hal_buffer_type(inst, b));
@@ -733,6 +740,7 @@ int msm_vidc_release_buffers(void *instance, int buffer_type)
 	struct v4l2_buffer buffer_info;
 	struct v4l2_plane plane[VIDEO_MAX_PLANES];
 	int i, rc = 0;
+	bool release_buf = false;
 
 	if (!inst)
 		return -EINVAL;
@@ -758,7 +766,6 @@ int msm_vidc_release_buffers(void *instance, int buffer_type)
 	}
 
 	list_for_each_safe(ptr, next, &inst->registered_bufs) {
-		bool release_buf = false;
 		mutex_lock(&inst->lock);
 		bi = list_entry(ptr, struct buffer_info, list);
 		if (bi->type == buffer_type) {
@@ -1094,11 +1101,17 @@ void *msm_vidc_smem_get_client(void *instance)
 {
 	struct msm_vidc_inst *inst = instance;
 
-	if (!inst || !inst->mem_client) {
-		dprintk(VIDC_ERR, "%s: invalid instance or client = %p %p\n",
-				__func__, inst, inst->mem_client);
-		return NULL;
-	}
+        
+        if (!inst) {
+                dprintk(VIDC_ERR, "%s: invalid NULL instance\n", __func__);
+                return NULL;
+        }
+        if (!inst->mem_client) {
+                dprintk(VIDC_ERR, "%s: invalid NULL client (instance: %p)\n",
+                                __func__, inst);
+                return NULL;
+        }
+        
 
 	return inst->mem_client;
 }
@@ -1194,6 +1207,7 @@ void *msm_vidc_open(int core_id, int session_type)
 {
 	struct msm_vidc_inst *inst = NULL;
 	struct msm_vidc_core *core = NULL;
+	struct smem_client *smem_client = NULL;
 	int rc = 0;
 	int i = 0;
 	if (core_id >= MSM_VIDC_CORES_MAX ||
@@ -1223,7 +1237,7 @@ void *msm_vidc_open(int core_id, int session_type)
 	mutex_init(&inst->bufq[OUTPUT_PORT].lock);
 	mutex_init(&inst->lock);
 	inst->session_type = session_type;
-	INIT_MSM_VIDC_LIST(&inst->pendingq);
+	INIT_LIST_HEAD(&inst->pendingq);
 	INIT_LIST_HEAD(&inst->internalbufs);
 	INIT_LIST_HEAD(&inst->persistbufs);
 	INIT_LIST_HEAD(&inst->registered_bufs);
@@ -1237,12 +1251,18 @@ void *msm_vidc_open(int core_id, int session_type)
 		i <= SESSION_MSG_INDEX(SESSION_MSG_END); i++) {
 		init_completion(&inst->completions[i]);
 	}
-	inst->mem_client = msm_smem_new_client(SMEM_ION,
+	inst->mem_client = htc_msm_smem_new_client(SMEM_ION,
 					&inst->core->resources);
 	if (!inst->mem_client) {
 		dprintk(VIDC_ERR, "Failed to create memory client\n");
 		goto fail_mem_client;
 	}
+
+	
+	smem_client = inst->mem_client;
+	smem_client->inst = inst;
+	
+
 	if (session_type == MSM_VIDC_DECODER) {
 		msm_vdec_inst_init(inst);
 		msm_vdec_ctrl_init(inst);
@@ -1306,16 +1326,18 @@ err_invalid_core:
 
 static void cleanup_instance(struct msm_vidc_inst *inst)
 {
-	struct vb2_buf_entry *entry, *dummy;
+	struct list_head *ptr, *next;
+	struct vb2_buf_entry *entry;
 	if (inst) {
-		mutex_lock(&inst->pendingq.lock);
-		list_for_each_entry_safe(entry, dummy, &inst->pendingq.list,
-				list) {
-			list_del(&entry->list);
-			kfree(entry);
-		}
-		mutex_unlock(&inst->pendingq.lock);
 		mutex_lock(&inst->lock);
+		if (!list_empty(&inst->pendingq)) {
+			list_for_each_safe(ptr, next, &inst->pendingq) {
+				entry = list_entry(ptr, struct vb2_buf_entry,
+						list);
+				list_del(&entry->list);
+				kfree(entry);
+			}
+		}
 		if (!list_empty(&inst->internalbufs)) {
 			mutex_unlock(&inst->lock);
 			if (msm_comm_release_scratch_buffers(inst))
