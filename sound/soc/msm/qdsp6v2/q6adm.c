@@ -37,6 +37,11 @@
 
 #define ULL_SUPPORTED_SAMPLE_RATE 48000
 #define ULL_MAX_SUPPORTED_CHANNEL 2
+
+#ifdef CONFIG_HD_AUDIO
+#define ULL_SUPPORTED_BITS_PER_SAMPLE 16
+#endif
+
 enum {
 	ADM_RX_AUDPROC_CAL,
 	ADM_TX_AUDPROC_CAL,
@@ -79,6 +84,75 @@ static struct adm_multi_ch_map multi_ch_map = { false,
 					      };
 
 static int adm_get_parameters[ADM_GET_PARAMETER_LENGTH];
+
+//htc audio ++
+int q6adm_enable_effect(int port_id, uint32_t module_id, uint32_t param_id,
+		uint32_t payload_size, void *payload)
+{
+	u8 *q6_cmd = NULL;
+	struct adm_cmd_set_pp_params_v5 *param;
+	int sz, rc = 0, index = afe_get_port_index(port_id);
+
+	if (index < 0 || index >= AFE_MAX_PORTS) {
+		pr_err("%s: invalid port idx %d portid %#x\n",
+			__func__, index, port_id);
+		return -EINVAL;
+	}
+
+	sz = sizeof(struct adm_cmd_set_pp_params_v5) + payload_size;
+	q6_cmd = kzalloc(sz, GFP_KERNEL);
+
+	if (!q6_cmd) {
+		pr_err("%s, adm params memory alloc failed", __func__);
+		return -ENOMEM;
+	}
+
+	memcpy(q6_cmd + sizeof(struct adm_cmd_set_pp_params_v5),
+			payload, payload_size);
+
+	param = (struct adm_cmd_set_pp_params_v5 *)q6_cmd;
+
+	param->hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
+				APR_HDR_LEN(APR_HDR_SIZE), APR_PKT_VER);
+	param->hdr.pkt_size = sz;
+	param->hdr.src_svc = APR_SVC_ADM;
+	param->hdr.src_domain = APR_DOMAIN_APPS;
+	param->hdr.src_port = port_id;
+	param->hdr.dest_svc = APR_SVC_ADM;
+	param->hdr.dest_domain = APR_DOMAIN_ADSP;
+	param->hdr.dest_port = atomic_read(&this_adm.copp_id[index]);
+	param->hdr.token = port_id;
+	param->hdr.opcode = ADM_CMD_SET_PP_PARAMS_V5;
+	param->payload_addr_lsw = 0;
+	param->payload_addr_msw = 0;
+	param->mem_map_handle = 0;
+	param->payload_size = payload_size;
+
+	atomic_set(&this_adm.copp_stat[index], 0);
+	rc = apr_send_pkt(this_adm.apr, (uint32_t *)q6_cmd);
+	if (rc < 0) {
+		pr_err("%s: Set params failed port = %#x\n",
+			__func__, port_id);
+		rc = -EINVAL;
+		goto fail_cmd;
+	}
+	/* Wait for the callback */
+	rc = wait_event_timeout(this_adm.wait[index],
+		atomic_read(&this_adm.copp_stat[index]),
+		msecs_to_jiffies(TIMEOUT_MS));
+	if (!rc) {
+		pr_err("%s: Set params timed out port = %#x\n",
+			 __func__, port_id);
+		rc = -EINVAL;
+		goto fail_cmd;
+	}
+	rc = 0;
+fail_cmd:
+	kfree(q6_cmd);
+
+	return rc;
+}
+//htc audio --
 
 int srs_trumedia_open(int port_id, int srs_tech_id, void *srs_params)
 {
@@ -378,7 +452,12 @@ int adm_get_params(int port_id, uint32_t module_id, uint32_t param_id,
 	struct adm_cmd_get_pp_params_v5 *adm_params = NULL;
 	int sz, rc = 0, i = 0, index = afe_get_port_index(port_id);
 	int *params_data = (int *)params;
-
+// htc audio ++
+	if (this_adm.apr == NULL) {
+		pr_err("%s APR handle NULL\n", __func__);
+		return -EINVAL;
+	}
+// htc audio --
 	if (index < 0 || index >= AFE_MAX_PORTS) {
 		pr_err("%s: invalid port idx %d portid %#x\n",
 			__func__, index, port_id);
@@ -674,6 +753,13 @@ static int32_t adm_callback(struct apr_client_data *data, void *priv)
 			atomic_set(&this_adm.copp_stat[index], 1);
 			wake_up(&this_adm.wait[index]);
 			break;
+//htc_aud_nsd++ , no sound detection
+		case ELITEMSG_CUSTOM_HTC_NO_SOUND_DET:
+			pr_debug("%s, ELITEMSG_CUSTOM_HTC_NO_SOUND_DET, value 0x%x\n",
+					__func__, payload[0]);
+			htc_nsd_update((void*)payload);
+			break;
+//htc_aud_nsd--
 		default:
 			pr_err("%s: Unknown cmd:0x%x\n", __func__,
 							data->opcode);
@@ -1126,8 +1212,10 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 	int index;
 	int tmp_port = q6audio_get_port_id(port_id);
 
-	pr_debug("%s: port %#x path:%d rate:%d mode:%d perf_mode:%d\n",
-		 __func__, port_id, path, rate, channel_mode, perf_mode);
+	pr_debug("%s: port %#x path:%d rate:%d mode:%d perf_mode:%d,\
+			topology: %d, bits_per_sample: %d\n", __func__,
+			port_id, path, rate, channel_mode, perf_mode,
+			topology, bits_per_sample);
 
 	port_id = q6audio_convert_virtual_to_portid(port_id);
 
@@ -1175,12 +1263,13 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 		open.hdr.dest_port = tmp_port;
 		open.hdr.token = port_id;
 		open.hdr.opcode = ADM_CMD_DEVICE_OPEN_V5;
-		if (perf_mode == ULTRA_LOW_LATENCY_PCM_MODE)
-			open.flags = ADM_ULTRA_LOW_LATENCY_DEVICE_SESSION;
-		else if (perf_mode == LOW_LATENCY_PCM_MODE)
-			open.flags = ADM_LOW_LATENCY_DEVICE_SESSION;
-		else
-			open.flags = ADM_LEGACY_DEVICE_SESSION;
+
+		open.flags = 0x00;
+		if (perf_mode) {
+			open.flags |= ADM_LOW_LATENCY_DEVICE_SESSION;
+		} else {
+			open.flags |= ADM_LEGACY_DEVICE_SESSION;
+		}
 
 		open.mode_of_operation = path;
 		open.endpoint_id_1 = tmp_port;
@@ -1203,6 +1292,9 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 			rate = ULL_SUPPORTED_SAMPLE_RATE;
 			if(channel_mode > ULL_MAX_SUPPORTED_CHANNEL)
 				channel_mode = ULL_MAX_SUPPORTED_CHANNEL;
+#ifdef CONFIG_HD_AUDIO
+			bits_per_sample = ULL_SUPPORTED_BITS_PER_SAMPLE;
+#endif
 		} else if (perf_mode == LOW_LATENCY_PCM_MODE) {
 			if ((open.topology_id == DOLBY_ADM_COPP_TOPOLOGY_ID) ||
 			    (open.topology_id == SRS_TRUMEDIA_TOPOLOGY_ID))
@@ -1661,8 +1753,8 @@ int adm_close(int port_id, int perf_mode)
 	if (q6audio_validate_port(port_id) < 0)
 		return -EINVAL;
 
-	pr_debug("%s port_id=%#x index %d perf_mode: %d\n", __func__, port_id,
-		index, perf_mode);
+	pr_debug("%s port_id=%#x index %d perf_mode: %d, perf_cnt %d cnt %d\n", __func__, port_id,
+		index, perf_mode, atomic_read(&this_adm.copp_low_latency_cnt[index]), atomic_read(&this_adm.copp_cnt[index]));
 
 	if (perf_mode == ULTRA_LOW_LATENCY_PCM_MODE ||
 				perf_mode == LOW_LATENCY_PCM_MODE) {
