@@ -5,17 +5,11 @@
 menu "Near Field Communication (NFC) devices"
 	depends on NFC
 
-config PN544_NFC
+config NFC_PN544
 	tristate "PN544 NFC driver"
-	depends on I2C
-	select CRC_CCITT
-	default n
-	---help---
-	  Say yes if you want PN544 Near Field Communication driver.
-	  This is for i2c connected version. If unsure, say N here.
-
-	  To compile this driver as a module, choose m here. The module will
-	  be called pn544.
+	depends on I2C=y
+	help
+	  PN544 NFC Driver implemented by HTC.
 
 config NFC_PN533
 	tristate "NXP PN533 USB driver"
