@@ -134,7 +134,7 @@ SYSCALL_DEFINE1(uselib, const char __user *, library)
 		goto out;
 
 	error = -EINVAL;
-	if (!S_ISREG(file->f_path.dentry->d_inode->i_mode))
+	if (!S_ISREG(file_inode(file)->i_mode))
 		goto exit;
 
 	error = -EACCES;
@@ -777,7 +777,7 @@ struct file *open_exec(const char *name)
 		goto out;
 
 	err = -EACCES;
-	if (!S_ISREG(file->f_path.dentry->d_inode->i_mode))
+	if (!S_ISREG(file_inode(file)->i_mode))
 		goto exit;
 
 	if (file->f_path.mnt->mnt_flags & MNT_NOEXEC)
@@ -1127,7 +1127,7 @@ EXPORT_SYMBOL(flush_old_exec);
 
 void would_dump(struct linux_binprm *bprm, struct file *file)
 {
-	if (inode_permission(file->f_path.dentry->d_inode, MAY_READ) < 0)
+	if (inode_permission(file_inode(file), MAY_READ) < 0)
 		bprm->interp_flags |= BINPRM_FLAGS_ENFORCE_NONDUMP;
 }
 EXPORT_SYMBOL(would_dump);
@@ -1277,7 +1277,7 @@ static int check_unsafe_exec(struct linux_binprm *bprm)
 int prepare_binprm(struct linux_binprm *bprm)
 {
 	umode_t mode;
-	struct inode * inode = bprm->file->f_path.dentry->d_inode;
+	struct inode * inode = file_inode(bprm->file);
 	int retval;
 
 	mode = inode->i_mode;
@@ -2237,8 +2237,9 @@ void do_coredump(long signr, int exit_code, struct pt_regs *regs)
 	if (ispipe && core_pipe_limit)
 		wait_for_dump_helpers(cprm.file);
 close_fail:
-	if (cprm.file)
+	if (cprm.file){
 		filp_close(cprm.file, NULL);
+	}
 fail_dropcount:
 	if (ispipe)
 		atomic_dec(&core_dump_count);

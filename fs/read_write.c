@@ -19,6 +19,7 @@
 
 #include <asm/uaccess.h>
 #include <asm/unistd.h>
+#include <mach/devices_cmdline.h>
 
 const struct file_operations generic_ro_fops = {
 	.llseek		= generic_file_llseek,
@@ -161,7 +162,7 @@ EXPORT_SYMBOL(no_llseek);
 
 loff_t default_llseek(struct file *file, loff_t offset, int origin)
 {
-	struct inode *inode = file->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(file);
 	loff_t retval;
 
 	mutex_lock(&inode->i_mutex);
@@ -297,7 +298,7 @@ int rw_verify_area(int read_write, struct file *file, loff_t *ppos, size_t count
 	loff_t pos;
 	int retval = -EINVAL;
 
-	inode = file->f_path.dentry->d_inode;
+	inode = file_inode(file);
 	if (unlikely((ssize_t) count < 0))
 		return retval;
 	pos = *ppos;
@@ -335,6 +336,65 @@ static void wait_on_retry_sync_kiocb(struct kiocb *iocb)
 	__set_current_state(TASK_RUNNING);
 }
 
+static struct fs_dbg_threshold dbg_threshold[] = {
+	{ 10485760, "read"}, 
+	{ 10485760, "write"}, 
+	{ 10485760, "erase"}, 
+};
+static void check_dbg_threshold(struct task_io_accounting *acc,
+	struct fs_dbg_threshold *thresh, int type)
+{
+	if (acc->acc_bytes[type] > thresh->threshold) {
+		pr_info("FS Statistics: %s(pid %d, parent %s(%d)) %s %llu MB in %u ms\n",
+				current->comm, current->pid,
+				current->parent->comm, current->parent->pid,
+				thresh->type,
+				acc->acc_bytes[type] / 1048576,
+				jiffies_to_msecs(jiffies - acc->last_jiffies[type]));
+		acc->acc_bytes[type] = 0;
+		acc->last_jiffies[type] = 0;
+	}
+}
+
+extern unsigned int get_tamper_sf(void);
+void fs_debug_dump(unsigned int type, size_t bytes)
+{
+	unsigned long last_jiffies;
+
+	if (get_tamper_sf() == 1)
+		return;
+	if (type > FS_DBG_TYPE_ERASE)
+		return;
+	if (!strcmp(current->comm, "sdcard"))
+		return;
+
+	last_jiffies = current->ioac.last_jiffies[type];
+	
+	if ((last_jiffies == 0) || time_after(jiffies, last_jiffies + 5 * HZ)) {
+		current->ioac.acc_bytes[type] = bytes;
+		current->ioac.last_jiffies[type] = jiffies;
+		if (type == FS_DBG_TYPE_ERASE)
+			check_dbg_threshold(&current->ioac, &dbg_threshold[type], type);
+		return;
+	}
+	current->ioac.acc_bytes[type] += bytes;
+
+	
+	if (type == FS_DBG_TYPE_ERASE) {
+		check_dbg_threshold(&current->ioac, &dbg_threshold[type], type);
+		return;
+	}
+
+	
+	if (time_before(jiffies, last_jiffies + HZ))
+		return;
+
+	
+	check_dbg_threshold(&current->ioac, &dbg_threshold[type], type);
+
+	return;
+}
+
 ssize_t do_sync_read(struct file *filp, char __user *buf, size_t len, loff_t *ppos)
 {
 	struct iovec iov = { .iov_base = buf, .iov_len = len };
@@ -364,6 +424,7 @@ EXPORT_SYMBOL(do_sync_read);
 ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 {
 	ssize_t ret;
+	struct super_block *sb = file->f_path.dentry->d_sb;
 
 	if (!(file->f_mode & FMODE_READ))
 		return -EBADF;
@@ -385,6 +446,10 @@ ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 		}
 		inc_syscr(current);
 	}
+	if (sb && (!strcmp(sb->s_type->name, "ext4")
+		|| !strcmp(sb->s_type->name, "fuse")
+		|| !strcmp(sb->s_type->name, "vfat")))
+		fs_debug_dump(FS_DBG_TYPE_READ, count);
 
 	return ret;
 }
@@ -420,6 +485,7 @@ EXPORT_SYMBOL(do_sync_write);
 ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_t *pos)
 {
 	ssize_t ret;
+	struct super_block *sb = file->f_path.dentry->d_sb;
 
 	if (!(file->f_mode & FMODE_WRITE))
 		return -EBADF;
@@ -441,6 +507,11 @@ ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_
 		}
 		inc_syscw(current);
 	}
+
+	if (sb && (!strcmp(sb->s_type->name, "ext4")
+		|| !strcmp(sb->s_type->name, "fuse")
+		|| !strcmp(sb->s_type->name, "vfat")))
+		fs_debug_dump(FS_DBG_TYPE_WRITE, count);
 
 	return ret;
 }
@@ -474,6 +545,8 @@ SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)
 	return ret;
 }
 
+#define WRITE_TIMEOUT_VALUE 5
+
 SYSCALL_DEFINE3(write, unsigned int, fd, const char __user *, buf,
 		size_t, count)
 {
@@ -484,7 +557,9 @@ SYSCALL_DEFINE3(write, unsigned int, fd, const char __user *, buf,
 	file = fget_light(fd, &fput_needed);
 	if (file) {
 		loff_t pos = file_pos_read(file);
+
 		ret = vfs_write(file, buf, count, &pos);
+
 		file_pos_write(file, pos);
 		fput_light(file, fput_needed);
 	}
@@ -922,8 +997,8 @@ static ssize_t do_sendfile(int out_fd, int in_fd, loff_t *ppos,
 	if (!(out_file->f_mode & FMODE_WRITE))
 		goto fput_out;
 	retval = -EINVAL;
-	in_inode = in_file->f_path.dentry->d_inode;
-	out_inode = out_file->f_path.dentry->d_inode;
+	in_inode = file_inode(in_file);
+	out_inode = file_inode(out_file);
 	retval = rw_verify_area(WRITE, out_file, &out_file->f_pos, count);
 	if (retval < 0)
 		goto fput_out;

@@ -57,6 +57,10 @@ static DEFINE_SPINLOCK(pll_reg_lock);
 #define ENABLE_WAIT_MAX_LOOPS 200
 #define PLL_LOCKED_BIT BIT(16)
 
+#ifdef CONFIG_ARCH_MSM8226
+int pming = 0;
+#endif
+
 static int fixed_pll_clk_set_rate(struct clk *c, unsigned long rate)
 {
 	if (rate != c->rate)
@@ -325,6 +329,7 @@ static int local_pll_clk_set_rate(struct clk *c, unsigned long rate)
 	struct pll_freq_tbl *nf;
 	struct pll_clk *pll = to_pll_clk(c);
 	unsigned long flags;
+	u32 regval;
 
 	for (nf = pll->freq_tbl; nf->freq_hz != PLL_FREQ_END
 			&& nf->freq_hz != rate; nf++)
@@ -338,8 +343,27 @@ static int local_pll_clk_set_rate(struct clk *c, unsigned long rate)
 	 * assume no downstream clock is using actively using it.
 	 */
 	spin_lock_irqsave(&c->lock, flags);
+	pll->rcg_cmd_value = readl_relaxed(*pll->rcg_debug_base + 0x50);
+	pll->rcg_cfg_value = readl_relaxed(*pll->rcg_debug_base + 0x54);
+	regval = (pll->rcg_cfg_value & BM(10, 8)) >> 8;
+	if (regval == 0x5) {
+		pr_err("invalid pll setting, c->count = %d, 0x%x, 0x%x\n", c->count, pll->rcg_cmd_value, pll->rcg_cfg_value);
+		pr_err("L = %d\n", readl_relaxed(PLL_L_REG(pll)));
+		pr_err("M = %d\n", readl_relaxed(PLL_M_REG(pll)));
+		pr_err("N = %d\n", readl_relaxed(PLL_N_REG(pll)));
+		BUG_ON(1);
+	}
+
+#ifdef CONFIG_ARCH_MSM8226
+	/* HTC: Prevent a7sspll from disabling and enabling no matter count number */
+	if (!strcmp(c->dbg_name, "a7sspll") && pming)
+		pr_info("[PP2] %s: Prevent from performing a7sspll clock disable, pll count = %d\n", __func__, c->count);
+	else if ((strcmp(c->dbg_name, "a7sspll") && c->count) || (!strcmp(c->dbg_name, "a7sspll") && c->count && !pming))
+		c->ops->disable(c);
+#else
 	if (c->count)
 		c->ops->disable(c);
+#endif
 
 	writel_relaxed(nf->l_val, PLL_L_REG(pll));
 	writel_relaxed(nf->m_val, PLL_M_REG(pll));
@@ -347,9 +371,16 @@ static int local_pll_clk_set_rate(struct clk *c, unsigned long rate)
 
 	__pll_config_reg(PLL_CONFIG_REG(pll), nf, &pll->masks);
 
+#ifdef CONFIG_ARCH_MSM8226
+	/* HTC: Prevent a7sspll from disabling and enabling no matter count number */
+	if (!strcmp(c->dbg_name, "a7sspll") && pming)
+		pr_info("[PP2] %s: Prevent from performing a7sspll enable, pll count = %d\n", __func__, c->count);
+	else if ((strcmp(c->dbg_name, "a7sspll") && c->count) || (!strcmp(c->dbg_name, "a7sspll") && c->count && !pming))
+		c->ops->enable(c);
+#else
 	if (c->count)
 		c->ops->enable(c);
-
+#endif
 	spin_unlock_irqrestore(&c->lock, flags);
 	return 0;
 }

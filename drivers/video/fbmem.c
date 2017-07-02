@@ -727,9 +727,13 @@ static const struct file_operations fb_proc_fops = {
  */
 static struct fb_info *file_fb_info(struct file *file)
 {
-	struct inode *inode = file->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(file);
 	int fbidx = iminor(inode);
-	struct fb_info *info = registered_fb[fbidx];
+	struct fb_info *info = NULL;
+
+	if (fbidx >= FB_MAX)
+		return NULL;
+	info = registered_fb[fbidx];
 
 	if (info != file->private_data)
 		info = NULL;
