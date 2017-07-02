@@ -83,6 +83,7 @@ int msm_bam_dmux_is_ch_low(uint32_t id);
 int msm_bam_dmux_reg_notify(void *priv,
 		       void (*notify)(void *priv, int event_type,
 						unsigned long data));
+void bam_change_adaptive_timer(int mode);
 #else
 static inline int msm_bam_dmux_open(uint32_t id, void *priv,
 		       void (*notify)(void *priv, int event_type,
