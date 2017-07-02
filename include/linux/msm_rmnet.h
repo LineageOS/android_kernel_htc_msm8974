@@ -35,31 +35,29 @@ enum rmnet_ioctl_cmds_e {
 };
 
 enum rmnet_ioctl_extended_cmds_e {
-/* RmNet Data Required IOCTLs */
-        RMNET_IOCTL_GET_SUPPORTED_FEATURES     = 0x0000,   /* Get features    */
-        RMNET_IOCTL_SET_MRU                    = 0x0001,   /* Set MRU         */
-        RMNET_IOCTL_GET_MRU                    = 0x0002,   /* Get MRU         */
-        RMNET_IOCTL_GET_EPID                   = 0x0003,   /* Get endpoint ID */
-        RMNET_IOCTL_GET_DRIVER_NAME            = 0x0004,   /* Get driver name */
-        RMNET_IOCTL_ADD_MUX_CHANNEL            = 0x0005,   /* Add MUX ID      */
-        RMNET_IOCTL_SET_EGRESS_DATA_FORMAT     = 0x0006,   /* Set EDF         */
-        RMNET_IOCTL_SET_INGRESS_DATA_FORMAT    = 0x0007,   /* Set IDF         */
-        RMNET_IOCTL_SET_AGGREGATION_COUNT      = 0x0008,   /* Set agg count   */
-        RMNET_IOCTL_GET_AGGREGATION_COUNT      = 0x0009,   /* Get agg count   */
-        RMNET_IOCTL_SET_AGGREGATION_SIZE       = 0x000A,   /* Set agg size    */
-        RMNET_IOCTL_GET_AGGREGATION_SIZE       = 0x000B,   /* Get agg size    */
-        RMNET_IOCTL_FLOW_CONTROL               = 0x000C,   /* Do flow control */
-        RMNET_IOCTL_GET_DFLT_CONTROL_CHANNEL   = 0x000D,   /* For legacy use  */
-        RMNET_IOCTL_GET_HWSW_MAP               = 0x000E,   /* Get HW/SW map   */
-        RMNET_IOCTL_SET_RX_HEADROOM            = 0x000F,   /* RX Headroom     */
-        RMNET_IOCTL_GET_EP_PAIR                = 0x0010,   /* Endpoint pair   */
-        RMNET_IOCTL_SET_QOS_VERSION            = 0x0011,   /* 8/6 byte QoS hdr*/
-        RMNET_IOCTL_GET_QOS_VERSION            = 0x0012,   /* 8/6 byte QoS hdr*/
-        RMNET_IOCTL_GET_SUPPORTED_QOS_MODES    = 0x0013,   /* Get QoS modes   */
-        RMNET_IOCTL_SET_SLEEP_STATE            = 0x0014,   /* Set sleep state */
-        RMNET_IOCTL_SET_XLAT_DEV_INFO          = 0x0015,   /* xlat dev name   */
-        RMNET_IOCTL_DEREGISTER_DEV             = 0x0016,   /* Dereg a net dev */
-        RMNET_IOCTL_EXTENDED_MAX               = 0x0017
+        RMNET_IOCTL_GET_SUPPORTED_FEATURES     = 0x0000,   
+        RMNET_IOCTL_SET_MRU                    = 0x0001,   
+        RMNET_IOCTL_GET_MRU                    = 0x0002,   
+        RMNET_IOCTL_GET_EPID                   = 0x0003,   
+        RMNET_IOCTL_GET_DRIVER_NAME            = 0x0004,   
+        RMNET_IOCTL_ADD_MUX_CHANNEL            = 0x0005,   
+        RMNET_IOCTL_SET_EGRESS_DATA_FORMAT     = 0x0006,   
+        RMNET_IOCTL_SET_INGRESS_DATA_FORMAT    = 0x0007,   
+        RMNET_IOCTL_SET_AGGREGATION_COUNT      = 0x0008,   
+        RMNET_IOCTL_GET_AGGREGATION_COUNT      = 0x0009,   
+        RMNET_IOCTL_SET_AGGREGATION_SIZE       = 0x000A,   
+        RMNET_IOCTL_GET_AGGREGATION_SIZE       = 0x000B,   
+        RMNET_IOCTL_FLOW_CONTROL               = 0x000C,   
+        RMNET_IOCTL_GET_DFLT_CONTROL_CHANNEL   = 0x000D,   
+        RMNET_IOCTL_GET_HWSW_MAP               = 0x000E,   
+        RMNET_IOCTL_SET_RX_HEADROOM            = 0x000F,   
+        RMNET_IOCTL_GET_EP_PAIR                = 0x0010,   
+        RMNET_IOCTL_SET_QOS_VERSION            = 0x0011,   
+        RMNET_IOCTL_GET_QOS_VERSION            = 0x0012,   
+        RMNET_IOCTL_GET_SUPPORTED_QOS_MODES    = 0x0013,   
+        RMNET_IOCTL_SET_SLEEP_STATE            = 0x0014,   
+        RMNET_IOCTL_SET_XLAT_DEV_INFO          = 0x0015,   
+        RMNET_IOCTL_EXTENDED_MAX               = 0x0016
 };
 
 /* Return values for the RMNET_IOCTL_GET_SUPPORTED_FEATURES IOCTL */

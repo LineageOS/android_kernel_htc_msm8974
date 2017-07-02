@@ -554,7 +554,6 @@ static int clock_debug_init(void)
 	measure = clk_get_sys("debug", "measure");
 	if (IS_ERR(measure))
 		measure = NULL;
-
 	return 0;
 }
 

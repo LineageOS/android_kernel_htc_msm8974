@@ -62,6 +62,14 @@ struct v4l2_subdev_info {
 	uint16_t order;
 };
 
+/* HTC_START Steven.CW_Wu 20131206 - porting ov13850 and NCP6924 */
+struct camera_ncp6924_vreg_t {
+	const char *reg_name;
+	int min_voltage;
+	int max_voltage;
+};
+/* HTC_END Steven.CW_Wu 20131206 - porting ov13850 and NCP6924 */
+
 struct msm_camera_power_ctrl_t {
 	struct device *dev;
 	struct msm_sensor_power_setting *power_setting;
@@ -82,12 +90,26 @@ struct msm_camera_sensor_board_info {
 	const char *actuator_name;
 	struct msm_camera_slave_info *slave_info;
 	struct msm_camera_csi_lane_params *csi_lane_params;
+	struct camera_vreg_t *cam_vreg;
+	int num_vreg;
 	struct msm_camera_sensor_strobe_flash_data *strobe_flash_data;
+	struct msm_camera_gpio_conf *gpio_conf;
 	struct msm_actuator_info *actuator_info;
+	struct msm_camera_i2c_conf *i2c_conf;
 	struct msm_sensor_info_t *sensor_info;
+	struct msm_sensor_init_params *sensor_init_params;
 	const char *misc_regulator;
 	struct msm_camera_power_ctrl_t power_info;
 	struct msm_camera_sensor_slave_info *cam_slave_info;
+
+	//HTC_START
+	uint32_t htc_image;
+	uint32_t camid_value;
+	//HTC_END
+	/* HTC_START Steven.CW_Wu 20131206 - porting ov13850 and NCP6924 */
+  uint32_t pm_ncp6924;
+  struct camera_ncp6924_vreg_t *cam_ncp6924_vreg;
+	/* HTC_END Steven.CW_Wu 20131206 - porting ov13850 and NCP6924 */
 };
 
 enum msm_camera_i2c_cmd_type {

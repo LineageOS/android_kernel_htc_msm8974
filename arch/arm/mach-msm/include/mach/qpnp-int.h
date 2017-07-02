@@ -119,6 +119,7 @@ static inline int qpnpint_handle_irq(struct spmi_controller *spmi_ctrl,
 {
 	return -ENXIO;
 }
+
 int qpnpint_show_irq(struct spmi_controller *spmi_ctrl,
 		       struct qpnp_irq_spec *spec)
 {
@@ -129,5 +130,6 @@ static inline bool qpnpint_show_resume_irq(void)
 {
 	return false;
 }
+
 #endif /* CONFIG_MSM_QPNP_INT */
 #endif /* QPNPINT_H */

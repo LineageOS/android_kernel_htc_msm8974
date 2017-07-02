@@ -291,6 +291,8 @@ static void slim_report(struct work_struct *work)
 	struct slim_driver *sbdrv;
 	struct slim_device *sbdev =
 			container_of(work, struct slim_device, wd);
+
+	pr_info("%s\n",__func__);
 	if (!sbdev->dev.driver)
 		return;
 	/* check if device-up or down needs to be called */
@@ -336,6 +338,7 @@ int slim_add_device(struct slim_controller *ctrl, struct slim_device *sbdev)
 	INIT_WORK(&sbdev->wd, slim_report);
 	mutex_lock(&ctrl->m_ctrl);
 	list_add_tail(&sbdev->dev_list, &ctrl->devs);
+	pr_info("add slim dev %s\n",dev_name(&sbdev->dev));
 	mutex_unlock(&ctrl->m_ctrl);
 	/* probe slave on this controller */
 	return device_register(&sbdev->dev);
@@ -657,7 +660,8 @@ void slim_framer_booted(struct slim_controller *ctrl)
 	mutex_lock(&ctrl->m_ctrl);
 	list_for_each_safe(pos, next, &ctrl->devs) {
 		struct slim_driver *sbdrv;
-		sbdev = list_entry(pos, struct slim_device, dev_list);
+		if (pos)
+			sbdev = list_entry(pos, struct slim_device, dev_list);
 		mutex_unlock(&ctrl->m_ctrl);
 		if (sbdev && sbdev->dev.driver) {
 			sbdrv = to_slim_driver(sbdev->dev.driver);

@@ -35,6 +35,11 @@
 		qcom,panel-pwm-period = <53>;
 	};
 
+	qcom,mdss_edp@fd923400 {
+		status = "ok";
+		qcom,cont-splash-enabled;
+	};
+
 	i2c@f9967000 {
 		battery@b {
 			compatible = "ti,bq28400-battery";
@@ -375,7 +380,7 @@
 
 		qcom,prim-auxpcm-gpio-clk  = <&msmgpio 74 0>;
 		qcom,prim-auxpcm-gpio-sync = <&msmgpio 75 0>;
-		qcom,prim-auxpcm-gpio-din  = <&msmgpio 76 0>;
+		/*qcom,prim-auxpcm-gpio-din  = <&msmgpio 76 0>;*/
 		qcom,prim-auxpcm-gpio-dout = <&msmgpio 77 0>;
 		qcom,prim-auxpcm-gpio-set = "prim-gpio-tert";
 	};

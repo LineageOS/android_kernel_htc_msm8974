@@ -38,4 +38,5 @@ struct msm_rpm_master_stats_platform_data {
 	 u32 master_offset;
 	 u32 version;
 };
+
 #endif
