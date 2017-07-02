@@ -138,6 +138,7 @@ Optional properties:
 					"bl_ctrl_pwm" = Backlight controlled by PWM gpio.
 					"bl_ctrl_wled" = Backlight controlled by WLED.
 					"bl_ctrl_dcs" = Backlight controlled by DCS commands.
+					"bl_ctrl_i2c" = Backlight controlled by I2C.
 					other: Unknown backlight control. (default)
 - qcom,mdss-dsi-bl-pmic-bank-select:	LPG channel for backlight.
 					Requred if blpmiccontroltype is PWM
@@ -262,7 +263,6 @@ Optional properties:
 					delay required by panel to reach functional.
 - qcom,mdss-dsi-rx-eot-ignore:		Boolean used to enable ignoring end of transmission packets.
 - qcom,mdss-dsi-tx-eot-append:		Boolean used to enable appending end of transmission packets.
-- qcom,ulps-enabled:			Boolean to enable support for Ultra Low Power State (ULPS) mode.
 - qcom,mdss-tear-check-disable:		Boolean to disable mdp tear check. Tear check is enabled by default to avoid
 					tearing. Other tear-check properties are ignored if this property is present.
 					The below tear check configuration properties can be individually tuned if
@@ -297,15 +297,6 @@ Optional properties:
 - qcom,panel-roi-alignment:		Specifies the panel ROI alignment restrictions on its
 					left, top, width, height alignments and minimum width and
 					height values
-- qcom,dynamic-mode-switch-enabled:		Boolean used to mention whether panel supports
-					dynamic switching from video mode to command mode
-					and vice versa.
-- qcom,video-to-cmd-mode-switch-commands:	List of commands that need to be sent
-					to panel in order to switch from video mode to command mode dynamically.
-					Refer to "qcom,mdss-dsi-on-command" section for adding commands.
-- qcom,cmd-to-video-mode-switch-commands:	List of commands that need to be sent
-					to panel in order to switch from command mode to video mode dynamically.
-					Refer to "qcom,mdss-dsi-on-command" section for adding commands.
 - qcom,esd-check-enabled:		Boolean used to enable ESD recovery feature.
 - qcom,mdss-dsi-panel-status-command:	A byte stream formed by multiple dcs packets based on
 					qcom dsi controller protocol, to read the panel status.
@@ -328,6 +319,42 @@ Optional properties:
 					"reg_read" = Reads panel status register to check the panel status
 - qcom,mdss-dsi-panel-status-value:	Specifies the value of the panel status register when the panel is
 					in good state.
+
+- qcom,display-on-cmds:                 A byte stream formed by multiple dcs packets base on
+                                        qcom dsi controller protocol.
+- qcom,display-on-wait:                 Specifies the delay time before display command.
+- qcom,mdss-dsi-default-command-state:  String that specifies the ctrl state for sending commands.
+- qcom,mdss-pwm-ctl-type:               Specifies pwm ctl type(0:none 1:PMIC(wled with cabc_en)
+                                        2:external IC(with CABC PWM by DCS))
+
+- htc,mdss-camera-blk:                  Specifies the brightness of camera
+
+- htc,mdss-camera-dua-blk:              Specifies the brightness of dua camera
+
+- htc,cabc-ui-cmds:                     A byte stream formed by multiple dcs packets base on
+                                        qcom dsi controller protocol.
+
+- htc,cabc-video-cmds:                  A byte stream formed by multiple dcs packets base on
+                                        qcom dsi controller protocol.
+
+- htc,cabc-off-cmds:                    A byte stream formed by multiple dcs packets base on
+                                        qcom dsi controller protocol.
+
+- htc,dimming-on-cmds:                  A byte stream formed by multiple dcs packets base on
+                                        qcom dsi controller protocol.
+
+- htc,mdss-pp-hue:                      Specifies pp hue adjustment for panel
+
+- htc,frame-suffix-cmds:                A byte stream formed by multiple dcs packets base on
+                                        qcom dsi controller protocol.
+
+- htc,brt-bl-table:                     An array that specifies the backlight 2.0 bl and brightness
+                                        transform table.
+                                        Each set will have the format defined as below:
+                                        --> brightness level
+                                        --> bl level
+- htc,nits-bl-table:                    An array that specifies the backlight 2.0 nits and bl
+                                        transform table.
 
 Note, if a given optional qcom,* binding is not present, then the driver will configure
 the default values specified.
@@ -427,7 +454,6 @@ Example:
 		qcom,mdss-dsi-init-delay-us = <100>;
 		mdss-dsi-rx-eot-ignore;
 		mdss-dsi-tx-eot-append;
-		qcom,ulps-enabled;
 		qcom,mdss-tear-check-sync-cfg-height = <0xfff0>;
 		qcom,mdss-tear-check-sync-init-val = <1280>;
 		qcom,mdss-tear-check-sync-threshold-start = <4>;
@@ -436,10 +462,6 @@ Example:
 		qcom,mdss-tear-check-rd-ptr-trigger-intr = <1281>;
 		qcom,mdss-tear-check-frame-rate = <6000>;
 		qcom,panel-roi-alignment = <4 4 2 2 20 20>;
-		qcom,dynamic-mode-switch-enabled;
-		qcom,video-to-cmd-mode-switch-commands = [15 01 00 00 00 00 02 C2 0B
-						15 01 00 00 00 00 02 C2 08];
-		qcom,cmd-to-video-mode-switch-commands = [15 01 00 00 00 00 02 C2 03];
 		qcom,esd-check-enabled;
 		qcom,mdss-dsi-panel-status-command = [06 01 00 01 05 00 02 0A 08];
 		qcom,mdss-dsi-panel-status-command-state = "dsi_lp_mode";
