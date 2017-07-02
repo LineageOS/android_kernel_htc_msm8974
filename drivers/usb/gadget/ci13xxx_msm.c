@@ -11,6 +11,7 @@
 #include <linux/usb/msm_hsusb_hw.h>
 #include <linux/usb/ulpi.h>
 #include <linux/gpio.h>
+#include <linux/usb/htc_info.h>
 
 #include "ci13xxx_udc.c"
 
@@ -35,8 +36,7 @@ static irqreturn_t msm_udc_irq(int irq, void *data)
 
 static void ci13xxx_msm_suspend(void)
 {
-	struct device *dev = _udc->gadget.dev.parent;
-	dev_dbg(dev, "ci13xxx_msm_suspend\n");
+	USB_INFO("ci13xxx_msm_suspend\n");
 
 	if (_udc_ctxt.wake_irq && !_udc_ctxt.wake_irq_state) {
 		enable_irq_wake(_udc_ctxt.wake_irq);
@@ -47,8 +47,7 @@ static void ci13xxx_msm_suspend(void)
 
 static void ci13xxx_msm_resume(void)
 {
-	struct device *dev = _udc->gadget.dev.parent;
-	dev_dbg(dev, "ci13xxx_msm_resume\n");
+	USB_INFO("ci13xxx_msm_resume\n");
 
 	if (_udc_ctxt.wake_irq && _udc_ctxt.wake_irq_state) {
 		disable_irq_wake(_udc_ctxt.wake_irq);
@@ -91,7 +90,7 @@ static void ci13xxx_msm_disconnect(void)
 static void ci13xxx_msm_set_l1(struct ci13xxx *udc)
 {
 	int temp;
-	struct device *dev = udc->gadget.dev.parent;
+	__maybe_unused struct device *dev = udc->gadget.dev.parent;
 
 	dev_dbg(dev, "Enable link power management\n");
 
@@ -140,7 +139,7 @@ static void ci13xxx_msm_reset(void)
 {
 	struct ci13xxx *udc = _udc;
 	struct usb_phy *phy = udc->transceiver;
-	struct device *dev = udc->gadget.dev.parent;
+	__maybe_unused struct device *dev = udc->gadget.dev.parent;
 
 	writel_relaxed(0, USB_AHBBURST);
 	writel_relaxed(0x08, USB_AHBMODE);
@@ -167,7 +166,7 @@ static void ci13xxx_msm_reset(void)
 
 static void ci13xxx_msm_notify_event(struct ci13xxx *udc, unsigned event)
 {
-	struct device *dev = udc->gadget.dev.parent;
+	__maybe_unused struct device *dev = udc->gadget.dev.parent;
 
 	switch (event) {
 	case CI13XXX_CONTROLLER_RESET_EVENT:
@@ -351,6 +350,21 @@ iounmap:
 	return ret;
 }
 
+static void ci13xxx_msm_shutdown(struct platform_device *pdev)
+{
+	struct msm_otg *motg;
+	struct ci13xxx *udc = _udc;
+
+	if (!udc || !udc->transceiver)
+		return;
+
+	motg = container_of(udc->transceiver, struct msm_otg, phy);
+
+	if (!atomic_read(&motg->in_lpm))
+		ci13xxx_pullup(&udc->gadget, 0);
+
+}
+
 int ci13xxx_msm_remove(struct platform_device *pdev)
 {
 	pm_runtime_disable(&pdev->dev);
@@ -359,11 +373,6 @@ int ci13xxx_msm_remove(struct platform_device *pdev)
 	udc_remove();
 	iounmap(_udc_ctxt.regs);
 	return 0;
-}
-
-void ci13xxx_msm_shutdown(struct platform_device *pdev)
-{
-	ci13xxx_pullup(&_udc->gadget, 0);
 }
 
 void msm_hw_bam_disable(bool bam_disable)
@@ -381,11 +390,11 @@ void msm_hw_bam_disable(bool bam_disable)
 
 static struct platform_driver ci13xxx_msm_driver = {
 	.probe = ci13xxx_msm_probe,
+	.shutdown = ci13xxx_msm_shutdown,
 	.driver = {
 		.name = "msm_hsusb",
 	},
 	.remove = ci13xxx_msm_remove,
-	.shutdown = ci13xxx_msm_shutdown,
 };
 MODULE_ALIAS("platform:msm_hsusb");
 

@@ -162,7 +162,7 @@ static ssize_t lpm_levels_attr_store(struct kobject *kobj,
 	struct kobj_attribute *attr, const char *buf, size_t count)
 {
 	struct kernel_param kp;
-	unsigned int temp;
+	unsigned int temp = 0;
 	int rc;
 
 	kp.arg = &temp;
@@ -895,7 +895,7 @@ static int lpm_cpu_probe(struct platform_device *pdev)
 	struct device_node *node = NULL;
 	int num_levels = 0;
 	char *key;
-	int ret;
+	int ret = 0;
 
 	for_each_child_of_node(pdev->dev.of_node, node)
 		num_levels++;
@@ -952,7 +952,7 @@ static int lpm_system_probe(struct platform_device *pdev)
 	int num_levels = 0;
 	struct device_node *node;
 	char *key;
-	int ret;
+	int ret = 0;
 
 	for_each_child_of_node(pdev->dev.of_node, node)
 		num_levels++;

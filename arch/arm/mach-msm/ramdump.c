@@ -215,7 +215,7 @@ void *create_ramdump_device(const char *dev_name, struct device *parent)
 		return NULL;
 	}
 
-	snprintf(rd_dev->name, ARRAY_SIZE(rd_dev->name), "ramdump_%s",
+	snprintf(rd_dev->name, ARRAY_SIZE(rd_dev->name) - 1, "ramdump_%s",
 		 dev_name);
 
 	init_completion(&rd_dev->ramdump_complete);
