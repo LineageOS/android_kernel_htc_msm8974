@@ -20,6 +20,7 @@
 #include <linux/power_supply.h>
 
 #include <linux/usb/otg.h>
+#include <mach/board.h>
 #include "power.h"
 
 #define DWC3_IDEV_CHG_MAX 1500
@@ -49,7 +50,13 @@ struct dwc3_otg {
 	unsigned long inputs;
 	struct power_supply	*psy;
 	struct completion	dwc3_xcvr_vbus_init;
+	struct work_struct notifier_work;
+	enum usb_connect_type connect_type;
+	int connect_type_ready;
+	struct workqueue_struct *usb_wq;
 	int			host_bus_suspend;
+	struct delayed_work ac_detect_work;
+	int ac_detect_count;
 	int			charger_retry_count;
 	int			vbus_retry_count;
 };
@@ -74,6 +81,8 @@ enum dwc3_chg_type {
 	DWC3_CDP_CHARGER,
 	DWC3_PROPRIETARY_CHARGER,
 	DWC3_FLOATED_CHARGER,
+	DWC3_STOP_CHARGE_CASE,
+	DWC3_UNSUPPORTED_CHARGER,
 };
 
 struct dwc3_charger {
@@ -83,6 +92,7 @@ struct dwc3_charger {
 
 	bool			skip_chg_detect;
 
+	bool			usb_disable;
 	/* start/stop charger detection, provided by external charger module */
 	void	(*start_detection)(struct dwc3_charger *charger, bool start);
 

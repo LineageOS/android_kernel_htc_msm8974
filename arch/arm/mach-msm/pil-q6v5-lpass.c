@@ -31,6 +31,10 @@
 #include <mach/ramdump.h>
 #include <mach/msm_smem.h>
 #include <mach/msm_bus_board.h>
+#if defined(CONFIG_HTC_FEATURES_SSR)
+#include <mach/devices_dtb.h>
+#include <mach/devices_cmdline.h>
+#endif
 
 #include "peripheral-loader.h"
 #include "pil-q6v5.h"
@@ -208,7 +212,7 @@ static int wcnss_notifier_cb(struct notifier_block *this, unsigned long code,
 								void *ss_handle)
 {
 	int ret;
-	pr_debug("%s: W-Notify: event %lu\n", __func__, code);
+	pr_info("%s: W-Notify: event %lu\n", __func__, code);
 	ret = sysmon_send_event(SYSMON_SS_LPASS, "wcnss", code);
 	if (ret < 0)
 		pr_err("%s: sysmon_send_event error %d", __func__, ret);
@@ -223,7 +227,7 @@ static int modem_notifier_cb(struct notifier_block *this, unsigned long code,
 								void *ss_handle)
 {
 	int ret;
-	pr_debug("%s: M-Notify: event %lu\n", __func__, code);
+	pr_info("%s: M-Notify: event %lu\n", __func__, code);
 	ret = sysmon_send_event(SYSMON_SS_LPASS, "modem", code);
 	if (ret < 0)
 		pr_err("%s: sysmon_send_event error %d", __func__, ret);
@@ -338,7 +342,7 @@ static int adsp_shutdown(const struct subsys_desc *subsys)
 	pil_shutdown(&drv->q6->desc);
 	disable_irq_nosync(drv->subsys_desc.wdog_bite_irq);
 
-	pr_debug("ADSP is Down\n");
+	pr_info("ADSP is Down\n");
 	adsp_set_state("OFFLINE");
 	return 0;
 }
@@ -350,7 +354,7 @@ static int adsp_powerup(const struct subsys_desc *subsys)
 	ret = pil_boot(&drv->q6->desc);
 	enable_irq(drv->subsys_desc.wdog_bite_irq);
 
-	pr_debug("ADSP is back online\n");
+	pr_info("ADSP is back online\n");
 	adsp_set_state("ONLINE");
 	return ret;
 }
@@ -477,6 +481,26 @@ static int __devinit pil_lpass_driver_probe(struct platform_device *pdev)
 		ret = PTR_ERR(drv->subsys);
 		goto err_subsys;
 	}
+
+#if defined(CONFIG_HTC_FEATURES_SSR)
+	/*LPASS restart condition and ramdump rule would follow below
+	1. LPASS restart default enable
+	- Independent on flag [6]
+	2. LPASS restart default disable
+	- flag [6] 0  -> reboot
+	- flag [6] 20 -> enable restart, no ramdump
+	3. Always disable LPASS SSR if boot_mode != normal
+	*/
+#if defined(CONFIG_HTC_FEATURES_SSR_LPASS_ENABLE)
+	subsys_set_restart_level(drv->subsys, RESET_SUBSYS_COUPLED);
+#else
+	if (get_kernel_flag() & KERNEL_FLAG_ENABLE_SSR_LPASS)
+		subsys_set_restart_level(drv->subsys, RESET_SUBSYS_COUPLED);
+#endif
+
+	if (board_mfg_mode() != 0)
+		subsys_set_restart_level(drv->subsys, RESET_SOC);
+#endif
 
 	drv->wcnss_notif_hdle = subsys_notif_register_notifier("wcnss", &wnb);
 	if (IS_ERR(drv->wcnss_notif_hdle)) {

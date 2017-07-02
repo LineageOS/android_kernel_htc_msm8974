@@ -453,7 +453,7 @@ static int update_region_prio(struct ocmem_region *region)
 		region->max_prio = NO_PRIO;
 	}
 	pr_debug("ocmem: Updating prio of region %p as %d\n",
-			region, max_prio);
+			region, region->max_prio);
 
 	return 0;
 }
@@ -718,6 +718,8 @@ static int __sched_grow(struct ocmem_req *req, bool can_block)
 	struct ocmem_zone *zone = get_zone(owner);
 	struct ocmem_region *region = NULL;
 
+	BUG_ON(!zone);
+
 	matched_region = find_region_match(req->req_start, req->req_end);
 	matched_req = find_req_match(req->req_id, matched_region);
 
@@ -855,9 +857,11 @@ err_not_supported:
 	return OP_FAIL;
 region_error:
 	zone->z_ops->free(zone, alloc_addr, curr_sz);
-	detach_req(region, req);
-	update_region_prio(region);
 	/* req is going to be destroyed by the caller anyways */
+	if (region) {
+		detach_req(region, req);
+		update_region_prio(region);
+	}
 internal_error:
 	destroy_region(region);
 invalid_op_error:
@@ -2486,7 +2490,7 @@ static const struct file_operations allocations_show_fops = {
 	.open = ocmem_allocations_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
-	.release = seq_release,
+	.release = single_release,
 };
 
 int ocmem_sched_init(struct platform_device *pdev)

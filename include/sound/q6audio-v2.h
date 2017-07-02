@@ -21,7 +21,6 @@ enum {
 	ULTRA_LOW_LATENCY_PCM_MODE,
 };
 
-
 int q6audio_get_port_index(u16 port_id);
 
 int q6audio_convert_virtual_to_portid(u16 port_id);
@@ -33,5 +32,9 @@ int q6audio_is_digital_pcm_interface(u16 port_id);
 int q6audio_get_port_id(u16 port_id);
 
 int q6audio_get_port_id_from_index(u16 port_idx);
+
+// HTC custom callback msg for "No sound detection"
+#define ELITEMSG_CUSTOM_HTC_NO_SOUND_DET	0x10041001
+extern void htc_nsd_update(void* payload);
 
 #endif

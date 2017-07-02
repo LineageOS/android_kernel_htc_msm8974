@@ -1273,6 +1273,7 @@ static int dsi_pll_enable_seq_8974(void)
 		udelay(100);
 		DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_LKDET_CFG2,
 			0x0d);
+		udelay(500);
 		/* poll for PLL ready status */
 		max_reads = 5;
 		timeout_us = 100;
@@ -2219,12 +2220,12 @@ static unsigned long edp_mainlink_get_rate(struct clk *c)
 
 	pclk = clk_get_parent(c);
 
-	if (pclk->ops->get_rate) {
+	if (pclk && pclk->ops && pclk->ops->get_rate && mclk && mclk->data.div) {
 		rate = pclk->ops->get_rate(pclk);
 		rate /= mclk->data.div;
 	}
 
-	pr_debug("%s: rate=%d div=%d\n", __func__, (int)rate, mclk->data.div);
+	pr_debug("%s: rate=%d\n", __func__, (int)rate);
 
 	return rate;
 }

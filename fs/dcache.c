@@ -2060,7 +2060,10 @@ EXPORT_SYMBOL(d_delete);
 
 static void __d_rehash(struct dentry * entry, struct hlist_bl_head *b)
 {
-	BUG_ON(!d_unhashed(entry));
+	WARN_ON(!d_unhashed(entry));
+	if (!d_unhashed(entry))
+		return;
+
 	hlist_bl_lock(b);
 	entry->d_flags |= DCACHE_RCUACCESS;
 	hlist_bl_add_head_rcu(&entry->d_hash, b);
@@ -2554,7 +2557,7 @@ global_root:
 	if (!slash)
 		error = prepend(buffer, buflen, "/", 1);
 	if (!error)
-		error = real_mount(vfsmnt)->mnt_ns ? 1 : 2;
+		error = is_mounted(vfsmnt) ? 1 : 2;
 	goto out;
 }
 
