@@ -7,8 +7,8 @@ struct mnt_namespace {
 	unsigned int            proc_inum;
 	struct mount *	root;
 	struct list_head	list;
-	 struct user_namespace   *user_ns;
-	u64			seq;	/* Sequence number to prevent loops */
+	struct user_namespace   *user_ns;
+	u64			seq;	
 	wait_queue_head_t poll;
 	int event;
 };
@@ -25,7 +25,6 @@ struct mount {
 	struct vfsmount mnt;
 #ifdef CONFIG_SMP
 	struct mnt_pcp __percpu *mnt_pcp;
-	atomic_t mnt_longterm;		/* how many of the refs are longterm */
 #else
 	int mnt_count;
 	int mnt_writers;
@@ -52,6 +51,8 @@ struct mount {
 	int mnt_ghosts;
 };
 
+#define MNT_NS_INTERNAL ERR_PTR(-EINVAL) 
+
 static inline struct mount *real_mount(struct vfsmount *mnt)
 {
 	return container_of(mnt, struct mount, mnt);
@@ -60,6 +61,12 @@ static inline struct mount *real_mount(struct vfsmount *mnt)
 static inline int mnt_has_parent(struct mount *mnt)
 {
 	return mnt != mnt->mnt_parent;
+}
+
+static inline int is_mounted(struct vfsmount *mnt)
+{
+	
+	return !IS_ERR_OR_NULL(real_mount(mnt)->mnt_ns);
 }
 
 extern struct mount *__lookup_mnt(struct vfsmount *, struct dentry *, int);
