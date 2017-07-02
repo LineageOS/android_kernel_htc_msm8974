@@ -308,7 +308,7 @@ static int ngd_xfer_msg(struct slim_controller *ctrl, struct slim_msg_txn *txn)
 	u8 la = txn->la;
 	u8 txn_mt;
 	u16 txn_mc = txn->mc;
-	u8 wbuf[SLIM_MSGQ_BUF_LEN];
+	u8 wbuf[SLIM_MSGQ_BUF_LEN] = {0};
 	bool report_sat = false;
 	bool sync_wr = true;
 
@@ -545,6 +545,8 @@ static int ngd_xfer_msg(struct slim_controller *ctrl, struct slim_msg_txn *txn)
 					(wbuf[1] + dev->port_b), dev->ver));
 			mutex_unlock(&dev->tx_lock);
 			msm_slim_put_ctrl(dev);
+			if (txn->wbuf == wbuf)
+				txn->wbuf = NULL;
 			return 0;
 		}
 		if (dev->err) {
@@ -680,6 +682,10 @@ static int ngd_xferandwait_ack(struct slim_controller *ctrl,
 			ret = -ETIMEDOUT;
 		else
 			ret = txn->ec;
+	} else if (ret == -EREMOTEIO &&
+			(txn->mc == SLIM_USR_MC_CHAN_CTRL ||
+			 txn->mc == SLIM_USR_MC_DISCONNECT_PORT)) {
+		return 0;
 	}
 
 	if (ret) {
@@ -765,6 +771,8 @@ static int ngd_allocbw(struct slim_device *sb, int *subfrmc, int *clkgear)
 				return -ENXIO;
 			}
 		}
+		if (txn.len >= SLIM_MSGQ_BUF_LEN - 1)
+			return -EINVAL;
 		num_chan++;
 		wbuf[txn.len++] = slc->chan;
 		SLIM_INFO(dev, "slim activate chan:%d, laddr: 0x%x\n",
@@ -806,6 +814,8 @@ static int ngd_allocbw(struct slim_device *sb, int *subfrmc, int *clkgear)
 				return -ENXIO;
 			}
 		}
+		if (txn.len >= SLIM_MSGQ_BUF_LEN - 1)
+			return -EINVAL;
 		wbuf[txn.len++] = slc->chan;
 		SLIM_INFO(dev, "slim remove chan:%d, laddr: 0x%x\n",
 			   slc->chan, sb->laddr);
@@ -1209,6 +1219,7 @@ static int ngd_notify_slaves(void *data)
 	struct slim_controller *ctrl = &dev->ctrl;
 	struct slim_device *sbdev;
 	struct list_head *pos, *next;
+
 	int ret, i = 0;
 	ret = qmi_svc_event_notifier_register(SLIMBUS_QMI_SVC_ID,
 				SLIMBUS_QMI_SVC_V1,
@@ -1220,7 +1231,12 @@ static int ngd_notify_slaves(void *data)
 
 	while (!kthread_should_stop()) {
 		set_current_state(TASK_INTERRUPTIBLE);
-		wait_for_completion(&dev->qmi.slave_notify);
+		ret = wait_for_completion_timeout(&dev->qmi.slave_notify, HZ);
+		if (!ret) {
+			dev_dbg(dev->dev, "slave thread wait err:%d", ret);
+			continue;
+		}
+
 		/* Probe devices for first notification */
 		if (!i) {
 			i++;
@@ -1236,6 +1252,7 @@ static int ngd_notify_slaves(void *data)
 		} else {
 			slim_framer_booted(ctrl);
 		}
+		i++;
 		mutex_lock(&ctrl->m_ctrl);
 		list_for_each_safe(pos, next, &ctrl->devs) {
 			int j;
