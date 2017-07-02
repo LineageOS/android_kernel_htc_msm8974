@@ -39,6 +39,7 @@
 #define CREATE_TRACE_POINTS
 #include <mach/trace_rpm_smd.h>
 #include "rpm-notifier.h"
+#include "smd_private.h"
 /* Debug Definitions */
 
 enum {
@@ -1153,9 +1154,35 @@ int msm_rpm_send_request_noirq(struct msm_rpm_request *handle)
 }
 EXPORT_SYMBOL(msm_rpm_send_request_noirq);
 
+void msm_rpm_dump_half_channel_data(smd_channel_t *ch_info,
+				volatile void __iomem *half_channel, unsigned char *data)
+{
+	pr_info("[RPM] state=0x%08x, head=0x%08x, tail=0x%08x\n",
+			ch_info->half_ch->get_state(half_channel),
+			ch_info->half_ch->get_head(half_channel),
+			ch_info->half_ch->get_tail(half_channel));
+
+	pr_info("[RPM] fSTATE=0x%08x, fHEAD=0x%08x, fTAIL=0x%08x\n",
+			ch_info->half_ch->get_fSTATE(half_channel),
+			ch_info->half_ch->get_fHEAD(half_channel),
+			ch_info->half_ch->get_fTAIL(half_channel));
+}
+
+void msm_rpm_dump_channel_data(smd_channel_t *ch_info)
+{
+	pr_info("[RPM] SMD Channel `%s'\n", ch_info->name);
+
+	pr_info("[RPM] Send:\n");
+	msm_rpm_dump_half_channel_data(ch_info, ch_info->send, ch_info->send_data);
+
+	pr_info("[RPM] Recv:\n");
+	msm_rpm_dump_half_channel_data(ch_info, ch_info->recv, ch_info->recv_data);
+}
+
 int msm_rpm_wait_for_ack(uint32_t msg_id)
 {
 	struct msm_rpm_wait_data *elem;
+	unsigned int remain = 0;
 	int rc = 0;
 
 	if (!msg_id) {
@@ -1173,7 +1200,19 @@ int msm_rpm_wait_for_ack(uint32_t msg_id)
 	if (!elem)
 		return rc;
 
-	wait_for_completion(&elem->ack);
+	remain = wait_for_completion_timeout(&elem->ack, msecs_to_jiffies(SMD_CHANNEL_NOTIF_TIMEOUT));
+
+	/* For timeout case, print warning and dump channel data, then let it go with TIMEOUT error. */
+	if (0 == remain) {
+		WARN(1, "%u msecs timeout for waiting msg rpm ack of msg %u.\n",
+				SMD_CHANNEL_NOTIF_TIMEOUT, msg_id);
+
+		/* Dump SMD channel data to check details */
+		msm_rpm_dump_channel_data(msm_rpm_data.ch_info);
+
+		elem->errno = -ETIMEDOUT;
+	}
+
 	trace_rpm_ack_recd(0, msg_id);
 
 	rc = elem->errno;
