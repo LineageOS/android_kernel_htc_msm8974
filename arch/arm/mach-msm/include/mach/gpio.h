@@ -234,4 +234,8 @@ int __init msm_gpio_of_init(struct device_node *node,
 			    struct device_node *parent);
 #endif
 
+#ifdef CONFIG_HTC_POWER_DEBUG
+int msm_dump_gpios(struct seq_file *m, int curr_len, char *gpio_buffer);
+#endif
+
 #endif /* __ASM_ARCH_MSM_GPIO_H */

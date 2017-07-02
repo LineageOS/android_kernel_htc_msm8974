@@ -14,6 +14,7 @@
 #include <linux/delay.h>
 
 #define MMC_CMD_RETRIES        3
+#define MMC_WAKELOCK_TIMEOUT 12
 
 struct mmc_bus_ops {
 	int (*awake)(struct mmc_host *);
@@ -26,6 +27,7 @@ struct mmc_bus_ops {
 	int (*power_restore)(struct mmc_host *);
 	int (*alive)(struct mmc_host *);
 	int (*change_bus_speed)(struct mmc_host *, unsigned long *);
+	int (*reinit)(struct mmc_host *);
 };
 
 void mmc_attach_bus(struct mmc_host *host, const struct mmc_bus_ops *ops);
@@ -63,6 +65,8 @@ static inline void mmc_delay(unsigned int ms)
 }
 
 void mmc_rescan(struct work_struct *work);
+void mmc_enable_detection(struct work_struct *work);
+void mmc_stats(struct work_struct *work);
 void mmc_start_host(struct mmc_host *host);
 void mmc_stop_host(struct mmc_host *host);
 
@@ -81,6 +85,7 @@ void mmc_remove_host_debugfs(struct mmc_host *host);
 
 void mmc_add_card_debugfs(struct mmc_card *card);
 void mmc_remove_card_debugfs(struct mmc_card *card);
+void mmc_remove_sd_card(struct work_struct *work);
 
 extern void mmc_disable_clk_scaling(struct mmc_host *host);
 extern bool mmc_can_scale_clk(struct mmc_host *host);
@@ -89,4 +94,5 @@ extern void mmc_exit_clk_scaling(struct mmc_host *host);
 extern void mmc_reset_clk_scale_stats(struct mmc_host *host);
 extern unsigned long mmc_get_max_frequency(struct mmc_host *host);
 void mmc_init_context_info(struct mmc_host *host);
+int mmc_send_single_read(struct mmc_card *card, struct mmc_host *host, unsigned int from);
 #endif

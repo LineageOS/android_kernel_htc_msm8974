@@ -22,6 +22,9 @@
 #include <mach/iommu.h>
 #include <mach/msm_iommu_priv.h>
 #include <trace/events/kmem.h>
+
+#include <htc_debug/stability/htc_report_meminfo.h>
+
 #include "msm_iommu_pagetable.h"
 
 #define NUM_FL_PTE      4096
@@ -103,6 +106,8 @@ int msm_iommu_pagetable_alloc(struct msm_iommu_pt *pt)
 	memset(pt->fl_table, 0, SZ_16K);
 	clean_pte(pt->fl_table, pt->fl_table + NUM_FL_PTE, pt->redirect);
 
+	add_meminfo_total_pages(NR_IOMMU_PAGETABLES_PAGES, 1 << get_order(SZ_16K));
+
 	return 0;
 }
 
@@ -113,9 +118,15 @@ void msm_iommu_pagetable_free(struct msm_iommu_pt *pt)
 
 	fl_table = pt->fl_table;
 	for (i = 0; i < NUM_FL_PTE; i++)
-		if ((fl_table[i] & 0x03) == FL_TYPE_TABLE)
-			free_page((unsigned long) __va(((fl_table[i]) &
-							FL_BASE_MASK)));
+		if ((fl_table[i] & 0x03) == FL_TYPE_TABLE) {
+			unsigned long addr = (unsigned long) __va(((fl_table[i]) &
+						FL_BASE_MASK));
+			dec_meminfo_total_pages_on(NR_IOMMU_PAGETABLES_PAGES,
+					addr && virt_addr_valid((void *)addr));
+			free_page(addr);
+		}
+
+	sub_meminfo_total_pages(NR_IOMMU_PAGETABLES_PAGES, 1 << get_order(SZ_16K));
 	free_pages((unsigned long)fl_table, get_order(SZ_16K));
 	pt->fl_table = 0;
 }
@@ -173,6 +184,9 @@ static unsigned long *make_second_level(struct msm_iommu_pt *pt,
 		pr_debug("Could not allocate second level table\n");
 		goto fail;
 	}
+
+	inc_meminfo_total_pages(NR_IOMMU_PAGETABLES_PAGES);
+
 	memset(sl, 0, SZ_4K);
 	clean_pte(sl, sl + NUM_SL_PTE, pt->redirect);
 
@@ -180,6 +194,7 @@ static unsigned long *make_second_level(struct msm_iommu_pt *pt,
 			FL_TYPE_TABLE);
 
 	clean_pte(fl_pte, fl_pte + 1, pt->redirect);
+
 fail:
 	return sl;
 }
@@ -597,6 +612,8 @@ void msm_iommu_pagetable_unmap_range(struct msm_iommu_pt *pt, unsigned int va,
 						break;
 					}
 			if (!used) {
+				dec_meminfo_total_pages_on(NR_IOMMU_PAGETABLES_PAGES,
+					sl_table && virt_addr_valid((void *)sl_table));
 				free_page((unsigned long)sl_table);
 				*fl_pte = 0;
 

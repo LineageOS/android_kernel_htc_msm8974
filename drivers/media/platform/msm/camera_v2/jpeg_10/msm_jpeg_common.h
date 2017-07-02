@@ -36,4 +36,18 @@ enum JPEG_ROTATION {
 	JPEG_ROTATION_270
 };
 
+//HTC_START
+#ifdef pr_err
+#undef pr_err
+#endif
+#define pr_err(fmt, args...) \
+         printk(KERN_ERR "[CAM] " pr_fmt(fmt), ## args)
+
+#ifdef pr_info
+#undef pr_info
+#endif
+#define pr_info(fmt, args...) \
+        printk(KERN_INFO "[CAM] " pr_fmt(fmt), ## args)
+//HTC_END
+
 #endif /* MSM_JPEG_COMMON_H */

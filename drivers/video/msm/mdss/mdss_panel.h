@@ -154,9 +154,7 @@ enum mdss_intf_events {
 	MDSS_EVENT_PANEL_CLK_CTRL,
 	MDSS_EVENT_DSI_CMDLIST_KOFF,
 	MDSS_EVENT_ENABLE_PARTIAL_UPDATE,
-	MDSS_EVENT_DSI_ULPS_CTRL,
 	MDSS_EVENT_REGISTER_RECOVERY_HANDLER,
-	MDSS_EVENT_DSI_DYNAMIC_SWITCH,
 };
 
 struct lcd_panel_info {
@@ -214,7 +212,6 @@ struct mipi_panel_info {
 	char hbp_power_stop;
 	char hsa_power_stop;
 	char eof_bllp_power_stop;
-	char last_line_interleave_en;
 	char bllp_power_stop;
 	char traffic_mode;
 	char frame_rate;
@@ -227,9 +224,6 @@ struct mipi_panel_info {
 	char stream;	/* 0 or 1 */
 	char mdp_trigger;
 	char dma_trigger;
-	/*Dynamic Switch Support*/
-	bool dynamic_switch_enabled;
-	u32 pixel_packing;
 	u32 dsi_pclk_rate;
 	/* The packet-size should not bet changed */
 	char no_max_pkt_size;
@@ -284,15 +278,17 @@ struct fbc_panel_info {
 	u32 lossy_mode_idx;
 };
 
-struct mdss_mdp_pp_tear_check {
-	u32 tear_check_en;
-	u32 sync_cfg_height;
-	u32 vsync_init_val;
-	u32 sync_threshold_start;
-	u32 sync_threshold_continue;
-	u32 start_pos;
-	u32 rd_ptr_irq;
-	u32 refx100;
+struct htc_backlight1_table {
+	int size;
+	u16 *brt_data;
+	u16 *bl_data;
+};
+
+struct htc_backlight2_table {
+	int size;
+	int scale;
+	int max_nits;
+	u16 *data;
 };
 
 struct mdss_panel_info {
@@ -327,37 +323,38 @@ struct mdss_panel_info {
 	int pwm_period;
 	u32 mode_gpio_state;
 	bool dynamic_fps;
-	bool ulps_feature_enabled;
-	bool esd_check_enabled;
 	char dfps_update;
 	int new_fps;
 	int panel_max_fps;
 	int panel_max_vtotal;
-	u32 xstart_pix_align;
-	u32 width_pix_align;
-	u32 ystart_pix_align;
-	u32 height_pix_align;
-	u32 min_width;
-	u32 min_height;
-	u32 min_fps;
-	u32 max_fps;
-
 	u32 cont_splash_enabled;
 	u32 partial_update_enabled;
 	struct ion_handle *splash_ihdl;
 	u32 panel_power_on;
 
 	uint32_t panel_dead;
-	bool dynamic_switch_pending;
-	bool is_lpm_mode;
-
-	struct mdss_mdp_pp_tear_check te;
 
 	struct lcd_panel_info lcdc;
 	struct fbc_panel_info fbc;
 	struct mipi_panel_info mipi;
 	struct lvds_panel_info lvds;
 	struct edp_panel_info edp;
+
+	int camera_blk;
+	int camera_dua_blk;
+	int panel_id;
+	int first_power_on;
+	u32 mdss_pp_hue;
+	u32 skip_frame;
+
+	uint32_t pcc_r;
+	uint32_t pcc_g;
+	uint32_t pcc_b;
+
+	struct htc_backlight1_table brt_bl_table;
+	struct htc_backlight2_table nits_bl_table;
+
+	bool even_roi;
 };
 
 struct mdss_panel_data {
@@ -378,7 +375,7 @@ struct mdss_panel_data {
 	 * and teardown.
 	 */
 	int (*event_handler) (struct mdss_panel_data *pdata, int e, void *arg);
-
+	void (*display_on) (struct mdss_panel_data *pdata);
 	struct mdss_panel_data *next;
 };
 

@@ -6,6 +6,7 @@
 
 #include <linux/sched.h>
 
+extern void collect_io_stats(size_t rw_bytes, int type);
 #ifdef CONFIG_TASK_IO_ACCOUNTING
 static inline void task_io_account_read(size_t bytes)
 {

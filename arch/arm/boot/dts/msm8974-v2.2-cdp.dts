@@ -13,6 +13,7 @@
 /dts-v1/;
 
 /include/ "msm8974-v2.2.dtsi"
+/include/ "msm8974-regulator.dtsi"
 /include/ "msm8974-cdp.dtsi"
 
 / {
@@ -21,4 +22,8 @@
 	qcom,msm-id = <126 1 0x20002>,
 		      <185 1 0x20002>,
 		      <186 1 0x20002>;
+};
+
+&krait_pdn {
+	qcom,use-phase-switching;
 };

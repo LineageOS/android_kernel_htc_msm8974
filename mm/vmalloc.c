@@ -30,6 +30,9 @@
 #include <asm/uaccess.h>
 #include <asm/tlbflush.h>
 #include <asm/shmparam.h>
+#include <asm/setup.h>
+
+#include <htc_debug/stability/htc_report_meminfo.h>
 
 /*** Page table manipulation functions ***/
 
@@ -289,6 +292,28 @@ void mark_vmalloc_reserved_area(void *x, unsigned long size)
 	bitmap_set(possible_areas, VMALLOC_TO_BIT(addr), size >> PAGE_SHIFT);
 }
 
+phys_addr_t report_vmalloc_saving_size(void)
+{
+	phys_addr_t vmalloc_saving_size = 0;
+	int i;
+
+	for (i = meminfo.nr_banks - 1; i >= 1; i--) {
+		if (meminfo.bank[i-1].start + meminfo.bank[i-1].size !=
+			  meminfo.bank[i].start) {
+			if (meminfo.bank[i-1].start + meminfo.bank[i-1].size
+				   <= MAX_HOLE_ADDRESS) {
+				phys_addr_t hole_start =
+					meminfo.bank[i-1].start + meminfo.bank[i-1].size;
+				phys_addr_t hole_end = meminfo.bank[i].start;
+
+				vmalloc_saving_size += hole_end - hole_start;
+			}
+		}
+	}
+
+	return vmalloc_saving_size;
+}
+
 int is_vmalloc_addr(const void *x)
 {
 	unsigned long addr = (unsigned long)x;
@@ -365,6 +390,64 @@ static void __insert_vmap_area(struct vmap_area *va)
 }
 
 static void purge_vmap_area_lazy(void);
+
+#ifdef CONFIG_HTC_DEBUG_VMALLOC_DUMP
+
+#define DUMP_VMALLOC_INTERVAL  10*HZ // the interval for each vmalloc dump
+#define MLM(b, t) b, t, ((t) - (b)) >> 20
+
+void dump_vmallocinfo(void)
+{
+	struct vm_struct *v=vmlist;
+	unsigned int used = 0;
+
+	read_lock(&vmlist_lock);
+	printk("[K] prepare to dump vmallocinfo\n");
+
+	while(v) {
+		printk("0x%p-0x%p %7ld", v->addr, v->addr + v->size, v->size);
+		used += v->size;
+
+		if(v->caller)
+			printk(" %pS", v->caller);
+
+		if (v->nr_pages)
+			printk(" pages=%d", v->nr_pages);
+
+		if (v->phys_addr)
+			printk(" phys=%llx", (unsigned long long)v->phys_addr);
+
+		if (v->flags & VM_IOREMAP)
+			printk(" ioremap");
+
+		if (v->flags & VM_ALLOC)
+			printk(" vmalloc");
+
+		if (v->flags & VM_MAP)
+			printk(" vmap");
+
+		if (v->flags & VM_USERMAP)
+			printk(" user");
+
+		if (v->flags & VM_VPAGES)
+			printk(" vpages");
+
+		printk("\n");
+
+		v = v->next;
+	}
+
+	printk("[K] vmalloc : 0x%08lx - 0x%08lx   (%4ld MB)\n", MLM(VMALLOC_START, VMALLOC_END) );
+	printk("[K] vmalloc used : %u bytes\n", used );
+	printk("[K] end of dump vmallocinfo\n");
+
+	read_unlock(&vmlist_lock);
+}
+EXPORT_SYMBOL(dump_vmallocinfo);
+
+static unsigned long last_dump_jiffies =0; // controls the dump interval.
+
+#endif
 
 /*
  * Allocate a region of KVA of the specified size and alignment, within the
@@ -489,6 +572,13 @@ overflow:
 		printk(KERN_WARNING
 			"vmap allocation for size %lu failed: "
 			"use vmalloc=<size> to increase size.\n", size);
+
+#ifdef CONFIG_HTC_DEBUG_VMALLOC_DUMP
+	if((last_dump_jiffies == 0) || time_is_before_jiffies(last_dump_jiffies + DUMP_VMALLOC_INTERVAL) ) {
+		dump_vmallocinfo();
+		last_dump_jiffies = jiffies;
+	}
+#endif
 	kfree(va);
 	return ERR_PTR(-EBUSY);
 }
@@ -1569,6 +1659,8 @@ static void __vunmap(const void *addr, int deallocate_pages)
 			__free_page(page);
 		}
 
+		sub_meminfo_total_pages(NR_VMALLOC_PAGES, area->nr_pages);
+
 		if (area->flags & VM_VPAGES)
 			vfree(area->pages);
 		else
@@ -1750,6 +1842,8 @@ void *__vmalloc_node_range(unsigned long size, unsigned long align,
 	addr = __vmalloc_area_node(area, gfp_mask, prot, node, caller);
 	if (!addr)
 		return NULL;
+
+	add_meminfo_total_pages(NR_VMALLOC_PAGES, area->nr_pages);
 
 	/*
 	 * In this function, newly allocated vm_struct is not added
@@ -2731,5 +2825,66 @@ static int __init proc_vmalloc_init(void)
 	return 0;
 }
 module_init(proc_vmalloc_init);
+
+void get_vmalloc_info(struct vmalloc_info *vmi)
+{
+	struct vm_struct *vma;
+	unsigned long free_area_size;
+	unsigned long prev_end;
+
+	vmi->used = 0;
+	vmi->ioremap = 0;
+	vmi->alloc = 0;
+	vmi->map = 0;
+	vmi->usermap = 0;
+	vmi->vpages = 0;
+
+	if (!vmlist) {
+		vmi->largest_chunk = VMALLOC_TOTAL;
+	}
+	else {
+		vmi->largest_chunk = 0;
+
+		prev_end = VMALLOC_START;
+
+		read_lock(&vmlist_lock);
+
+		for (vma = vmlist; vma; vma = vma->next) {
+			unsigned long addr = (unsigned long) vma->addr;
+
+			/*
+			 * Some archs keep another range for modules in vmlist
+			 */
+			if (addr < VMALLOC_START)
+				continue;
+			if (addr >= VMALLOC_END)
+				break;
+
+			vmi->used += vma->size;
+			if (vma->flags & VM_IOREMAP)
+				vmi->ioremap += vma->size;
+			if (vma->flags & VM_ALLOC)
+				vmi->alloc += vma->size;
+			if (vma->flags & VM_MAP)
+				vmi->map += vma->size;
+			if (vma->flags & VM_USERMAP)
+				vmi->usermap += vma->size;
+			if (vma->flags & VM_VPAGES)
+				vmi->vpages += vma->size;
+
+			free_area_size = addr - prev_end;
+			if (vmi->largest_chunk < free_area_size)
+				vmi->largest_chunk = free_area_size;
+
+			prev_end = vma->size + addr;
+		}
+
+		if (VMALLOC_END - prev_end > vmi->largest_chunk)
+			vmi->largest_chunk = VMALLOC_END - prev_end;
+
+		read_unlock(&vmlist_lock);
+	}
+}
+
 #endif
 

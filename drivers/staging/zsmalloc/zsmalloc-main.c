@@ -600,6 +600,8 @@ static struct page *alloc_zspage(struct size_class *class, gfp_t flags)
 		prev_page = page;
 	}
 
+       if (!first_page)
+           goto cleanup;
 	init_zspage(first_page, class);
 
 	first_page->freelist = obj_location_to_handle(first_page, 0);

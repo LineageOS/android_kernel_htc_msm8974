@@ -39,7 +39,7 @@ struct tsens_device {
 	uint32_t			sensor_num;
 };
 
-int32_t tsens_get_temp(struct tsens_device *dev, unsigned long *temp);
+int32_t tsens_get_temp(struct tsens_device *dev, long *temp);
 int msm_tsens_early_init(struct tsens_platform_data *pdata);
 
 #if defined(CONFIG_THERMAL_TSENS8974)

@@ -365,7 +365,7 @@ EXPORT_SYMBOL_GPL(mnt_clone_write);
  */
 int mnt_want_write_file(struct file *file)
 {
-	struct inode *inode = file->f_dentry->d_inode;
+	struct inode *inode = file_inode(file);
 	if (!(file->f_mode & FMODE_WRITE) || special_file(inode->i_mode))
 		return mnt_want_write(file->f_path.mnt);
 	else
@@ -623,24 +623,6 @@ static void attach_mnt(struct mount *mnt, struct path *path)
 	list_add_tail(&mnt->mnt_child, &real_mount(path->mnt)->mnt_mounts);
 }
 
-static inline void __mnt_make_longterm(struct mount *mnt)
-{
-#ifdef CONFIG_SMP
-	atomic_inc(&mnt->mnt_longterm);
-#endif
-}
-
-/* needs vfsmount lock for write */
-static inline void __mnt_make_shortterm(struct mount *mnt)
-{
-#ifdef CONFIG_SMP
-	atomic_dec(&mnt->mnt_longterm);
-#endif
-}
-
-/*
- * vfsmount lock must be held for write
- */
 static void commit_tree(struct mount *mnt)
 {
 	struct mount *parent = mnt->mnt_parent;
@@ -651,10 +633,8 @@ static void commit_tree(struct mount *mnt)
 	BUG_ON(parent == mnt);
 
 	list_add_tail(&head, &mnt->mnt_list);
-	list_for_each_entry(m, &head, mnt_list) {
+	list_for_each_entry(m, &head, mnt_list)
 		m->mnt_ns = n;
-		__mnt_make_longterm(m);
-	}
 
 	list_splice(&head, n->list.prev);
 
@@ -807,7 +787,8 @@ static void mntput_no_expire(struct mount *mnt)
 put_again:
 #ifdef CONFIG_SMP
 	br_read_lock(vfsmount_lock);
-	if (likely(atomic_read(&mnt->mnt_longterm))) {
+	if (likely(mnt->mnt_ns)) {
+		
 		mnt_add_count(mnt, -1);
 		br_read_unlock(vfsmount_lock);
 		return;
@@ -1076,8 +1057,6 @@ void umount_tree(struct mount *mnt, int propagate, struct list_head *kill)
 		list_del_init(&p->mnt_expire);
 		list_del_init(&p->mnt_list);
 		__touch_mnt_namespace(p->mnt_ns);
-		if (p->mnt_ns)
-			__mnt_make_shortterm(p);
 		p->mnt_ns = NULL;
 		list_del_init(&p->mnt_child);
 		if (mnt_has_parent(p)) {
@@ -1178,6 +1157,10 @@ static int do_umount(struct mount *mnt, int flags)
 	br_write_unlock(vfsmount_lock);
 	up_write(&namespace_sem);
 	release_mounts(&umount_list);
+
+	printk(KERN_INFO "pid:%d(%s)(parent:%d/%s)  (%s) umounted filesystem.\n",
+			current->pid, current->comm, current->parent->pid,
+			current->parent->comm, sb->s_id);
 	return retval;
 }
 
@@ -1225,6 +1208,41 @@ out:
 	return retval;
 }
 
+int umount2(char *name, int flags)
+{
+	struct path path;
+	struct mount *mnt;
+	int retval;
+	int lookup_flags = 0;
+
+	if (flags & ~(MNT_FORCE | MNT_DETACH | MNT_EXPIRE | UMOUNT_NOFOLLOW))
+		return -EINVAL;
+
+	if (!(flags & UMOUNT_NOFOLLOW))
+		lookup_flags |= LOOKUP_FOLLOW;
+
+	retval = user_path_at(AT_FDCWD, name, lookup_flags, &path);
+	if (retval)
+		goto out;
+	mnt = real_mount(path.mnt);
+	retval = -EINVAL;
+	if (path.dentry != path.mnt->mnt_root)
+		goto dput_and_out;
+	if (!check_mnt(mnt))
+		goto dput_and_out;
+#if 0
+	retval = -EPERM;
+	if (!capable(CAP_SYS_ADMIN))
+		goto dput_and_out;
+#endif
+	retval = do_umount(mnt, flags);
+dput_and_out:
+	
+	dput(path.dentry);
+	mntput_no_expire(mnt);
+out:
+	return retval;
+}
 #ifdef __ARCH_WANT_SYS_OLDUMOUNT
 
 /*
@@ -1907,6 +1925,12 @@ static int do_new_mount(struct path *path, const char *fstype, int flags,
 	err = do_add_mount(real_mount(mnt), path, mnt_flags);
 	if (err)
 		mntput(mnt);
+
+	
+	if (!err && !strcmp(fstype, "ext4") &&
+	    !strcmp(path->dentry->d_name.name, "data"))
+		mnt->mnt_sb->fsync_flags |= FLAG_ASYNC_FSYNC;
+
 	return err;
 }
 
@@ -2231,7 +2255,6 @@ dput_out:
 	return retval;
 }
 
-
 static void free_mnt_ns(struct mnt_namespace *ns)
 {
 	proc_free_inum(ns->proc_inum);
@@ -2271,27 +2294,6 @@ static struct mnt_namespace *alloc_mnt_ns(struct user_namespace *user_ns)
 	return new_ns;
 }
 
-void mnt_make_longterm(struct vfsmount *mnt)
-{
-	__mnt_make_longterm(real_mount(mnt));
-}
-
-void mnt_make_shortterm(struct vfsmount *m)
-{
-#ifdef CONFIG_SMP
-	struct mount *mnt = real_mount(m);
-	if (atomic_add_unless(&mnt->mnt_longterm, -1, 1))
-		return;
-	br_write_lock(vfsmount_lock);
-	atomic_dec(&mnt->mnt_longterm);
-	br_write_unlock(vfsmount_lock);
-#endif
-}
-
-/*
- * Allocate a new namespace structure and populate it with contents
- * copied from the namespace of the passed in task structure.
- */
 static struct mnt_namespace *dup_mnt_ns(struct mnt_namespace *mnt_ns,
 		struct user_namespace *user_ns, struct fs_struct *fs)
 {
@@ -2331,18 +2333,13 @@ static struct mnt_namespace *dup_mnt_ns(struct mnt_namespace *mnt_ns,
 	q = new;
 	while (p) {
 		q->mnt_ns = new_ns;
-		__mnt_make_longterm(q);
 		if (fs) {
 			if (&p->mnt == fs->root.mnt) {
 				fs->root.mnt = mntget(&q->mnt);
-				__mnt_make_longterm(q);
-				mnt_make_shortterm(&p->mnt);
 				rootmnt = &p->mnt;
 			}
 			if (&p->mnt == fs->pwd.mnt) {
 				fs->pwd.mnt = mntget(&q->mnt);
-				__mnt_make_longterm(q);
-				mnt_make_shortterm(&p->mnt);
 				pwdmnt = &p->mnt;
 			}
 		}
@@ -2360,7 +2357,7 @@ static struct mnt_namespace *dup_mnt_ns(struct mnt_namespace *mnt_ns,
 }
 
 struct mnt_namespace *copy_mnt_ns(unsigned long flags, struct mnt_namespace *ns,
-		 struct user_namespace *user_ns, struct fs_struct *new_fs)
+		struct user_namespace *user_ns, struct fs_struct *new_fs)
 {
 	struct mnt_namespace *new_ns;
 
@@ -2386,7 +2383,6 @@ static struct mnt_namespace *create_mnt_ns(struct vfsmount *m)
 	if (!IS_ERR(new_ns)) {
 		struct mount *mnt = real_mount(m);
 		mnt->mnt_ns = new_ns;
-		__mnt_make_longterm(mnt);
 		new_ns->root = mnt;
 		list_add(&new_ns->list, &mnt->mnt_list);
 	} else {
@@ -2628,7 +2624,9 @@ static void __init init_mount_tree(void)
 	set_fs_pwd(current->fs, &root);
 	set_fs_root(current->fs, &root);
 }
-
+#ifdef CONFIG_HTC_FD_MONITOR
+void create_fd_list_entry(struct kobject *kobj);
+#endif
 void __init mnt_init(void)
 {
 	unsigned u;
@@ -2658,6 +2656,10 @@ void __init mnt_init(void)
 	fs_kobj = kobject_create_and_add("fs", NULL);
 	if (!fs_kobj)
 		printk(KERN_WARNING "%s: kobj create error\n", __func__);
+#ifdef CONFIG_HTC_FD_MONITOR
+	else
+		create_fd_list_entry(fs_kobj);
+#endif
 	init_rootfs();
 	init_mount_tree();
 }
@@ -2682,11 +2684,7 @@ struct vfsmount *kern_mount_data(struct file_system_type *type, void *data)
 	struct vfsmount *mnt;
 	mnt = vfs_kern_mount(type, MS_KERNMOUNT, type->name, data);
 	if (!IS_ERR(mnt)) {
-		/*
-		 * it is a longterm mount, don't release mnt until
-		 * we unmount before file sys is unregistered
-		*/
-		mnt_make_longterm(mnt);
+		real_mount(mnt)->mnt_ns = MNT_NS_INTERNAL;
 	}
 	return mnt;
 }
@@ -2696,7 +2694,9 @@ void kern_unmount(struct vfsmount *mnt)
 {
 	/* release long term mount so mount point can be released */
 	if (!IS_ERR_OR_NULL(mnt)) {
-		mnt_make_shortterm(mnt);
+		br_write_lock(vfsmount_lock);
+		real_mount(mnt)->mnt_ns = NULL;
+		br_write_unlock(vfsmount_lock);
 		mntput(mnt);
 	}
 }

@@ -1855,7 +1855,7 @@ config ENABLE_DMM
 
 choice
 	prompt "Virtual Memory Reclaim"
-	default NO_VM_RECLAIM
+	default ENABLE_VMALLOC_SAVING
 	help
 	  Select the method of reclaiming virtual memory
 
@@ -2436,13 +2436,6 @@ config NEON
 	  Say Y to include support code for NEON, the ARMv7 Advanced SIMD
 	  Extension.
 
-config KERNEL_MODE_NEON
-	bool "Support for NEON in kernel mode"
-	default n
-	depends on NEON
-	help
-	  Say Y to include support for NEON in kernel mode.
-
 endmenu
 
 menu "Userspace binary formats"
@@ -2481,6 +2474,8 @@ source "net/Kconfig"
 source "drivers/Kconfig"
 
 source "fs/Kconfig"
+
+source "arch/arm/Kconfig.htc"
 
 source "arch/arm/Kconfig.debug"
 

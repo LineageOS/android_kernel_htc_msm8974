@@ -398,4 +398,7 @@ struct ion_handle *ion_handle_get_by_id(struct ion_client *client,
 
 int ion_handle_put(struct ion_handle *handle);
 
+int ion_client_set_debug_name(struct ion_client *client,
+				const char *debug_name);
+
 #endif /* _ION_PRIV_H */
