@@ -72,7 +72,7 @@ DEFINE_PER_CPU(atomic_t, msm_rtb_idx_cpu);
 static atomic_t msm_rtb_idx;
 #endif
 
-static struct msm_rtb_state msm_rtb = {
+struct msm_rtb_state msm_rtb = {
 	.filter = 1 << LOGK_LOGBUF,
 	.enabled = 1,
 };
@@ -234,35 +234,50 @@ EXPORT_SYMBOL(uncached_logk);
 static int msm_rtb_probe(struct platform_device *pdev)
 {
 	struct msm_rtb_platform_data *d = pdev->dev.platform_data;
+	struct resource *res = NULL;
 #if defined(CONFIG_MSM_RTB_SEPARATE_CPUS)
 	unsigned int cpu;
 #endif
 	int ret;
 
 	if (!pdev->dev.of_node) {
+		if (!d)
+			return -EINVAL;
 		msm_rtb.size = d->size;
 	} else {
-		int size;
+		res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
+					"msm_rtb_res");
+		if (res) {
+			msm_rtb.size = resource_size(res);
+		} else {
+			int size;
 
-		ret = of_property_read_u32((&pdev->dev)->of_node,
-					"qcom,memory-reservation-size",
-					&size);
+			ret = of_property_read_u32((&pdev->dev)->of_node,
+						"qcom,memory-reservation-size",
+						&size);
 
-		if (ret < 0)
-			return ret;
+			if (ret < 0)
+				return ret;
 
-		msm_rtb.size = size;
+			msm_rtb.size = size;
+		}
 	}
+	pr_info("msm_rtb.size: 0x%x\n", msm_rtb.size);
 
 	if (msm_rtb.size <= 0 || msm_rtb.size > SZ_1M)
 		return -EINVAL;
 
-	/*
-	 * The ioremap call is made separately to store the physical
-	 * address of the buffer. This is necessary for cases where
-	 * the only way to access the buffer is a physical address.
-	 */
-	msm_rtb.phys = allocate_contiguous_ebi_nomap(msm_rtb.size, SZ_4K);
+	if (res) {
+		msm_rtb.phys = res->start;
+	} else {
+		/*
+		 * The ioremap call is made separately to store the physical
+	 	* address of the buffer. This is necessary for cases where
+		 * the only way to access the buffer is a physical address.
+		 */
+		msm_rtb.phys = allocate_contiguous_ebi_nomap(msm_rtb.size, SZ_4K);
+	}
+	pr_info("msm_rtb.phys: 0x%x\n", msm_rtb.phys);
 
 	if (!msm_rtb.phys)
 		return -ENOMEM;
@@ -270,7 +285,8 @@ static int msm_rtb_probe(struct platform_device *pdev)
 	msm_rtb.rtb = ioremap(msm_rtb.phys, msm_rtb.size);
 
 	if (!msm_rtb.rtb) {
-		free_contiguous_memory_by_paddr(msm_rtb.phys);
+		if (!res)
+			free_contiguous_memory_by_paddr(msm_rtb.phys);
 		return -ENOMEM;
 	}
 

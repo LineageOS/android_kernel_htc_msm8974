@@ -21,6 +21,7 @@
 #include <linux/ktime.h>
 #include <linux/smp.h>
 #include <linux/tick.h>
+#include <linux/console.h>
 #include <linux/delay.h>
 #include <linux/platform_device.h>
 #include <linux/of_platform.h>
@@ -45,6 +46,8 @@
 
 #define CREATE_TRACE_POINTS
 #include <mach/trace_msm_low_power.h>
+
+#include "msm_watchdog.h"
 
 #define SCM_CMD_TERMINATE_PC	(0x2)
 #define SCM_CMD_CORE_HOTPLUGGED (0x10)
@@ -404,7 +407,18 @@ static bool msm_pm_is_L1_writeback(void)
 
 static enum msm_pm_time_stats_id msm_pm_swfi(bool from_idle)
 {
+	if (!from_idle && smp_processor_id() == 0) {
+		suspend_console();
+		msm_watchdog_suspend_deferred();
+	}
+
 	msm_arch_idle();
+
+	if (!from_idle && smp_processor_id() == 0) {
+		msm_watchdog_resume_deferred();
+		resume_console();
+	}
+
 	return MSM_PM_STAT_IDLE_WFI;
 }
 
@@ -559,6 +573,13 @@ static bool __ref msm_pm_spm_power_collapse(
 			cpu, __func__, entry);
 
 	msm_jtag_save_state();
+	if (!from_idle && smp_processor_id() == 0) {
+		pr_info("[R] suspend end\n");
+
+		suspend_console();
+
+		msm_watchdog_suspend_deferred();
+	}
 
 	collapsed = save_cpu_regs ?
 		!cpu_suspend(0, msm_pm_collapse) : msm_pm_pc_hotplug();
@@ -570,6 +591,14 @@ static bool __ref msm_pm_spm_power_collapse(
 		spin_unlock(&cpu_cnt_lock);
 	}
 	msm_jtag_restore_state();
+
+	if (!from_idle && smp_processor_id() == 0) {
+
+		msm_watchdog_resume_deferred();
+
+		resume_console();
+		pr_info("[R] resume start\n");
+	}
 
 	if (collapsed) {
 		cpu_init();
@@ -617,7 +646,7 @@ static int ramp_down_last_cpu(int cpu)
 
 	if (use_acpuclk_apis) {
 		ret = acpuclk_power_collapse();
-		if (MSM_PM_DEBUG_CLOCK & msm_pm_debug_mask)
+		if (MSM_PM_DEBUG_IDLE_CLK & msm_pm_debug_mask)
 			pr_info("CPU%u: %s: change clk rate(old rate = %d)\n",
 					cpu, __func__, ret);
 	} else {
@@ -632,7 +661,7 @@ static int ramp_up_first_cpu(int cpu, int saved_rate)
 	struct clk *cpu_clk = per_cpu(cpu_clks, cpu);
 	int rc = 0;
 
-	if (MSM_PM_DEBUG_CLOCK & msm_pm_debug_mask)
+	if (MSM_PM_DEBUG_IDLE_CLK & msm_pm_debug_mask)
 		pr_info("CPU%u: %s: restore clock rate\n",
 				cpu, __func__);
 
@@ -662,6 +691,10 @@ static int ramp_up_first_cpu(int cpu, int saved_rate)
 	return rc;
 }
 
+#ifdef CONFIG_ARCH_MSM8226
+extern int pming;
+#endif
+
 static enum msm_pm_time_stats_id msm_pm_power_collapse(bool from_idle)
 {
 	unsigned int cpu = smp_processor_id();
@@ -669,6 +702,24 @@ static enum msm_pm_time_stats_id msm_pm_power_collapse(bool from_idle)
 	unsigned int avsdscr;
 	unsigned int avscsr;
 	bool collapsed;
+
+	/* Unvote DIG voltage before entering suspend mode */
+	/* msm_pm_power_collapse is shared by cpu hotplug, idle pc, and suspend.
+	 * Only suspend should unvote dig voltage.
+	 * cpu hotplug: cpu > 0 and from_idle is false.
+	 * idle pc: from_idle is true.
+	 * suspend: cpu == 0 and from_idle is false.
+	 */
+	if ((from_idle && (MSM_PM_DEBUG_IDLE_CLK & msm_pm_debug_mask)) ||
+			(!from_idle && (smp_processor_id() == 0))) {
+		clock_debug_print_enabled();
+	}
+#ifdef CONFIG_ARCH_MSM8226
+	if (!cpu && !from_idle)
+		pming = 1;
+#endif
+	if (!cpu && !from_idle)
+		keep_dig_voltage_low_in_idle(false);
 
 	if (MSM_PM_DEBUG_POWER_COLLAPSE & msm_pm_debug_mask)
 		pr_info("CPU%u: %s: idle %d\n",
@@ -692,10 +743,23 @@ static enum msm_pm_time_stats_id msm_pm_power_collapse(bool from_idle)
 	if (cpu_online(cpu) && !msm_no_ramp_down_pc)
 		saved_acpuclk_rate = ramp_down_last_cpu(cpu);
 
+	if (MSM_PM_DEBUG_CLOCK & msm_pm_debug_mask)
+		pr_info("CPU%u: %s: change clock rate (old rate = %lu)\n",
+			cpu, __func__, saved_acpuclk_rate);
+
 	collapsed = msm_pm_spm_power_collapse(cpu, from_idle, true);
 
-	if (cpu_online(cpu) && !msm_no_ramp_down_pc)
-		ramp_up_first_cpu(cpu, saved_acpuclk_rate);
+	if (cpu_online(cpu)) {
+		if (MSM_PM_DEBUG_CLOCK & msm_pm_debug_mask)
+			pr_info("CPU%u: %s: restore clock rate to %lu\n",
+				cpu, __func__, saved_acpuclk_rate);
+		if (!msm_no_ramp_down_pc &&
+			ramp_up_first_cpu(cpu, saved_acpuclk_rate)
+				< 0)
+			pr_err("CPU%u: %s: failed to restore clock rate(%lu)\n",
+				cpu, __func__, saved_acpuclk_rate);
+	}
+
 
 	avs_set_avsdscr(avsdscr);
 	avs_set_avscsr(avscsr);
@@ -705,6 +769,15 @@ static enum msm_pm_time_stats_id msm_pm_power_collapse(bool from_idle)
 
 	if (MSM_PM_DEBUG_POWER_COLLAPSE & msm_pm_debug_mask)
 		pr_info("CPU%u: %s: return\n", cpu, __func__);
+
+	/* Vote DIG voltage after leaving suspend mode */
+	if (!cpu && !from_idle)
+		keep_dig_voltage_low_in_idle(true);
+
+#ifdef CONFIG_ARCH_MSM8226
+	if (!cpu && !from_idle)
+		pming = 0;
+#endif
 	return collapsed ? MSM_PM_STAT_IDLE_POWER_COLLAPSE :
 			MSM_PM_STAT_IDLE_FAILED_POWER_COLLAPSE;
 }
@@ -802,7 +875,7 @@ int msm_cpu_pm_enter_sleep(enum msm_pm_sleep_mode mode, bool from_idle)
 	if (from_idle)
 		time = sched_clock();
 
-	if (execute[mode])
+	if (mode >= 0 && mode < MSM_PM_SLEEP_MODE_NR && execute[mode])
 		exit_stat = execute[mode](from_idle);
 
 	if (from_idle) {
@@ -810,20 +883,30 @@ int msm_cpu_pm_enter_sleep(enum msm_pm_sleep_mode mode, bool from_idle)
 		msm_pm_ftrace_lpm_exit(smp_processor_id(), mode, collapsed);
 		if (exit_stat >= 0)
 			msm_pm_add_stat(exit_stat, time);
+
 	}
 
 	return collapsed;
 }
 
+#define MAX_CPU_SHUTDOWN_TIMEOUT	(10000)	/* 1s */
+
+static int cpu_shutdown_retry_max[NR_CPUS];
+
+#define MAX_CPU_SHUTDOWN_TIMEOUT	(10000)	/* 1s */
+
+static int cpu_shutdown_retry_max[NR_CPUS];
+
 int msm_pm_wait_cpu_shutdown(unsigned int cpu)
 {
-	int timeout = 10;
+	int timeout;
 
 	if (!msm_pm_slp_sts)
 		return 0;
 	if (!msm_pm_slp_sts[cpu].base_addr)
 		return 0;
-	while (1) {
+
+	for (timeout = 0; timeout < MAX_CPU_SHUTDOWN_TIMEOUT; timeout++) {
 		/*
 		 * Check for the SPM of the core being hotplugged to set
 		 * its sleep state.The SPM sleep state indicates that the
@@ -831,11 +914,18 @@ int msm_pm_wait_cpu_shutdown(unsigned int cpu)
 		 */
 		int acc_sts = __raw_readl(msm_pm_slp_sts[cpu].base_addr);
 
-		if (acc_sts & msm_pm_slp_sts[cpu].mask)
+		if (acc_sts & msm_pm_slp_sts[cpu].mask) {
+			if (cpu_shutdown_retry_max[cpu] < timeout)
+				cpu_shutdown_retry_max[cpu] = timeout;
 			return 0;
+		}
 		udelay(100);
 		WARN(++timeout == 20, "CPU%u didn't collapse in 2 ms\n", cpu);
 	}
+
+	cpu_shutdown_retry_max[cpu] = MAX_CPU_SHUTDOWN_TIMEOUT;
+	pr_info("%s(): Timed out waiting %d ms for CPU %u SPM to enter sleep state\n",
+		__func__, MAX_CPU_SHUTDOWN_TIMEOUT/10, cpu);
 
 	return -EBUSY;
 }
@@ -1033,6 +1123,8 @@ static int msm_pm_init(void)
 	msm_pm_mode_sysfs_add();
 	msm_pm_add_stats(enable_stats, ARRAY_SIZE(enable_stats));
 
+	keep_dig_voltage_low_in_idle(true);
+
 	return 0;
 }
 
@@ -1102,7 +1194,7 @@ static int msm_pc_debug_counters_file_read(struct file *file,
 	if (!data)
 		return -EINVAL;
 
-	if (!bufu || count < 0)
+	if (!bufu)
 		return -EINVAL;
 
 	if (!access_ok(VERIFY_WRITE, bufu, count))
