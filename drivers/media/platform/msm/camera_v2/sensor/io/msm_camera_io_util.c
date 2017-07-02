@@ -491,6 +491,7 @@ int msm_camera_config_single_vreg(struct device *dev,
 		if (IS_ERR(*reg_ptr)) {
 			pr_err("%s: %s get failed\n", __func__,
 				cam_vreg->reg_name);
+			regulator_put(*reg_ptr);
 			*reg_ptr = NULL;
 			goto vreg_get_fail;
 		}
@@ -552,10 +553,65 @@ vreg_get_fail:
 	return -ENODEV;
 }
 
+int msm_camera_config_single_ncp6924_vreg(struct device *dev,
+	struct camera_ncp6924_vreg_t *ncp6924_vreg, struct regulator **reg_ptr, int config)
+{
+	int rc = 0;
+
+	if (config) {
+		CDBG("%s enable %s\n", __func__, ncp6924_vreg->reg_name);
+		*reg_ptr = regulator_get(dev, ncp6924_vreg->reg_name);
+		if (IS_ERR(*reg_ptr)) {
+			pr_err("%s: %s get failed\n", __func__,
+				ncp6924_vreg->reg_name);
+			regulator_put(*reg_ptr);
+			*reg_ptr = NULL;
+			goto vreg_get_fail;
+		}
+		rc = regulator_set_voltage(
+			*reg_ptr, ncp6924_vreg->min_voltage,
+			ncp6924_vreg->max_voltage);
+		if (rc < 0) {
+			pr_err("%s: %s set voltage failed\n",
+				__func__, ncp6924_vreg->reg_name);
+			goto vreg_set_voltage_fail;
+		}
+		rc = regulator_enable(*reg_ptr);
+		if (rc < 0) {
+			pr_err("%s: %s enable failed\n",
+				__func__, ncp6924_vreg->reg_name);
+			goto vreg_unconfig;
+		}
+	} else {
+		if (*reg_ptr) {
+			CDBG("%s disable %s\n", __func__, ncp6924_vreg->reg_name);
+			regulator_disable(*reg_ptr);
+			regulator_put(*reg_ptr);
+			*reg_ptr = NULL;
+		}
+	}
+	return 0;
+
+vreg_unconfig:
+	regulator_set_optimum_mode(*reg_ptr, 0);
+
+vreg_set_voltage_fail:
+	regulator_put(*reg_ptr);
+	*reg_ptr = NULL;
+
+vreg_get_fail:
+	return -ENODEV;
+}
+
 int msm_camera_request_gpio_table(struct gpio *gpio_tbl, uint8_t size,
 	int gpio_en)
 {
 	int rc = 0, i = 0, err = 0;
+
+	static int gpio_558_index = 0;
+	static int gpio_557_index = 0;
+	static int gpio_430_index = 0;
+	static int gpio_429_index = 0;
 
 	if (!gpio_tbl || !size) {
 		pr_err("%s:%d invalid gpio_tbl %p / size %d\n", __func__,
@@ -568,8 +624,37 @@ int msm_camera_request_gpio_table(struct gpio *gpio_tbl, uint8_t size,
 	}
 	if (gpio_en) {
 		for (i = 0; i < size; i++) {
-			err = gpio_request_one(gpio_tbl[i].gpio,
-				gpio_tbl[i].flags, gpio_tbl[i].label);
+			if (gpio_tbl[i].gpio == 558) {
+				gpio_558_index ++;
+				if (gpio_558_index == 1)
+					err = gpio_request_one(gpio_tbl[i].gpio, gpio_tbl[i].flags, gpio_tbl[i].label);
+				else
+					pr_info("%s:%d already request gpio_558_index:%d\n",
+						 __func__,__LINE__, gpio_558_index);
+			} else if (gpio_tbl[i].gpio == 557) {
+				gpio_557_index ++;
+				if (gpio_557_index == 1)
+					err = gpio_request_one(gpio_tbl[i].gpio, gpio_tbl[i].flags, gpio_tbl[i].label);
+				else
+					pr_info("%s:%d already request gpio_557_index:%d\n",
+						 __func__, __LINE__, gpio_557_index);
+			} else if (gpio_tbl[i].gpio == 430) {
+				gpio_430_index ++;
+				if (gpio_430_index == 1)
+					err = gpio_request_one(gpio_tbl[i].gpio, gpio_tbl[i].flags, gpio_tbl[i].label);
+				else
+					pr_info("%s:%d already request gpio_430_index:%d\n",
+						 __func__, __LINE__, gpio_430_index);
+			} else if (gpio_tbl[i].gpio == 429) {
+				gpio_429_index ++;
+				if (gpio_429_index == 1)
+					err = gpio_request_one(gpio_tbl[i].gpio, gpio_tbl[i].flags, gpio_tbl[i].label);
+				else
+					pr_info("%s:%d already request gpio_429_index:%d\n",
+						 __func__, __LINE__, gpio_429_index);
+			} else
+				err = gpio_request_one(gpio_tbl[i].gpio,
+					gpio_tbl[i].flags, gpio_tbl[i].label);
 			if (err) {
 				/*
 				* After GPIO request fails, contine to
@@ -582,7 +667,30 @@ int msm_camera_request_gpio_table(struct gpio *gpio_tbl, uint8_t size,
 			}
 		}
 	} else {
+#if 1
+		for (i = 0; i < size; i++) {
+			if (gpio_tbl[i].gpio == 558) {
+				gpio_558_index--;
+				if (gpio_558_index == 0)
+					gpio_free(gpio_tbl[i].gpio);
+			} else if (gpio_tbl[i].gpio == 557) {
+				gpio_557_index--;
+				if (gpio_557_index == 0)
+					gpio_free(gpio_tbl[i].gpio);
+			} else if (gpio_tbl[i].gpio == 430) {
+				gpio_430_index--;
+				if (gpio_430_index == 0)
+					gpio_free(gpio_tbl[i].gpio);
+			} else if (gpio_tbl[i].gpio == 429) {
+				gpio_429_index--;
+				if (gpio_429_index == 0)
+					gpio_free(gpio_tbl[i].gpio);
+			} else
+				gpio_free(gpio_tbl[i].gpio);
+		}
+#else
 		gpio_free_array(gpio_tbl, size);
+#endif
 	}
 	return rc;
 }
