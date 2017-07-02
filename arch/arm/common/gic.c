@@ -49,6 +49,9 @@
 
 #include <mach/socinfo.h>
 #include <mach/msm_rtb.h>
+#ifdef CONFIG_HTC_POWER_DEBUG
+#include <mach/irqs.h>
+#endif
 
 union gic_base {
 	void __iomem *common_base;
@@ -259,6 +262,11 @@ static void gic_show_resume_irq(struct gic_chip_data *gic)
 	     i = find_next_bit(pending, gic->max_irq, i+1)) {
 		pr_warning("%s: %d triggered", __func__,
 					i + gic->irq_offset);
+#ifdef CONFIG_HTC_POWER_DEBUG
+                if (EE0_KRAIT_HLOS_SPMI_PERIPH_IRQ != i + gic->irq_offset)
+                        if (TLMM_MSM_SUMMARY_IRQ != i + gic->irq_offset)
+                                pr_info("[WAKEUP] Resume caused by gic-%d\n", i + gic->irq_offset);
+#endif
 	}
 }
 

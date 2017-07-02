@@ -687,6 +687,9 @@ static int __devinit jtag_mm_etm_probe(struct platform_device *pdev,
 
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "etm-base");
 
+	if (!res)
+		return -EINVAL;
+
 	etmdata->base = devm_ioremap(dev, res->start, resource_size(res));
 	if (!etmdata->base)
 		return -EINVAL;
@@ -755,6 +758,8 @@ static int __devinit jtag_mm_dbg_probe(struct platform_device *pdev,
 
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "debug-base");
 
+	if (!res)
+		return -EINVAL;
 	dbgdata->base = devm_ioremap(dev, res->start, resource_size(res));
 	if (!dbgdata->base)
 		return -EINVAL;

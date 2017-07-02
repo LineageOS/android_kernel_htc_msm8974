@@ -1,0 +1,15 @@
+#
+# Miscellaneous I2C sensor drivers configuration
+#
+# *** DEPRECATED! Do not add new entries! See Makefile ***
+#
+
+menu "Miscellaneous I2C Chip support"
+
+config SENSORS_ONLY_BMA255
+	tristate "BMA255 acceleration sensor support"
+	depends on I2C=y
+	help
+	  BMA255 ONLY G-sensor Driver implemented by HTC.
+
+endmenu

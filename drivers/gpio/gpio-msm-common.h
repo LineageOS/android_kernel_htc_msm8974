@@ -27,4 +27,18 @@ void __msm_gpio_set_intr_cfg_type(unsigned gpio, unsigned type);
 void __gpio_tlmm_config(unsigned config);
 void __msm_gpio_install_direct_irq(unsigned gpio, unsigned irq,
 					unsigned int input_polarity);
+
+#ifdef CONFIG_HTC_POWER_DEBUG
+struct  msm_gpio_dump_info {
+        unsigned int dir;
+        unsigned int pull;
+        unsigned int drv;
+        unsigned int value;
+        unsigned int func_sel;
+        unsigned int int_en;
+        unsigned int int_owner;
+};
+void __msm_gpio_get_dump_info(unsigned gpio, struct  msm_gpio_dump_info *data);
+#endif
+
 #endif

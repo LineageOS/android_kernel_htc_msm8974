@@ -230,3 +230,25 @@ void __msm_gpio_install_direct_irq(unsigned gpio, unsigned irq,
 		cfg |= DC_POLARITY_HI;
 	__raw_writel(cfg, GPIO_DIR_CONN_INTR(irq));
 }
+
+#ifdef CONFIG_HTC_POWER_DEBUG
+void __msm_gpio_get_dump_info(unsigned gpio, struct  msm_gpio_dump_info *data)
+{
+        unsigned flags;
+
+        flags = __raw_readl(GPIO_CONFIG(gpio));
+        data->pull = flags & 0x3;
+        data->func_sel = (flags >> 2) & 0xf;
+        data->drv = (flags >> 6) & 0x7;
+        data->dir = (flags >> 9) & 0x1;
+
+        if (data->dir)
+                data->value = (__raw_readl(GPIO_IN_OUT(gpio)) >> 1) & 0x1;
+        else {
+                data->value = __raw_readl(GPIO_IN_OUT(gpio)) & 0x1;
+                data->int_en = __raw_readl(GPIO_INTR_CFG(gpio)) & 0x1;
+                if (data->int_en)
+                        data->int_owner = (__raw_readl(GPIO_INTR_CFG(gpio)) >> 5) & 0x7;
+        }
+}
+#endif

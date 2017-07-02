@@ -189,8 +189,8 @@ struct msm_gpio_set_tbl {
 };
 
 struct msm_camera_gpio_num_info {
-	uint16_t gpio_num[10];
-	uint8_t valid[10];
+	uint16_t gpio_num[20]; /* This should reference to SENSOR_GPIO_MAX in include/media/msm_cam_sensor.h */
+	uint8_t valid[20];
 };
 
 struct msm_camera_gpio_conf {
@@ -636,6 +636,7 @@ void vic_handle_irq(struct pt_regs *regs);
 void msm_8974_reserve(void);
 void msm_8974_very_early(void);
 void msm_8974_init_gpiomux(void);
+void msm_htc_8974_init_gpiomux(void);
 void apq8084_init_gpiomux(void);
 void msm9625_init_gpiomux(void);
 void msmkrypton_init_gpiomux(void);
@@ -645,6 +646,7 @@ void mpq8092_init_gpiomux(void);
 void msm_map_msm8226_io(void);
 void msm8226_init_irq(void);
 void msm8226_init_gpiomux(void);
+void msm8226_htc_init_gpiomux(void);
 void msm8610_init_gpiomux(void);
 void msm_map_msm8610_io(void);
 void msm8610_init_irq(void);
@@ -664,12 +666,72 @@ void msm_pm_register_irqs(void);
 struct msm_usb_host_platform_data;
 int msm_add_host(unsigned int host,
 		struct msm_usb_host_platform_data *plat);
-#if defined(CONFIG_USB_FUNCTION_MSM_HSUSB) \
-	|| defined(CONFIG_USB_MSM_72K) || defined(CONFIG_USB_MSM_72K_MODULE)
+
 void msm_hsusb_set_vbus_state(int online);
-#else
-static inline void msm_hsusb_set_vbus_state(int online) {}
+void msm_otg_set_vbus_state(int online);
+void htc_dwc3_msm_otg_set_vbus_state(int online);
+enum usb_connect_type {
+	CONNECT_TYPE_NOTIFY = -3,
+	CONNECT_TYPE_CLEAR = -2,
+	CONNECT_TYPE_UNKNOWN = -1,
+	CONNECT_TYPE_NONE = 0,
+	CONNECT_TYPE_USB,
+	CONNECT_TYPE_AC,
+	CONNECT_TYPE_9V_AC,
+	CONNECT_TYPE_WIRELESS,
+	CONNECT_TYPE_INTERNAL,
+	CONNECT_TYPE_UNSUPPORTED,
+#ifdef CONFIG_MACH_VERDI_LTE
+	/* Y cable with USB and 9V charger */
+	CONNECT_TYPE_USB_9V_AC,
 #endif
+	CONNECT_TYPE_MHL_AC,
+};
+/* START: add USB connected notify function */
+struct t_usb_status_notifier{
+	struct list_head notifier_link;
+	const char *name;
+	void (*func)(int cable_type);
+};
+int htc_usb_register_notifier(struct t_usb_status_notifier *notifer);
+int64_t htc_qpnp_adc_get_usbid_adc(void);
+int usb_get_connect_type(void);
+static LIST_HEAD(g_lh_usb_notifier_list);
+
+/***********************************
+Direction: cable detect drvier -> battery driver or other
+ ***********************************/
+struct t_cable_status_notifier{
+	struct list_head cable_notifier_link;
+	const char *name;
+	void (*func)(int cable_type);
+};
+int cable_detect_register_notifier(struct t_cable_status_notifier *);
+static LIST_HEAD(g_lh_calbe_detect_notifier_list);
+
+#ifdef CONFIG_HTC_MHL_DETECTION
+/***********************************
+ Direction: sii9234 drvier -> cable detect driver
+***********************************/
+struct t_mhl_status_notifier{
+        struct list_head mhl_notifier_link;
+        const char *name;
+        void (*func)(bool isMHL, int charging_type);
+};
+int mhl_detect_register_notifier(struct t_mhl_status_notifier *);
+static LIST_HEAD(g_lh_mhl_detect_notifier_list);
+#endif
+
+/***********************************
+Direction: cable detect drvier -> usb driver
+ ***********************************/
+struct t_usb_host_status_notifier{
+	struct list_head usb_host_notifier_link;
+	const char *name;
+	void (*func)(bool cable_in);
+};
+int usb_host_detect_register_notifier(struct t_usb_host_status_notifier *);
+static LIST_HEAD(g_lh_usb_host_detect_notifier_list);
 
 void msm_snddev_init(void);
 void msm_snddev_init_timpani(void);
@@ -682,6 +744,7 @@ void msm_snddev_tx_route_deconfig(void);
 
 extern phys_addr_t msm_shared_ram_phys; /* defined in arch/arm/mach-msm/io.c */
 
+extern int get_partition_num_by_name(char *name);
 
 u32 wcnss_rf_read_reg(u32 rf_reg_addr);
 #endif

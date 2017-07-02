@@ -490,6 +490,7 @@ static int32_t qpnp_adc_tm_timer_interval_select(
 		return -EINVAL;
 	}
 
+	/* Configure kernel clients to timer1 */
 	switch (chip->sensor[chan_idx].timer_select) {
 	case ADC_MEAS_TIMER_SELECT1:
 		rc = qpnp_adc_tm_write_reg(chip,
@@ -1053,13 +1054,14 @@ static int qpnp_adc_tm_get_trip_type(struct thermal_zone_device *thermal,
 }
 
 static int qpnp_adc_tm_get_trip_temp(struct thermal_zone_device *thermal,
-				   int trip, unsigned long *temp)
+				   int trip, long *temp)
 {
 	struct qpnp_adc_tm_sensor *adc_tm_sensor = thermal->devdata;
 	struct qpnp_adc_tm_chip *chip = adc_tm_sensor->chip;
 	int64_t result = 0;
 	u8 trip_cool_thr0, trip_cool_thr1, trip_warm_thr0, trip_warm_thr1;
-	unsigned int reg, rc = 0;
+	unsigned int reg;
+	int rc = 0;
 	uint16_t reg_low_thr_lsb, reg_low_thr_msb;
 	uint16_t reg_high_thr_lsb, reg_high_thr_msb;
 	uint32_t btm_chan_idx = 0, btm_chan = 0;
@@ -1149,6 +1151,7 @@ static int qpnp_adc_tm_set_trip_temp(struct thermal_zone_device *thermal,
 	if (qpnp_adc_tm_check_revision(chip, adc_tm->btm_channel_num))
 		return -EINVAL;
 
+	memset(&tm_config, 0, sizeof(struct qpnp_adc_tm_config));
 	tm_config.channel = adc_tm->vadc_channel_num;
 	switch (trip) {
 	case ADC_TM_TRIP_HIGH_WARM:
@@ -1611,7 +1614,7 @@ static irqreturn_t qpnp_adc_tm_low_thr_isr(int irq, void *data)
 }
 
 static int qpnp_adc_read_temp(struct thermal_zone_device *thermal,
-			     unsigned long *temp)
+			     long *temp)
 {
 	struct qpnp_adc_tm_sensor *adc_tm_sensor = thermal->devdata;
 	struct qpnp_adc_tm_chip *chip = adc_tm_sensor->chip;

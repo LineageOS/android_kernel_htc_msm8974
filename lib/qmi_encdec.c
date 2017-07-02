@@ -562,7 +562,9 @@ static int _qmi_kernel_decode(struct elem_info *ei_array,
 	struct elem_info *temp_ei = ei_array;
 	uint8_t opt_flag_value = 1;
 	uint32_t data_len_value = 0, data_len_sz = 0;
-	uint8_t *buf_dst = out_c_struct;
+	/* ++ fix Klocwork */
+	uint8_t *buf_dst = 0;
+	/* -- fix Klocwork */
 	uint8_t *tlv_pointer;
 	uint32_t tlv_len = 0;
 	uint32_t tlv_type;

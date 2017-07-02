@@ -138,9 +138,14 @@ extern __init void vm_area_register_early(struct vm_struct *vm, size_t align);
 extern __init int vm_area_check_early(struct vm_struct *vm);
 #ifdef CONFIG_ENABLE_VMALLOC_SAVING
 extern void mark_vmalloc_reserved_area(void *addr, unsigned long size);
+extern phys_addr_t report_vmalloc_saving_size(void);
 #else
 static inline void mark_vmalloc_reserved_area(void *addr, unsigned long size)
 { };
+static inline phys_addr_t report_vmalloc_saving_size(void)
+{
+	return 0UL;
+}
 #endif
 
 #ifdef CONFIG_SMP
@@ -164,6 +169,34 @@ pcpu_free_vm_areas(struct vm_struct **vms, int nr_vms)
 {
 }
 # endif
+#endif
+
+struct vmalloc_info {
+	unsigned long	used;
+	unsigned long	ioremap;
+	unsigned long	alloc;
+	unsigned long	map;
+	unsigned long	usermap;
+	unsigned long	vpages;
+	unsigned long	largest_chunk;
+};
+
+#ifdef CONFIG_MMU
+#define VMALLOC_TOTAL (VMALLOC_END - VMALLOC_START)
+extern void get_vmalloc_info(struct vmalloc_info *vmi);
+#else
+
+#define VMALLOC_TOTAL 0UL
+#define get_vmalloc_info(vmi)			\
+do {						\
+	(vmi)->used = 0;			\
+	(vmi)->ioremap = 0;		\
+	(vmi)->alloc = 0;		\
+	(vmi)->map = 0;		\
+	(vmi)->usermap = 0;		\
+	(vmi)->vpages = 0;		\
+	(vmi)->largest_chunk = 0;		\
+} while(0)
 #endif
 
 #endif /* _LINUX_VMALLOC_H */
