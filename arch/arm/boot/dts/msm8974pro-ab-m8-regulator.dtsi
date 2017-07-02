@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -210,7 +210,7 @@
 		pm8941_l3: regulator-l3 {
 			regulator-min-microvolt = <1200000>;
 			regulator-max-microvolt = <1200000>;
-			qcom,init-voltage = <1225000>;
+			qcom,init-voltage = <1200000>;
 			status = "okay";
 		};
 	};
@@ -288,8 +288,8 @@
 	rpm-regulator-ldoa11 {
 		status = "okay";
 		pm8941_l11: regulator-l11 {
-			regulator-min-microvolt = <1225000>;
-			regulator-max-microvolt = <1350000>;
+			regulator-min-microvolt = <1300000>;
+			regulator-max-microvolt = <1300000>;
 			qcom,init-voltage = <1300000>;
 			status = "okay";
 		};
@@ -376,7 +376,7 @@
 		status = "okay";
 		pm8941_l19: regulator-l19 {
 			regulator-min-microvolt = <2900000>;
-			regulator-max-microvolt = <3350000>;
+			regulator-max-microvolt = <3300000>;
 			qcom,init-voltage = <2900000>;
 			status = "okay";
 		};
@@ -465,8 +465,6 @@
 		ranges;
 		qcom,pfm-threshold = <76>;
 		qcom,use-phase-scaling-factor;
-		qcom,phase-scaling-factor-bits-pos = <16>;
-		qcom,valid-scaling-factor-versions = <0 1 0 0>;
 
 		krait0_vreg: regulator@f9088000 {
 			compatible = "qcom,krait-regulator";
@@ -562,14 +560,6 @@
 	regulator-name = "8941_smbb_boost";
 };
 
-&pm8941_chg_batif  {
-	regulator-name = "batfet";
-};
-
 &pm8941_chg_otg {
 	regulator-name = "8941_smbb_otg";
-};
-
-&pm8941_chg_chgr {
-	regulator-name = "flash_wa";
 };
