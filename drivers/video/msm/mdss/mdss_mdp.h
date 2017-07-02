@@ -77,13 +77,6 @@ static inline u32 mdss_mdp_reg_read(u32 addr)
 #define MDSS_MDP_REG_WRITE(addr, val)	MDSS_REG_WRITE((u32)(addr), (u32)(val))
 #define MDSS_MDP_REG_READ(addr)		MDSS_REG_READ((u32)(addr))
 #endif
-#define PERF_STATUS_DONE 0
-#define PERF_STATUS_BUSY 1
-
-enum mdss_mdp_perf_state_type {
-	PERF_SW_COMMIT_STATE = 0,
-	PERF_HW_MDP_STATE,
-};
 
 enum mdss_mdp_block_power_state {
 	MDP_BLOCK_POWER_OFF = 0,
@@ -189,7 +182,6 @@ struct mdss_mdp_ctl {
 	int force_screen_state;
 	struct mdss_mdp_perf_params cur_perf;
 	struct mdss_mdp_perf_params new_perf;
-	u32 perf_transaction_status;
 
 	struct mdss_data_type *mdata;
 	struct msm_fb_data_type *mfd;
@@ -198,13 +190,9 @@ struct mdss_mdp_ctl {
 	struct mutex lock;
 	struct mutex *shared_lock;
 	struct mutex *wb_lock;
-	spinlock_t spin_lock;
 
 	struct mdss_panel_data *panel_data;
 	struct mdss_mdp_vsync_handler vsync_handler;
-	struct mdss_mdp_vsync_handler recover_underrun_handler;
-	struct work_struct recover_work;
-	struct work_struct remove_underrun_handler;
 
 	struct mdss_mdp_img_rect roi;
 	struct mdss_mdp_img_rect roi_bkup;
@@ -228,7 +216,6 @@ struct mdss_mdp_ctl {
 
 	void *priv_data;
 	u32 wb_type;
-	u64 bw_pending;
 };
 
 struct mdss_mdp_mixer {
@@ -417,7 +404,8 @@ struct mdss_mdp_pipe {
 	struct mdss_mdp_data back_buf;
 	struct mdss_mdp_data front_buf;
 
-	struct list_head list;
+	struct list_head used_list;
+	struct list_head cleanup_list;
 
 	struct mdp_overlay_pp_params pp_cfg;
 	struct mdss_pipe_pp_res pp_res;
@@ -444,8 +432,6 @@ struct mdss_overlay_private {
         struct mutex dfps_lock;
 	struct mdss_mdp_ctl *ctl;
 	struct mdss_mdp_wb *wb;
-
-	struct mutex list_lock;
 	struct list_head overlay_list;
 	struct list_head pipes_used;
 	struct list_head pipes_cleanup;
@@ -607,12 +593,7 @@ void mdss_mdp_ctl_notifier_unregister(struct mdss_mdp_ctl *ctl,
 
 int mdss_mdp_mixer_handoff(struct mdss_mdp_ctl *ctl, u32 num,
 	struct mdss_mdp_pipe *pipe);
-
 int mdss_mdp_scan_pipes(void);
-
-void mdss_mdp_ctl_perf_set_transaction_status(struct mdss_mdp_ctl *ctl,
-	enum mdss_mdp_perf_state_type component, bool new_status);
-void mdss_mdp_ctl_perf_release_bw(struct mdss_mdp_ctl *ctl);
 
 struct mdss_mdp_mixer *mdss_mdp_wb_mixer_alloc(int rotator);
 int mdss_mdp_wb_mixer_destroy(struct mdss_mdp_mixer *mixer);
@@ -749,8 +730,6 @@ int mdss_mdp_wb_get_format(struct msm_fb_data_type *mfd,
 
 int mdss_mdp_wb_set_secure(struct msm_fb_data_type *mfd, int enable);
 int mdss_mdp_wb_get_secure(struct msm_fb_data_type *mfd, uint8_t *enable);
-void mdss_mdp_ctl_restore(struct mdss_mdp_ctl *ctl);
-int mdss_mdp_footswitch_ctrl_ulps(int on, struct device *dev);
 
 int mdss_mdp_pipe_program_pixel_extn(struct mdss_mdp_pipe *pipe);
 #define mfd_to_mdp5_data(mfd) (mfd->mdp.private1)
