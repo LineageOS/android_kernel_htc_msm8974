@@ -112,6 +112,7 @@ typedef struct {
  */
 struct reclaim_state {
 	unsigned long reclaimed_slab;
+	int trigger_lmk;
 };
 
 #ifdef __KERNEL__
@@ -381,7 +382,6 @@ struct backing_dev_info;
 #ifdef CONFIG_CGROUP_MEM_RES_CTLR
 extern void
 mem_cgroup_uncharge_swapcache(struct page *page, swp_entry_t ent, bool swapout);
-extern int mem_cgroup_count_swap_user(swp_entry_t ent, struct page **pagep);
 #else
 static inline void
 mem_cgroup_uncharge_swapcache(struct page *page, swp_entry_t ent, bool swapout)
@@ -488,14 +488,6 @@ mem_cgroup_uncharge_swapcache(struct page *page, swp_entry_t ent)
 {
 }
 
-#ifdef CONFIG_CGROUP_MEM_RES_CTLR
-static inline int
-mem_cgroup_count_swap_user(swp_entry_t ent, struct page **pagep)
-{
-	return 0;
-}
-#endif
-
-#endif /* CONFIG_SWAP */
-#endif /* __KERNEL__*/
-#endif /* _LINUX_SWAP_H */
+#endif 
+#endif 
+#endif 

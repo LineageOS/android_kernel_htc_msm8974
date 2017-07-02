@@ -96,6 +96,7 @@ static void free_buffer_page(struct ion_system_heap *heap,
 	int i;
 
 	if ((buffer->flags & ION_FLAG_FREED_FROM_SHRINKER)) {
+		ion_alloc_dec_usage(ION_TOTAL, 1 << order);
 		if (split_pages) {
 			for (i = 0; i < (1 << order); i++)
 				__free_page(page + i);
@@ -189,11 +190,13 @@ static int ion_system_heap_allocate(struct ion_heap *heap,
 	int i = 0;
 	unsigned int nents_sync = 0;
 	unsigned long size_remaining = PAGE_ALIGN(size);
+	size_t total_pages = 0;
 	unsigned int max_order = orders[0];
 	struct pages_mem data;
 	unsigned int sz;
 	bool split_pages = ion_buffer_fault_user_mappings(buffer);
 
+	memset(&table_sync, 0, sizeof(table_sync));
 	data.size = 0;
 	INIT_LIST_HEAD(&pages);
 	INIT_LIST_HEAD(&pages_from_pool);
@@ -212,6 +215,7 @@ static int ion_system_heap_allocate(struct ion_heap *heap,
 			++nents_sync;
 		}
 		size_remaining -= sz;
+		total_pages += 1 << info->order;
 		max_order = info->order;
 		i++;
 	}
@@ -291,6 +295,7 @@ static int ion_system_heap_allocate(struct ion_heap *heap,
 				       DMA_BIDIRECTIONAL);
 
 	buffer->priv_virt = table;
+	ion_alloc_inc_usage(ION_IN_USE, total_pages);
 	if (nents_sync)
 		sg_free_table(&table_sync);
 	ion_heap_free_pages_mem(&data);
@@ -336,9 +341,11 @@ void ion_system_heap_free(struct ion_buffer *buffer)
 	if (!(buffer->flags & ION_FLAG_FREED_FROM_SHRINKER))
 		ion_heap_buffer_zero(buffer);
 
-	for_each_sg(table->sgl, sg, table->nents, i)
+	for_each_sg(table->sgl, sg, table->nents, i) {
+		ion_alloc_dec_usage(ION_IN_USE, 1 << get_order(sg_dma_len(sg)));
 		free_buffer_page(sys_heap, buffer, sg_page(sg),
 				get_order(sg_dma_len(sg)));
+	}
 	sg_free_table(table);
 	kfree(table);
 }
@@ -423,6 +430,7 @@ static int ion_system_heap_debug_show(struct ion_heap *heap, struct seq_file *s,
 							struct ion_system_heap,
 							heap);
 	int i;
+	unsigned long total_pages = 0;
 	for (i = 0; i < num_orders; i++) {
 		struct ion_page_pool *pool = sys_heap->uncached_pools[i];
 		seq_printf(s,
@@ -433,6 +441,7 @@ static int ion_system_heap_debug_show(struct ion_heap *heap, struct seq_file *s,
 			"%d order %u lowmem pages in uncached pool = %lu total\n",
 			pool->low_count, pool->order,
 			(1 << pool->order) * PAGE_SIZE * pool->low_count);
+		total_pages += (1 << pool->order) * (pool->high_count + pool->low_count);
 	}
 
 	for (i = 0; i < num_orders; i++) {
@@ -445,7 +454,13 @@ static int ion_system_heap_debug_show(struct ion_heap *heap, struct seq_file *s,
 			"%d order %u lowmem pages in cached pool = %lu total\n",
 			pool->low_count, pool->order,
 			(1 << pool->order) * PAGE_SIZE * pool->low_count);
+		total_pages += (1 << pool->order) * (pool->high_count + pool->low_count);
 	}
+
+	seq_printf(s,
+		"Total: %lu pages with %lu bytes in page pools and %u bytes in free list\n",
+		total_pages, total_pages * PAGE_SIZE,
+		ion_heap_freelist_size(heap));
 
 	return 0;
 }

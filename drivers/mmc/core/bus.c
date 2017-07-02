@@ -361,10 +361,16 @@ int mmc_add_card(struct mmc_card *card)
 
 
 	dev_set_name(&card->dev, "%s:%04x", mmc_hostname(card->host), card->rca);
-
+	card->state &= ~MMC_CARD_REMOVED;
+	card->do_remove = 0;
 	switch (card->type) {
 	case MMC_TYPE_MMC:
 		type = "MMC";
+		if (stats_workqueue && !card->host->perf_enable) {
+			card->host->perf_enable = true;
+			queue_delayed_work(stats_workqueue, &card->host->stats_work,
+					msecs_to_jiffies(MMC_STATS_INTERVAL));
+		}
 		break;
 	case MMC_TYPE_SD:
 		type = "SD";
@@ -373,6 +379,11 @@ int mmc_add_card(struct mmc_card *card)
 				type = "SDXC";
 			else
 				type = "SDHC";
+		}
+		if (stats_workqueue && !card->host->perf_enable) {
+			card->host->perf_enable = true;
+			queue_delayed_work(stats_workqueue, &card->host->stats_work,
+					msecs_to_jiffies(MMC_STATS_INTERVAL));
 		}
 		break;
 	case MMC_TYPE_SDIO:
@@ -408,6 +419,8 @@ int mmc_add_card(struct mmc_card *card)
 			mmc_card_ddr_mode(card) ? "DDR " : "",
 			uhs_bus_speed_mode, type, card->rca);
 	}
+
+	mmc_card_set_present(card);
 
 #ifdef CONFIG_DEBUG_FS
 	mmc_add_card_debugfs(card);
@@ -447,8 +460,6 @@ int mmc_add_card(struct mmc_card *card)
 		card->idle_timeout = RUNTIME_SUSPEND_DELAY_MS;
 	}
 
-	mmc_card_set_present(card);
-
 	return 0;
 }
 
@@ -461,7 +472,8 @@ void mmc_remove_card(struct mmc_card *card)
 #ifdef CONFIG_DEBUG_FS
 	mmc_remove_card_debugfs(card);
 #endif
-
+	if (mmc_card_sd(card))
+		mmc_card_set_removed(card);
 	if (mmc_card_present(card)) {
 		if (mmc_host_is_spi(card->host)) {
 			pr_info("%s: SPI card removed\n",

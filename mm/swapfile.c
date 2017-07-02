@@ -767,37 +767,6 @@ int free_swap_and_cache(swp_entry_t entry)
 	return p != NULL;
 }
 
-#ifdef CONFIG_CGROUP_MEM_RES_CTLR
-/**
- * mem_cgroup_count_swap_user - count the user of a swap entry
- * @ent: the swap entry to be checked
- * @pagep: the pointer for the swap cache page of the entry to be stored
- *
- * Returns the number of the user of the swap entry. The number is valid only
- * for swaps of anonymous pages.
- * If the entry is found on swap cache, the page is stored to pagep with
- * refcount of it being incremented.
- */
-int mem_cgroup_count_swap_user(swp_entry_t ent, struct page **pagep)
-{
-	struct page *page;
-	struct swap_info_struct *p;
-	int count = 0;
-
-	page = find_get_page(&swapper_space, ent.val);
-	if (page)
-		count += page_mapcount(page);
-	p = swap_info_get(ent);
-	if (p) {
-		count += swap_count(p->swap_map[swp_offset(ent)]);
-		spin_unlock(&swap_lock);
-	}
-
-	*pagep = page;
-	return count;
-}
-#endif
-
 #ifdef CONFIG_HIBERNATION
 /*
  * Find the swap type that corresponds to given device (if any).
@@ -1819,7 +1788,7 @@ static int swap_show(struct seq_file *swap, void *v)
 	len = seq_path(swap, &file->f_path, " \t\n\\");
 	seq_printf(swap, "%*s%s\t%u\t%u\t%d\n",
 			len < 40 ? 40 - len : 1, " ",
-			S_ISBLK(file->f_path.dentry->d_inode->i_mode) ?
+			S_ISBLK(file_inode(file)->i_mode) ?
 				"partition" : "file\t",
 			si->pages << (PAGE_SHIFT - 10),
 			si->inuse_pages << (PAGE_SHIFT - 10),
@@ -2439,6 +2408,9 @@ int add_swap_count_continuation(swp_entry_t entry, gfp_t gfp_mask)
 	 * will not corrupt the GFP_ATOMIC caller's atomic pagetable kmaps.
 	 */
 	head = vmalloc_to_page(si->swap_map + offset);
+    if (!head) {
+        goto out;
+    }
 	offset &= ~PAGE_MASK;
 
 	/*
@@ -2500,6 +2472,9 @@ static bool swap_count_continued(struct swap_info_struct *si,
 	unsigned char *map;
 
 	head = vmalloc_to_page(si->swap_map + offset);
+    if (!head) {
+        return false;
+    }
 	if (page_private(head) != SWP_CONTINUED) {
 		BUG_ON(count & COUNT_CONTINUED);
 		return false;		/* need to add count continuation */
@@ -2580,7 +2555,9 @@ static void free_swap_count_continuations(struct swap_info_struct *si)
 	for (offset = 0; offset < si->max; offset += PAGE_SIZE) {
 		struct page *head;
 		head = vmalloc_to_page(si->swap_map + offset);
-		if (page_private(head)) {
+		if (!head)
+            continue;
+        if (page_private(head)) {
 			struct list_head *this, *next;
 			list_for_each_safe(this, next, &head->lru) {
 				struct page *page;

@@ -143,6 +143,7 @@ struct worker {
 	unsigned int		flags;		/* X: flags */
 	int			id;		/* I: worker id */
 	struct work_struct	rebind_work;	/* L: rebind worker to cpu */
+	struct work_struct	*previous_work;	/* HTC: previous processed work */
 };
 
 struct worker_pool {
@@ -1093,7 +1094,9 @@ static void delayed_work_timer_fn(unsigned long __data)
 	struct delayed_work *dwork = (struct delayed_work *)__data;
 	struct cpu_workqueue_struct *cwq = get_work_cwq(&dwork->work);
 
-	__queue_work(smp_processor_id(), cwq->wq, &dwork->work);
+	if (cwq) {
+        __queue_work(smp_processor_id(), cwq->wq, &dwork->work);
+    }
 }
 
 /**
@@ -1806,7 +1809,7 @@ __acquires(&gcwq->lock)
 	struct worker_pool *pool = worker->pool;
 	struct global_cwq *gcwq = pool->gcwq;
 	struct hlist_head *bwh = busy_worker_head(gcwq, work);
-	bool cpu_intensive = cwq->wq->flags & WQ_CPU_INTENSIVE;
+	bool cpu_intensive;
 	work_func_t f = work->func;
 	int work_color;
 	struct worker *collision;
@@ -1820,6 +1823,12 @@ __acquires(&gcwq->lock)
 	 */
 	struct lockdep_map lockdep_map = work->lockdep_map;
 #endif
+
+    if (!cwq) {
+        return;
+    }
+    cpu_intensive = cwq->wq->flags & WQ_CPU_INTENSIVE;
+
 	/*
 	 * A single work shouldn't be executed concurrently by
 	 * multiple workers on a single cpu.  Check whether anyone is
@@ -1892,6 +1901,7 @@ __acquires(&gcwq->lock)
 	/* we're done with it, release */
 	hlist_del_init(&worker->hentry);
 	worker->current_work = NULL;
+	worker->previous_work = work;
 	worker->current_cwq = NULL;
 	cwq_dec_nr_in_flight(cwq, work_color, false);
 }
@@ -3827,6 +3837,29 @@ out_unlock:
 	spin_unlock(&workqueue_lock);
 }
 #endif /* CONFIG_FREEZER */
+
+#if defined(CONFIG_HTC_DEBUG_WORKQUEUE)
+void htc_debug_workqueue_show_pending_work_on_gcwq(void)
+{
+	unsigned int cpu;
+	struct global_cwq *gcwq;
+	struct worker_pool *pool;
+	const char *pri;
+	struct work_struct *work;
+
+	for_each_gcwq_cpu(cpu) {
+		gcwq = get_gcwq(cpu);
+
+		for_each_worker_pool(pool, gcwq) {
+			pri = worker_pool_pri(pool) ? "(H)" : "";
+
+			list_for_each_entry(work, &pool->worklist, entry) {
+				printk("CPU%d pending work %s: %pf\n", cpu, pri, work->func);
+			}
+		}
+	}
+}
+#endif /* CONFIG_HTC_DEBUG_WORKQUEUE */
 
 static int __init init_workqueues(void)
 {

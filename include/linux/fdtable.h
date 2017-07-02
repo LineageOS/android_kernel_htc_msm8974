@@ -21,9 +21,16 @@
  */
 #define NR_OPEN_DEFAULT BITS_PER_LONG
 
+struct fdt_user {
+	pid_t remover;
+	pid_t installer;
+	struct timespec open_time;
+};
+
 struct fdtable {
 	unsigned int max_fds;
 	struct file __rcu **fd;      /* current fd array */
+	struct fdt_user *user;       /* current installer and previous remover */
 	unsigned long *close_on_exec;
 	unsigned long *open_fds;
 	struct rcu_head rcu;
@@ -78,6 +85,7 @@ struct files_struct {
 	unsigned long close_on_exec_init[1];
 	unsigned long open_fds_init[1];
 	struct file __rcu * fd_array[NR_OPEN_DEFAULT];
+	struct fdt_user user_array[NR_OPEN_DEFAULT];
 };
 
 #define rcu_dereference_check_fdtable(files, fdtfd) \

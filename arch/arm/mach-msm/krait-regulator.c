@@ -827,7 +827,7 @@ static int configure_ldo_or_hs_all(struct krait_power_vreg *from, int vmax)
 	return rc;
 }
 
-#define SLEW_RATE 2395
+#define SLEW_RATE 1500
 static int krait_voltage_increase(struct krait_power_vreg *from,
 							int vmax)
 {
@@ -1205,7 +1205,7 @@ static int __devinit krait_power_probe(struct platform_device *pdev)
 	int rc = 0;
 	int headroom_uV, retention_uV, ldo_default_uV, ldo_threshold_uV;
 	int ldo_delta_uV;
-	int cpu_num;
+	int cpu_num = -1;
 	bool ldo_disable = false;
 
 	if (pdev->dev.of_node) {
@@ -1297,6 +1297,11 @@ static int __devinit krait_power_probe(struct platform_device *pdev)
 
 	if (!init_data) {
 		dev_err(&pdev->dev, "init data required.\n");
+		return -EINVAL;
+	}
+
+	if(cpu_num < 0) {
+		dev_err(&pdev->dev, "cpu number required.\n");
 		return -EINVAL;
 	}
 
@@ -1400,7 +1405,7 @@ static int __devexit krait_power_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static struct of_device_id krait_power_match_table[] __initdata = {
+static struct of_device_id krait_power_match_table[] = {
 	{ .compatible = "qcom,krait-regulator", },
 	{}
 };
@@ -1415,7 +1420,7 @@ static struct platform_driver krait_power_driver = {
 	},
 };
 
-static struct of_device_id krait_pdn_match_table[] __initdata = {
+static struct of_device_id krait_pdn_match_table[] = {
 	{ .compatible = "qcom,krait-pdn", },
 	{}
 };
@@ -1739,6 +1744,16 @@ void secondary_cpu_hs_init(void *base_ptr, int cpu)
 		} else {
 			__WARN();
 		}
+	}
+}
+
+void vreg_krait_get_info(int cpu, int *is_ldo_mode_ptr, int *uV_ptr)
+{
+	struct krait_power_vreg *kvreg = per_cpu(krait_vregs, cpu);
+	if(kvreg)
+	{
+		*is_ldo_mode_ptr = (kvreg->mode == LDO_MODE)?1:0;
+		*uV_ptr = kvreg->uV;
 	}
 }
 

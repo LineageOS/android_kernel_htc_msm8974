@@ -36,6 +36,12 @@
 
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
+#ifdef CONFIG_MSM_KGSL
+#include <linux/msm_kgsl.h>
+#endif
+#ifdef CONFIG_ION
+#include <linux/ion.h>
+#endif
 
 #include "mm.h"
 
@@ -100,6 +106,12 @@ void show_mem(unsigned int filter)
 	int free = 0, total = 0, reserved = 0;
 	int shared = 0, cached = 0, slab = 0, i;
 	struct meminfo * mi = &meminfo;
+#ifdef CONFIG_MSM_KGSL
+        unsigned long kgsl_alloc = kgsl_get_alloc_size(true);
+#endif
+#ifdef CONFIG_ION
+        //int ion_alloc = ion_iommu_heap_dump_size();
+#endif
 
 	printk("Mem-info:\n");
 	show_free_areas(filter);
@@ -144,6 +156,12 @@ void show_mem(unsigned int filter)
 	printk("%d slab pages\n", slab);
 	printk("%d pages shared\n", shared);
 	printk("%d pages swap cached\n", cached);
+#ifdef CONFIG_MSM_KGSL
+        printk("KGSL_ALLOC: %8lu kB\n", kgsl_alloc >> 10);
+#endif
+#ifdef CONFIG_ION
+//        printk("ION_ALLOC: %8d kB\n", ion_alloc >> 10);
+#endif
 }
 
 static void __init find_limits(unsigned long *min, unsigned long *max_low,
@@ -739,7 +757,7 @@ static void __init free_highpages(void)
 #define MLK_ROUNDUP(b, t) b, t, DIV_ROUND_UP(((t) - (b)), SZ_1K)
 
 #ifdef CONFIG_ENABLE_VMALLOC_SAVING
-static void print_vmalloc_lowmem_info(void)
+void print_vmalloc_lowmem_info(void)
 {
 	int i;
 	void *va_start, *va_end;
@@ -759,21 +777,11 @@ static void print_vmalloc_lowmem_info(void)
 		}
 		if (i && ((meminfo.bank[i-1].start + meminfo.bank[i-1].size) !=
 			   meminfo.bank[i].start)) {
-			phys_addr_t end_phys;
-
-			if((meminfo.bank[i-1].start + meminfo.bank[i-1].size) > arm_lowmem_limit)
-				continue;
-
-			if(meminfo.bank[i].start > arm_lowmem_limit)
-				end_phys = arm_lowmem_limit;
-			else
-				end_phys = meminfo.bank[i].start;
-
 			if (meminfo.bank[i-1].start + meminfo.bank[i-1].size
 				   <= MAX_HOLE_ADDRESS) {
 				va_start = __va(meminfo.bank[i-1].start
 						+ meminfo.bank[i-1].size);
-				va_end = __va(end_phys);
+				va_end = __va(meminfo.bank[i].start);
 				printk(KERN_NOTICE
 				"	   vmalloc : 0x%08lx - 0x%08lx   (%4ld MB)\n",
 					   MLM((unsigned long)va_start,

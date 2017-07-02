@@ -77,9 +77,10 @@ static int gdsc_enable(struct regulator_dev *rdev)
 		ret = readl_tight_poll_timeout(sc->gdscr, regval,
 					regval & PWR_ON_MASK, TIMEOUT_US);
 		if (ret) {
-			dev_err(&rdev->dev, "%s enable timed out\n",
-				sc->rdesc.name);
-			return ret;
+			dev_warn(&rdev->dev, "%s enable taking longer than %dus\n",
+				 sc->rdesc.name, TIMEOUT_US);
+			readl_tight_poll(sc->gdscr, regval, regval & PWR_ON_MASK);
+			dev_warn(&rdev->dev, "%s enabled\n", sc->rdesc.name);
 		}
 	} else {
 		for (i = 0; i < sc->clock_count; i++)
@@ -135,7 +136,7 @@ static int gdsc_disable(struct regulator_dev *rdev)
 		sc->resets_asserted = true;
 	}
 
-	return ret;
+	return 0;
 }
 
 static struct regulator_ops gdsc_ops = {
@@ -146,7 +147,7 @@ static struct regulator_ops gdsc_ops = {
 
 static int __devinit gdsc_probe(struct platform_device *pdev)
 {
-	static atomic_t gdsc_count __initdata = ATOMIC_INIT(-1);
+	static atomic_t gdsc_count = ATOMIC_INIT(-1);
 	struct regulator_init_data *init_data;
 	struct resource *res;
 	struct gdsc *sc;
@@ -274,7 +275,7 @@ static int __devexit gdsc_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static struct of_device_id gdsc_match_table[] __initdata = {
+static struct of_device_id gdsc_match_table[] = {
 	{ .compatible = "qcom,gdsc" },
 	{}
 };

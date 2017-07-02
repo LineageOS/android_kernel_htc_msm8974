@@ -58,6 +58,7 @@
 /include/ "msm8226-mdss.dtsi"
 /include/ "msm8226-coresight.dtsi"
 /include/ "msm8226-iommu-domains.dtsi"
+/include/ "msm8226-htc.dtsi"
 /include/ "msm-rdbg.dtsi"
 
 &soc {
@@ -162,8 +163,8 @@
 		interrupts = <0 44 0>;
 		vdd-supply = <&gdsc_venus>;
 		qcom,load-freq-tbl = <352800 160000000>,
-			<244800 133330000>,
-			<108000  66700000>;
+			<215999 133330000>,
+			<108000  66700000>; /* HTC_VIDEO: 215999 is to let 720p@60 run at 160 MHz */
 		qcom,hfi = "venus";
 		qcom,bus-ports = <1>;
 		qcom,reg-presets = <0xE0024 0x0>,
@@ -213,7 +214,14 @@
 		compatible = "qcom,msm-wfd";
 	};
 
-	serial@f991f000 {
+	serial@f991e000 {
+		compatible = "qcom,msm-lsuart-v14";
+		reg = <0xf991e000 0x1000>;
+		interrupts = <0 108 0>;
+		status = "ok";
+	};
+
+	/*serial@f991f000 {
 		compatible = "qcom,msm-lsuart-v14";
 		reg = <0xf991f000 0x1000>;
 		interrupts = <0 109 0>;
@@ -225,6 +233,13 @@
 		qcom,msm-bus,vectors-KBps =
 				<86 512 0 0>,
 				<86 512 500 800>;
+	};*/
+
+	serial@f9920000 {
+		compatible = "qcom,msm-lsuart-v14";
+		reg = <0xf9920000 0x1000>;
+		interrupts = <0 110 0>;
+		status = "ok";
 	};
 
 	qcom,msm-imem@fe805000 {
@@ -285,6 +300,8 @@
 		qcom,hsusb-otg-otg-control = <2>;
 		qcom,hsusb-otg-disable-reset;
 		qcom,dp-manual-pullup;
+		qcom,usb_id-vadc = <&pm8226_vadc>;
+		qcom,ahb-async-bridge-bypass;
 		qcom,usbin-vadc = <&pm8226_vadc>;
 
 		qcom,msm-bus,name = "usb";
@@ -440,20 +457,20 @@
 		qcom,tapan-codec-9302;
 	};
 
-	qti,msm-pcm {
-		compatible = "qti,msm-pcm-dsp";
-		qti,msm-pcm-dsp-id = <0>;
+	qcom,msm-pcm {
+		compatible = "qcom,msm-pcm-dsp";
+		qcom,msm-pcm-dsp-id = <0>;
 	};
 
 	qcom,msm-pcm-routing {
 		compatible = "qcom,msm-pcm-routing";
 	};
 
-	qti,msm-pcm-low-latency {
-		compatible = "qti,msm-pcm-dsp";
-		qti,msm-pcm-dsp-id = <1>;
-		qti,msm-pcm-low-latency;
-		qti,latency-level = "regular";
+	qcom,msm-pcm-low-latency {
+		compatible = "qcom,msm-pcm-dsp";
+		qcom,msm-pcm-dsp-id = <1>;
+		qcom,msm-pcm-low-latency;
+		qcom,latency-level = "regular";
 	};
 
 	qcom,msm-pcm-lpa {
@@ -497,8 +514,12 @@
 		compatible = "qcom,msm-lsm-client";
 	};
 
-	qti,msm-pcm-loopback {
-		compatible = "qti,msm-pcm-loopback";
+	qcom,msm-pcm-loopback {
+		compatible = "qcom,msm-pcm-loopback";
+	};
+
+	qcom,msm-voice-svc {
+		compatible = "qcom,msm-voice-svc";
 	};
 
 	qcom,msm-voice-svc {
@@ -666,14 +687,16 @@
 		compatible = "qcom,msm-watchdog";
 		reg = <0xf9017000 0x1000>;
 		interrupts = <0 3 0>, <0 4 0>;
-		qcom,bark-time = <11000>;
-		qcom,pet-time = <10000>;
+		qcom,bark-time = <18000>;
+		qcom,pet-time = <8000>;
 		qcom,ipi-ping;
+		htc,scm-regsave-phys = <0x5bf0000>; /* HTC_DEBUG_INFO_PHYS + HTC_DEBUG_INFO_TZLOG_SIZE */
+		htc,scm-regsave-size = <0x1000>; /* SZ_4K */
 	};
 
 	qcom,smem@fa00000 {
 		compatible = "qcom,smem";
-		reg = <0xfa00000 0x100000>,
+		reg = <0xfa00000 0x200000>,
 			<0xf9011000 0x1000>,
 			<0xfc428000 0x4000>;
 		reg-names = "smem", "irq-reg-base", "aux-mem1";
@@ -990,23 +1013,23 @@
 		qcom,pmic-arb-channel = <0>;
 	};
 
-	i2c@f9925000 { /* BLSP-1 QUP-3 */
-		cell-index = <2>;
+	i2c@f9924000 { /* BLSP-1 QUP-2 */
+		cell-index = <1>;
 		compatible = "qcom,i2c-qup";
-		reg = <0xf9925000 0x1000>;
+		reg = <0xf9924000 0x1000>;
 		#address-cells = <1>;
 		#size-cells = <0>;
 		reg-names = "qup_phys_addr";
-		interrupts = <0 97 0>;
+		interrupts = <0 96 0>;
 		interrupt-names = "qup_err_intr";
-		qcom,i2c-bus-freq = <400000>;
+		qcom,i2c-bus-freq = <384000>;
 		qcom,i2c-src-freq = <19200000>;
-		qcom,sda-gpio = <&msmgpio 10 0>;
-		qcom,scl-gpio = <&msmgpio 11 0>;
+		qcom,sda-gpio = <&msmgpio 6 0>;
+		qcom,scl-gpio = <&msmgpio 7 0>;
 		qcom,master-id = <86>;
 	};
-	i2c_0: i2c@f9926000 { /* BLSP-1 QUP-4 */
-		cell-index = <0>;
+	i2c@f9926000 { /* BLSP-1 QUP-4 */
+		cell-index = <2>;
 		compatible = "qcom,i2c-qup";
 		reg = <0xf9926000 0x1000>;
 		#address-cells = <1>;
@@ -1014,13 +1037,14 @@
 		reg-names = "qup_phys_addr";
 		interrupts = <0 98 0>;
 		interrupt-names = "qup_err_intr";
-		qcom,i2c-bus-freq = <100000>;
+		qcom,i2c-bus-freq = <384000>;
 		qcom,i2c-src-freq = <19200000>;
-		qcom,master-id = <86>;
+		qcom,sda-gpio = <&msmgpio 14 0>;
+		qcom,scl-gpio = <&msmgpio 15 0>;
 	};
 
 	i2c@f9927000 { /* BLSP1 QUP5 */
-		cell-index = <5>;
+		cell-index = <3>;
 		compatible = "qcom,i2c-qup";
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -1034,6 +1058,21 @@
 		qcom,scl-gpio = <&msmgpio 19 0>;
 	};
 
+	i2c@f9928000 { /* BLSP1 QUP6 */
+		cell-index = <4>;
+		compatible = "qcom,i2c-qup";
+		reg = <0xf9928000 0x1000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg-names = "qup_phys_addr";
+		interrupts = <0 100 0>;
+		interrupt-names = "qup_err_intr";
+		qcom,i2c-bus-freq = <384000>;
+		qcom,i2c-src-freq = <19200000>;
+		qcom,sda-gpio = <&msmgpio 22 0>;
+		qcom,scl-gpio = <&msmgpio 23 0>;
+	};
+
 	qcom,clock-a7@f9011050 {
 		compatible = "qcom,clock-a7-8226";
 		reg = <0xf9011050 0x8>;
@@ -1041,9 +1080,10 @@
 		clock-names = "clk-4", "clk-5";
 		qcom,speed0-bin-v0 =
 			<         0 0>,
-			< 384000000 1>,
-			< 787200000 2>,
-			<1190400000 3>;
+/*			< 384000000 2>, */
+			< 300000000 2>,
+			< 787200000 4>,
+			<1190400000 7>;
 
 		cpu-vdd-supply = <&apc_vreg_corner>;
 	};
@@ -1063,9 +1103,9 @@
 		compatible = "qcom,msm-cpufreq";
 		qcom,cpufreq-table =
 			<  300000 1525 >,
-			<  384000 1525 >,
+/*			<  384000 1525 >, */
 			<  600000 1525 >,
-			<  787200 1525 >,
+			<  787200 3051 >,
 			<  998400 4066 >,
 			< 1094400 4066 >,
 			< 1190400 4066 >,
@@ -1206,16 +1246,16 @@
 	qcom,msm-thermal {
 		compatible = "qcom,msm-thermal";
 		qcom,sensor-id = <0>;
-		qcom,poll-ms = <250>;
+		qcom,poll-ms = <1000>;
 		qcom,limit-temp = <60>;
 		qcom,temp-hysteresis = <10>;
-		qcom,freq-step = <2>;
+		qcom,freq-step = <1>;
 		qcom,freq-control-mask = <0xf>;
 		qcom,core-limit-temp = <80>;
 		qcom,core-temp-hysteresis = <10>;
 		qcom,core-control-mask = <0xe>;
-		qcom,hotplug-temp = <110>;
-		qcom,hotplug-temp-hysteresis = <20>;
+		qcom,hotplug-temp = <95>;
+		qcom,hotplug-temp-hysteresis = <5>;
 		qcom,cpu-sensors = "tsens_tz_sensor5", "tsens_tz_sensor5",
 				"tsens_tz_sensor2", "tsens_tz_sensor2";
 		qcom,vdd-restriction-temp = <5>;
@@ -1266,10 +1306,25 @@
 	};
 
 	qcom,msm-rtb {
-		compatible = "qcom,msm-rtb";
-		qcom,memory-reservation-type = "EBI1";
-		qcom,memory-reservation-size = <0x100000>; /* 1M EBI1 buffer */
+                compatible = "qcom,msm-rtb";
+                reg = <0x5c00000 0x100000>,
+                      <0x5bf4000 0x1000>;
+                reg-names = "msm_rtb_res", "htc_debug_rtb_res";
+        };
+
+	qcom,smlog-20M {
+		compatible = "qcom,smlog";
+		reg = <0x4700000 0x1400000>;
+		reg-names = "htc_smlog_res";
+		status = "disabled";
 	};
+
+	qcom,smlog-8M {
+                compatible = "qcom,smlog";
+                reg = <0x5300000 0x800000>;
+                reg-names = "htc_smlog_res";
+                status = "disabled";
+        };
 
 	qcom,msm-rng@f9bff000 {
                 compatible = "qcom,msm-rng";
@@ -1431,6 +1486,8 @@
 /include/ "msm-pm8226-rpm-regulator.dtsi"
 /include/ "msm-pm8226.dtsi"
 /include/ "msm8226-regulator.dtsi"
+/include/ "msm-pm8226-vreg-dump.dtsi"
+/include/ "msm-ncp6924.dtsi"
 
 &pm8226_vadc {
 	chan@0 {

@@ -454,7 +454,7 @@ static int smack_sb_umount(struct vfsmount *mnt, int flags)
  */
 static int smack_bprm_set_creds(struct linux_binprm *bprm)
 {
-	struct inode *inode = bprm->file->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(bprm->file);
 	struct task_smack *bsp = bprm->cred->security;
 	struct inode_smack *isp;
 	int rc;
@@ -1182,7 +1182,6 @@ static int smack_file_mmap(struct file *file,
 	char *msmack;
 	char *osmack;
 	struct inode_smack *isp;
-	struct dentry *dp;
 	int may;
 	int mmay;
 	int tmay;
@@ -1193,15 +1192,10 @@ static int smack_file_mmap(struct file *file,
 	if (rc || addr_only)
 		return rc;
 
-	if (file == NULL || file->f_dentry == NULL)
+	if (file == NULL)
 		return 0;
 
-	dp = file->f_dentry;
-
-	if (dp->d_inode == NULL)
-		return 0;
-
-	isp = dp->d_inode->i_security;
+	isp = file_inode(file)->i_security;
 	if (isp->smk_mmap == NULL)
 		return 0;
 	msmack = isp->smk_mmap;
@@ -1359,7 +1353,7 @@ static int smack_file_receive(struct file *file)
  */
 static int smack_dentry_open(struct file *file, const struct cred *cred)
 {
-	struct inode_smack *isp = file->f_path.dentry->d_inode->i_security;
+	struct inode_smack *isp = file_inode(file)->i_security;
 
 	file->f_security = isp->smk_inode;
 
