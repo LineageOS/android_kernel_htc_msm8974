@@ -2,6 +2,8 @@
 # USB peripheral controller drivers
 #
 ccflags-$(CONFIG_USB_GADGET_DEBUG) := -DDEBUG
+ccflags-y += -Idrivers/usb/dwc3
+ccflags-y += -Idrivers/base/power
 
 obj-$(CONFIG_USB_GADGET)	+= udc-core.o
 obj-$(CONFIG_USB_DUMMY_HCD)	+= dummy_hcd.o
