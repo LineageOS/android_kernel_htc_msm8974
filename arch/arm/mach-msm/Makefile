@@ -438,7 +438,7 @@ obj-$(CONFIG_WALL_CLK) += wallclk.o
 obj-$(CONFIG_WALL_CLK_SYSFS) += wallclk_sysfs.o
 
 obj-y += display/
-obj-$(CONFIG_ARCH_MSM8974) += board-htc-8974.o
+obj-$(CONFIG_ARCH_MSM8974) += board-htc-8974.o htc_acoustic_alsa.o
 obj-$(CONFIG_MACH_M8) += board-m8-gpiomux.o
 
 obj-y += smlog.o
