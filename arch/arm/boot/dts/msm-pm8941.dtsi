@@ -65,6 +65,7 @@
 			linux,code = <116>;
 		};
 
+		/* HTC: disable the pon-type due to we don't use it currently
 		qcom,pon_2 {
 			qcom,pon-type = <1>;
 			qcom,support-reset = <1>;
@@ -85,6 +86,7 @@
 			qcom,pull-up = <1>;
 			qcom,use-bark;
 		};
+		*/
 	};
 
 	bif_ctrl: qcom,bsi@1b00 {
@@ -107,7 +109,6 @@
 		qcom,min-clock-period = <1000>;
 		qcom,max-clock-period = <160000>;
 		qcom,sample-rate = <4>;
-		qcom,bsi-vadc = <&pm8941_vadc>;
 	};
 
 	pm8941_coincell: qcom,coincell@2800 {
@@ -123,7 +124,7 @@
 		status = "disabled";
 
 		qcom,r-sense-uohm = <10000>;
-		qcom,v-cutoff-uv = <3400000>;
+		qcom,v-cutoff-uv = <3000000>;
 		qcom,max-voltage-uv = <4200000>;
 		qcom,r-conn-mohm = <0>;
 		qcom,shutdown-soc-valid-limit = <100>;
@@ -138,6 +139,7 @@
 		qcom,batt-type = <0>;
 		qcom,low-voltage-threshold = <3420000>;
 		qcom,tm-temp-margin = <5000>;
+		qcom,ignore-shutdown-soc;
 		qcom,low-ocv-correction-limit-uv = <100>;
 		qcom,high-ocv-correction-limit-uv = <250>;
 		qcom,hold-soc-est = <3>;
@@ -489,12 +491,26 @@
 
 		gpio@e000 {
 			reg = <0xe000 0x100>;
-			qcom,pin-num = <33>;
+			qcom,pin-num = <33>;		//blue
+			qcom,mode = <1>;		//digital output
+			qcom,output-type = <0>;		//CMOS
+			qcom,pull = <0>;		//no pull
+			qcom,vin-sel = <0>;		//voltage source from VPH_PWR
+			qcom,out-strength = <3>;	//high output druver strength
+			qcom,src-sel = <0>;		//special function 2 (LPG output for Green LED)
+			qcom,master-en = <1>;		//enable GPIO
 		};
 
 		gpio@e100 {
 			reg = <0xe100 0x100>;
-			qcom,pin-num = <34>;
+			qcom,pin-num = <34>;		//green
+			qcom,mode = <1>;		//digital output
+			qcom,output-type = <0>;		//CMOS
+			qcom,pull = <0>;		//no pull
+			qcom,vin-sel = <0>;		//voltage sourve from VPH_PWR
+			qcom,out-strength = <3>;	//high output druver strength
+			qcom,src-sel = <0>;		//special function 2 (LPG output for Green LED)
+			qcom,master-en = <1>;		//enable GPIO
 		};
 
 		gpio@e200 {
@@ -563,8 +579,8 @@
 		compatible = "qcom,qpnp-rtc";
 		#address-cells = <1>;
 		#size-cells = <1>;
-		qcom,qpnp-rtc-write = <0>;
-		qcom,qpnp-rtc-alarm-pwrup = <0>;
+		qcom,qpnp-rtc-write = <1>;
+		qcom,qpnp-rtc-alarm-pwrup = <1>;
 
 		qcom,pm8941_rtc_rw@6000 {
 			reg = <0x6000 0x100>;
@@ -807,6 +823,17 @@
 			qcom,fast-avg-setup = <0>;
 		};
 
+		chan@38 {
+			label = "headset_adc";
+			reg = <0x38>;
+			qcom,decimation = <0>;
+			qcom,pre-div-channel-scaling = <0>;
+			qcom,calibration-type = "absolute";
+			qcom,scale-function = <0>;
+			qcom,hw-settle-time = <0>;
+			qcom,fast-avg-setup = <0>;
+		};
+
 		chan@39 {
 			label = "usb_id_nopull";
 			reg = <0x39>;
@@ -832,11 +859,12 @@
 		qcom,adc-vdd-reference = <1800>;
 		qcom,iadc-vadc = <&pm8941_vadc>;
 		qcom,iadc-poll-eoc;
+		qcom,rsense = <10000000>;
 		qcom,use-default-rds-trim = <0>;
 		qcom,pmic-revid = <&pm8941_revid>;
 
 		chan@0 {
-			label = "internal_rsense";
+			label = "external_rsense";
 			reg = <0>;
 			qcom,decimation = <0>;
 			qcom,fast-avg-setup = <0>;
@@ -1372,11 +1400,14 @@
 	};
 
 	pwm@b200 {
+		status = "okay";
 		compatible = "qcom,qpnp-pwm";
 		reg = <0xb200 0x100>,
 		      <0xb042 0x7e>;
 		reg-names = "qpnp-lpg-channel-base", "qpnp-lpg-lut-base";
+		qcom,mode-select = <1>;
 		qcom,channel-id = <1>;
+		qcom,period = <100000>; //PWM period time in microseconds
 	};
 
 	pwm@b300 {
