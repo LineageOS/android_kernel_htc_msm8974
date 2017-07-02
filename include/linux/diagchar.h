@@ -13,6 +13,12 @@
 #ifndef DIAGCHAR_SHARED
 #define DIAGCHAR_SHARED
 
+/* We always use 64 for the logging mode: UART/QXDM2SD,
+ * however, to not conflict with QCT definition, we shift
+ * the USERMODE_DIAGFWD to 2048
+ */
+#define USERMODE_DIAGFWD		2048
+#define USERMODE_DIAGFWD_LEGACY		64
 #define MSG_MASKS_TYPE		0x00000001
 #define LOG_MASKS_TYPE		0x00000002
 #define EVENT_MASKS_TYPE	0x00000004
@@ -57,6 +63,8 @@
 #define DIAG_IOCTL_REMOTE_DEV		32
 #define DIAG_IOCTL_VOTE_REAL_TIME	33
 #define DIAG_IOCTL_GET_REAL_TIME	34
+/* HTC: process request non-blocking IO */
+#define DIAG_IOCTL_NONBLOCKING_TIMEOUT 64
 
 /* PC Tools IDs */
 #define APQ8060_TOOLS_ID	4062
