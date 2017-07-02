@@ -13,17 +13,23 @@
  *
  */
 
+#include <linux/earlysuspend.h>
 #include <linux/module.h>
 #include <linux/input.h>
 #include <linux/gpio_event.h>
 #include <linux/hrtimer.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
+#include <linux/of_gpio.h>
+#include <mach/devices_dtb.h>
+#include <linux/delay.h>
 
 struct gpio_event {
 	struct gpio_event_input_devs *input_devs;
 	const struct gpio_event_platform_data *info;
+	struct early_suspend early_suspend;
 	void *state[0];
+	uint8_t rrm1_mode;
 };
 
 static int gpio_input_event(
@@ -73,6 +79,8 @@ static int gpio_event_call_all_func(struct gpio_event *ip, int func)
 			}
 			if (func == GPIO_EVENT_FUNC_RESUME && (*ii)->no_suspend)
 				continue;
+			if (func == GPIO_EVENT_FUNC_INIT)
+				(*ii)->rrm1_mode = ip->rrm1_mode;
 			ret = (*ii)->func(ip->input_devs, *ii, &ip->state[i],
 					  func);
 			if (ret) {
@@ -99,19 +107,145 @@ err_no_func:
 	return ret;
 }
 
-static void __maybe_unused gpio_event_suspend(struct gpio_event *ip)
+#ifdef CONFIG_HAS_EARLYSUSPEND
+void gpio_event_suspend(struct early_suspend *h)
 {
+	struct gpio_event *ip;
+	ip = container_of(h, struct gpio_event, early_suspend);
 	gpio_event_call_all_func(ip, GPIO_EVENT_FUNC_SUSPEND);
-	if (ip->info->power)
-		ip->info->power(ip->info, 0);
+	ip->info->power(ip->info, 0);
 }
 
-static void __maybe_unused gpio_event_resume(struct gpio_event *ip)
+void gpio_event_resume(struct early_suspend *h)
 {
-	if (ip->info->power)
-		ip->info->power(ip->info, 1);
+	struct gpio_event *ip;
+	ip = container_of(h, struct gpio_event, early_suspend);
+	ip->info->power(ip->info, 1);
 	gpio_event_call_all_func(ip, GPIO_EVENT_FUNC_RESUME);
 }
+#endif
+
+#ifdef CONFIG_OF
+#ifdef CONFIG_POWER_KEY_CLR_RESET
+static void clear_hw_reset(uint32_t clear_gpio)
+{
+	uint32_t hw_clr_gpio_table[] = {
+		GPIO_CFG(clear_gpio, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_UP, GPIO_CFG_2MA),
+	};
+
+	gpio_tlmm_config(hw_clr_gpio_table[0], GPIO_CFG_ENABLE);
+	gpio_set_value(clear_gpio, 0);
+	msleep(100);
+	gpio_set_value(clear_gpio, 1);
+}
+#endif
+static void setup_input_gpio(const struct gpio_event_direct_entry *cfg, size_t size)
+{
+	uint8_t i = 0;
+	uint32_t gpio_table[size];
+	int rc;
+
+	pr_debug("DT:%s\n", __func__);
+	for (i = 0; i < size; i++) {
+		if (cfg[i].pull == 1)
+			gpio_table[i] = GPIO_CFG(cfg[i].gpio, 0, GPIO_CFG_INPUT,
+					GPIO_CFG_NO_PULL, GPIO_CFG_2MA);
+		else
+			gpio_table[i] = GPIO_CFG(cfg[i].gpio, 0, GPIO_CFG_INPUT,
+					GPIO_CFG_PULL_UP, GPIO_CFG_2MA);
+		rc = gpio_tlmm_config(gpio_table[i], GPIO_CFG_ENABLE);
+		if (rc) {
+			pr_err("Init gpio[%d] pull= %d, tlmm_config = %d\n",
+				cfg[i].gpio, cfg[i].pull, rc);
+		}
+	}
+}
+
+static struct gpio_event_input_info keypad_input_info = {
+	.info.func             = gpio_event_input_func,
+	.flags                 = GPIOEDF_PRINT_KEYS,
+	.type                  = EV_KEY,
+#if BITS_PER_LONG != 64 && !defined(CONFIG_KTIME_SCALAR)
+	.debounce_time.tv.nsec = 20 * NSEC_PER_MSEC,
+# else
+	.debounce_time.tv64    = 20 * NSEC_PER_MSEC,
+# endif
+	.dt_setup_input_gpio   = setup_input_gpio,
+#ifdef CONFIG_POWER_KEY_CLR_RESET
+	.dt_clear_hw_reset     = clear_hw_reset,
+#endif
+};
+
+static struct gpio_event_info *keypad_info[] = {
+	&keypad_input_info.info,
+};
+
+static int gpio_event_parser_dt(struct device *dev,
+				struct gpio_event_platform_data *event_info)
+{
+	const char *drname;
+	int ret = 0;
+	uint8_t i = 0, cnt = 0;
+	u32 data = 0;
+	struct device_node *node, *pp = NULL;
+	struct gpio_event_direct_entry *cfg;
+
+	node = dev->of_node;
+	if (node == NULL) {
+		pr_err("%s, Can't find device_node", __func__);
+		ret = -ENODEV;
+	}
+
+	if (of_property_read_string(node, "names", &drname) == 0)
+		event_info->names[0] = drname;
+	else
+		pr_err("DT, platform_data driver name parser fail");
+#ifdef CONFIG_POWER_KEY_CLR_RESET
+	keypad_input_info.clr_gpio = of_get_named_gpio(node, "clr_gpio", 0);
+	pr_info("DT:clr gpio[%d] load\n", keypad_input_info.clr_gpio);
+#endif
+	while ((pp = of_get_next_child(node, pp)))
+		cnt++;
+	if (!cnt)
+		ret = -ENODEV;
+	pr_info("DT %s, cnt=%d\n", __func__, cnt);
+
+	cfg = kzalloc(cnt * sizeof(*cfg), GFP_KERNEL);
+	if (!cfg)
+		return -ENOMEM;
+
+	if (of_property_read_u32(node, "cmcc_disable_reset", &data) == 0) {
+		event_info->cmcc_disable_reset = data;
+		pr_info("DT:event_info->cmcc_disable_reset = %d\n", event_info->cmcc_disable_reset);
+	}
+
+	pp = NULL;
+	while ((pp = of_get_next_child(node, pp))) {
+		if (of_property_read_u32(pp, "keycode", &data) == 0)
+			cfg[i].code = data;
+		if (of_property_read_u32(pp, "pull", &data) == 0)
+			cfg[i].pull = data;
+
+		cfg[i].gpio = of_get_named_gpio(pp, "gpio", 0);
+		pr_info("DT:gpio[%d]:%d parser done, pull= %d, kcode = %d\n",
+				i, cfg[i].gpio, cfg[i].pull, cfg[i].code);
+		i++;
+	}
+	keypad_input_info.keymap = cfg;
+	keypad_input_info.keymap_size = i;
+
+	event_info->info = keypad_info;
+	event_info->info_count = ARRAY_SIZE(keypad_info);
+
+	return 0;
+}
+#else
+static int gpio_event_parser_dt(struct device *dev,
+				struct gpio_event_platform_data *event_info)
+{
+	return 0;
+}
+#endif
 
 static int gpio_event_probe(struct platform_device *pdev)
 {
@@ -122,7 +256,14 @@ static int gpio_event_probe(struct platform_device *pdev)
 	int i;
 	int registered = 0;
 
-	event_info = pdev->dev.platform_data;
+	if (pdev->dev.of_node) {
+		event_info = kzalloc(sizeof(*event_info), GFP_KERNEL);
+		if (event_info == NULL)
+			pr_err("gpio_event_probe: alloc memroy fail\n");
+		gpio_event_parser_dt(&pdev->dev, event_info);
+	} else {
+		event_info = pdev->dev.platform_data;
+	}
 	if (event_info == NULL) {
 		pr_err("gpio_event_probe: No pdata\n");
 		return -ENODEV;
@@ -147,6 +288,13 @@ static int gpio_event_probe(struct platform_device *pdev)
 	ip->input_devs = (void*)&ip->state[event_info->info_count];
 	platform_set_drvdata(pdev, ip);
 
+	if ((get_debug_flag() & DEBUG_FLAG_DISABLE_PMIC_RESET) && event_info->cmcc_disable_reset) {
+		ip->rrm1_mode = 1;
+		pr_debug("Lab Test RRM1 Mode");
+	} else {
+	      ip->rrm1_mode = 0;
+	}
+
 	for (i = 0; i < dev_count; i++) {
 		struct input_dev *input_dev = input_allocate_device();
 		if (input_dev == NULL) {
@@ -163,8 +311,15 @@ static int gpio_event_probe(struct platform_device *pdev)
 	}
 	ip->input_devs->count = dev_count;
 	ip->info = event_info;
-	if (event_info->power)
+	if (event_info->power) {
+#ifdef CONFIG_HAS_EARLYSUSPEND
+		ip->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
+		ip->early_suspend.suspend = gpio_event_suspend;
+		ip->early_suspend.resume = gpio_event_resume;
+		register_early_suspend(&ip->early_suspend);
+#endif
 		ip->info->power(ip->info, 1);
+	}
 
 	err = gpio_event_call_all_func(ip, GPIO_EVENT_FUNC_INIT);
 	if (err)
@@ -185,8 +340,12 @@ static int gpio_event_probe(struct platform_device *pdev)
 err_input_register_device_failed:
 	gpio_event_call_all_func(ip, GPIO_EVENT_FUNC_UNINIT);
 err_call_all_func_failed:
-	if (event_info->power)
+	if (event_info->power) {
+#ifdef CONFIG_HAS_EARLYSUSPEND
+		unregister_early_suspend(&ip->early_suspend);
+#endif
 		ip->info->power(ip->info, 0);
+	}
 	for (i = 0; i < registered; i++)
 		input_unregister_device(ip->input_devs->dev[i]);
 	for (i = dev_count - 1; i >= registered; i--) {
@@ -205,34 +364,38 @@ static int gpio_event_remove(struct platform_device *pdev)
 	int i;
 
 	gpio_event_call_all_func(ip, GPIO_EVENT_FUNC_UNINIT);
-	if (ip->info->power)
+	if (ip->info->power) {
+#ifdef CONFIG_HAS_EARLYSUSPEND
+		unregister_early_suspend(&ip->early_suspend);
+#endif
 		ip->info->power(ip->info, 0);
+	}
 	for (i = 0; i < ip->input_devs->count; i++)
 		input_unregister_device(ip->input_devs->dev[i]);
 	kfree(ip);
 	return 0;
 }
 
+static const struct platform_device_id gpio_event_id[] = {
+	{ "gpio-event", 0 },
+	{ },
+};
+
+static const struct of_device_id htc_gpio_event_mttable[] = {
+	{ .compatible = "key,gpio-event"},
+	{ },
+};
+
 static struct platform_driver gpio_event_driver = {
 	.probe		= gpio_event_probe,
 	.remove		= gpio_event_remove,
 	.driver		= {
 		.name	= GPIO_EVENT_DEV_NAME,
+		.of_match_table = htc_gpio_event_mttable,
 	},
+	.id_table = gpio_event_id,
 };
-
-static int __devinit gpio_event_init(void)
-{
-	return platform_driver_register(&gpio_event_driver);
-}
-
-static void __exit gpio_event_exit(void)
-{
-	platform_driver_unregister(&gpio_event_driver);
-}
-
-module_init(gpio_event_init);
-module_exit(gpio_event_exit);
+module_platform_driver(gpio_event_driver);
 
 MODULE_DESCRIPTION("GPIO Event Driver");
 MODULE_LICENSE("GPL");
