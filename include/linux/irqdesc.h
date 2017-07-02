@@ -130,7 +130,8 @@ static inline void __irq_set_handler_locked(unsigned int irq,
 	struct irq_desc *desc;
 
 	desc = irq_to_desc(irq);
-	desc->handle_irq = handler;
+	if (desc != NULL)
+		desc->handle_irq = handler;
 }
 
 /* caller has locked the irq_desc and both params are valid */
