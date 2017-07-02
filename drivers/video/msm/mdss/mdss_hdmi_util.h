@@ -262,7 +262,7 @@ ssize_t hdmi_get_video_3d_fmt_2string(u32 format, char *buf, u32 size);
 void *hdmi_get_featuredata_from_sysfs_dev(struct device *device, u32 type);
 
 /* DDC */
-void hdmi_ddc_config(struct hdmi_tx_ddc_ctrl *);
+void hdmi_ddc_config(struct hdmi_tx_ddc_ctrl *, u16 ddc_ref_clk);
 int hdmi_ddc_isr(struct hdmi_tx_ddc_ctrl *);
 int hdmi_ddc_write(struct hdmi_tx_ddc_ctrl *, struct hdmi_tx_ddc_data *);
 int hdmi_ddc_read_seg(struct hdmi_tx_ddc_ctrl *, struct hdmi_tx_ddc_data *);

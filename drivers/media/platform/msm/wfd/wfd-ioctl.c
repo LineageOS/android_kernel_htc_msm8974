@@ -543,11 +543,15 @@ static int wfd_vidbuf_buf_init(struct vb2_buffer *vb)
 		(struct wfd_device *)video_drvdata(priv_data);
 	struct mem_info *minfo = vb2_plane_cookie(vb, 0);
 	struct mem_region mregion;
+
+	if (!minfo)
+		return -ENODEV;
+
 	mregion.fd = minfo->fd;
 	mregion.offset = minfo->offset;
 	mregion.cookie = (u32)vb;
-	/*TODO: should be fixed in kernel 3.2*/
-	mregion.size =  inst->out_buf_size;
+	if (inst)
+		mregion.size = inst->out_buf_size;
 
 	if (inst && !inst->vid_bufq.streaming) {
 		rc = wfd_allocate_input_buffers(wfd_dev, inst);
@@ -937,6 +941,7 @@ static int wfd_register_out_buf(struct wfd_inst *inst,
 					sizeof(struct mem_info))) {
 			WFD_MSG_ERR(" copy_from_user failed. Populate"
 					" v4l2_buffer->reserved with meminfo\n");
+			kfree(minfo_entry);
 			return -EINVAL;
 		}
 		minfo_entry->userptr = b->m.userptr;

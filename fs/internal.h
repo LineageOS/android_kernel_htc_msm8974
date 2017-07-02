@@ -50,8 +50,6 @@ extern int copy_mount_string(const void __user *, char **);
 extern struct vfsmount *lookup_mnt(struct path *);
 extern int finish_automount(struct vfsmount *, struct path *);
 
-extern void mnt_make_longterm(struct vfsmount *);
-extern void mnt_make_shortterm(struct vfsmount *);
 extern int sb_prepare_remount_readonly(struct super_block *);
 
 extern void __init mnt_init(void);
@@ -80,6 +78,7 @@ extern bool grab_super_passive(struct super_block *sb);
 extern struct dentry *mount_fs(struct file_system_type *,
 			       int, const char *, void *);
 extern struct super_block *user_get_super(dev_t);
+extern int umount2(char *name, int flags);
 
 /*
  * open.c
