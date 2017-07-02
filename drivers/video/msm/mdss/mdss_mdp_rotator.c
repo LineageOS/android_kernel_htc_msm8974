@@ -179,7 +179,6 @@ static int mdss_mdp_rotator_pipe_dequeue(struct mdss_mdp_rotator_session *rot)
 					       head);
 
 			rc = mdss_mdp_rotator_busy_wait(tmp);
-			mdss_mdp_smp_release(tmp->pipe);
 			list_del(&tmp->head);
 			if (rc) {
 				pr_err("no pipe attached to session=%d\n",
@@ -448,7 +447,6 @@ int mdss_mdp_rotator_setup(struct msm_fb_data_type *mfd,
 	struct mdss_mdp_rotator_session *rot = NULL;
 	struct mdss_mdp_format_params *fmt;
 	u32 bwc_enabled;
-	bool format_changed = false;
 	int ret = 0;
 
 	mutex_lock(&rotator_lock);
@@ -482,16 +480,6 @@ int mdss_mdp_rotator_setup(struct msm_fb_data_type *mfd,
 			ret = -ENODEV;
 			goto rot_err;
 		}
-
-		if (work_busy(&rot->commit_work)) {
-			mutex_unlock(&rotator_lock);
-			flush_work(&rot->commit_work);
-			mutex_lock(&rotator_lock);
-		}
-
-		if (rot->format != fmt->format)
-			format_changed = true;
-
 	} else {
 		pr_err("invalid rotator session id=%x\n", req->id);
 		ret = -EINVAL;
@@ -611,12 +599,6 @@ int mdss_mdp_rotator_setup(struct msm_fb_data_type *mfd,
 
 	rot->params_changed++;
 
-	/* If the format changed, release the smp alloc */
-	if (format_changed && rot->pipe) {
-		mdss_mdp_rotator_busy_wait(rot);
-		mdss_mdp_smp_release(rot->pipe);
-	}
-
 	ret = __mdss_mdp_rotator_pipe_reserve(rot);
 	if (!ret && rot->next)
 		ret = __mdss_mdp_rotator_pipe_reserve(rot->next);
@@ -643,23 +625,18 @@ static int mdss_mdp_rotator_finish(struct mdss_mdp_rotator_session *rot)
 	int ret = 0;
 	struct msm_sync_pt_data *rot_sync_pt_data;
 	struct work_struct commit_work;
+	struct list_head list;
 
 	if (!rot)
 		return -ENODEV;
 
-	pr_debug("finish rot id=%x\n", rot->session_id);
+	pr_info("finish rot id=%x\n", rot->session_id);
 
 	if (rot->next)
 		mdss_mdp_rotator_finish(rot->next);
 
 	rot_pipe = rot->pipe;
 	if (rot_pipe) {
-		if (work_busy(&rot->commit_work)) {
-			mutex_unlock(&rotator_lock);
-			flush_work(&rot->commit_work);
-			mutex_lock(&rotator_lock);
-		}
-
 		mdss_mdp_rotator_busy_wait(rot);
 		list_del(&rot->head);
 	}
@@ -669,9 +646,11 @@ static int mdss_mdp_rotator_finish(struct mdss_mdp_rotator_session *rot)
 
 	rot_sync_pt_data = rot->rot_sync_pt_data;
 	commit_work = rot->commit_work;
+	list = rot->list;
 	memset(rot, 0, sizeof(*rot));
 	rot->rot_sync_pt_data = rot_sync_pt_data;
 	rot->commit_work = commit_work;
+	rot->list = list;
 
 	if (rot_pipe) {
 		struct mdss_mdp_mixer *mixer = rot_pipe->mixer;
@@ -707,6 +686,8 @@ int mdss_mdp_rotator_release_all(void)
 	for (i = 0, cnt = 0; i < MAX_ROTATOR_SESSIONS; i++) {
 		rot = &rotator_session[i];
 		if (rot->ref_cnt) {
+			if (!list_empty(&rot->list))
+				list_del_init(&rot->list);
 			mdss_mdp_rotator_finish(rot);
 			cnt++;
 		}

@@ -404,18 +404,9 @@ int mdp3_ppp_turnon(struct msm_fb_data_type *mfd, int on_off)
 	return 0;
 }
 
-bool mdp3_optimal_bw(struct blit_req_list *req)
+bool mdp3_optimal_bw(int req_cnt)
 {
-	int i, solid_fill = 0;
-
-	if (!req || (ppp_stat->req_q.count > 1))
-		return false;
-
-	for (i = 0; i < req->count; i++) {
-		if (req->req_list[i].flags & MDP_SOLID_FILL)
-			solid_fill++;
-	}
-	if ((req->count - solid_fill) <= 1)
+	if (req_cnt == 1 && ppp_stat->req_q.count == 1)
 		return true;
 	return false;
 }
@@ -875,7 +866,25 @@ int mdp3_ppp_start_blit(struct msm_fb_data_type *mfd,
 	if (unlikely(req->dst_rect.h == 0 || req->dst_rect.w == 0))
 		return 0;
 
-	/* MDP width split workaround */
+	if (req->flags & MDP_ROT_90) {
+		if (((req->dst_rect.h == 1) && ((req->src_rect.w != 1) ||
+			(req->dst_rect.w == req->src_rect.h))) ||
+			((req->dst_rect.w == 1) && ((req->src_rect.h != 1) ||
+			(req->dst_rect.h == req->src_rect.w)))) {
+			pr_err("mdp_ppp: error scaling when size is 1!\n");
+			return -EINVAL;
+		}
+	} else {
+		if (((req->dst_rect.w == 1) && ((req->src_rect.w != 1) ||
+			(req->dst_rect.h == req->src_rect.h))) ||
+			((req->dst_rect.h == 1) && ((req->src_rect.h != 1) ||
+			(req->dst_rect.w == req->src_rect.w)))) {
+			pr_err("mdp_ppp: error scaling when size is 1!\n");
+			return -EINVAL;
+		}
+	}
+
+	
 	remainder = (req->dst_rect.w) % 16;
 	ret = ppp_get_bpp(req->dst.format, mfd->fb_imgType);
 	if (ret <= 0) {
@@ -1056,7 +1065,7 @@ static void mdp3_ppp_blit_wq_handler(struct work_struct *work)
 	}
 
 	if (!ppp_stat->bw_on) {
-		ppp_stat->bw_optimal = mdp3_optimal_bw(req);
+		ppp_stat->bw_optimal = mdp3_optimal_bw(req->count);
 		mdp3_ppp_turnon(mfd, 1);
 		if (rc < 0) {
 			mutex_unlock(&ppp_stat->config_ppp_mutex);
@@ -1091,7 +1100,7 @@ static void mdp3_ppp_blit_wq_handler(struct work_struct *work)
 		if (ppp_stat->wait_for_pop)
 			complete(&ppp_stat->pop_q_comp);
 		mutex_unlock(&ppp_stat->req_mutex);
-		if (req && (ppp_stat->bw_optimal != mdp3_optimal_bw(req))) {
+		if (req && (ppp_stat->bw_optimal != mdp3_optimal_bw(req->count))) {
 			ppp_stat->bw_optimal = !ppp_stat->bw_optimal;
 			mdp3_ppp_vote_update(mfd);
 		}
