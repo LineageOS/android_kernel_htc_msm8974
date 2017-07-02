@@ -788,11 +788,14 @@ static void msm_iommu_detach_dev(struct iommu_domain *domain,
 	int ret;
 	int is_secure;
 
+	if (!dev)
+		goto fail_no_lock;
+
 	msm_iommu_detached(dev->parent);
 
 	mutex_lock(&msm_iommu_lock);
 	priv = domain->priv;
-	if (!priv || !dev)
+	if (!priv)
 		goto unlock;
 
 	iommu_drvdata = dev_get_drvdata(dev->parent);
@@ -840,6 +843,8 @@ static void msm_iommu_detach_dev(struct iommu_domain *domain,
 	--iommu_drvdata->ctx_attach_count;
 unlock:
 	mutex_unlock(&msm_iommu_lock);
+fail_no_lock:
+	return;
 }
 
 static int msm_iommu_map(struct iommu_domain *domain, unsigned long va,

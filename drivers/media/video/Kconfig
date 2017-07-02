@@ -891,6 +891,10 @@ source "drivers/media/video/omap/Kconfig"
 
 source "drivers/media/video/blackfin/Kconfig"
 
+source "drivers/media/video/nmi/Kconfig"
+
+source "drivers/media/video/panasonic/Kconfig"
+
 config VIDEO_SH_VOU
 	tristate "SuperH VOU video output driver"
 	depends on VIDEO_DEV && ARCH_SHMOBILE
