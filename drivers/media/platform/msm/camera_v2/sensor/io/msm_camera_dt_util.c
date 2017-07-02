@@ -919,6 +919,20 @@ int msm_camera_get_dt_vreg_data(struct device_node *of_node,
 			vreg[i].op_mode);
 	}
 
+#ifndef CONFIG_MACH_A11_UL
+	rc = of_property_read_u32_array(of_node, "qcom,cam-vreg-gpios-index",
+		vreg_array, count);
+	if (rc < 0) {
+		pr_err("%s failed %d\n", __func__, __LINE__);
+		goto ERROR2;
+	}
+	for (i = 0; i < count; i++) {
+		vreg[i].gpios_index = vreg_array[i];
+		CDBG("%s cam_vreg[%d].gpios_index = %d\n", __func__, i,
+			vreg[i].gpios_index);
+	}
+#endif
+
 	kfree(vreg_array);
 	return rc;
 ERROR2:
@@ -926,6 +940,74 @@ ERROR2:
 ERROR1:
 	kfree(vreg);
 	*num_vreg = 0;
+	return rc;
+}
+
+int msm_camera_get_dt_ncp6924_vreg_data(struct device_node *of_node,
+	struct msm_camera_sensor_board_info *sensordata)
+{
+	int rc = 0, i = 0;
+	uint32_t count = 0;
+	uint32_t *vreg_array = NULL;
+
+	count = of_property_count_strings(of_node, "htc,ncp6924-vreg-name");
+	CDBG("%s htc,ncp6924-vreg-name count %d\n", __func__, count);
+
+	if (!count)
+		return 0;
+
+	sensordata->cam_ncp6924_vreg = kzalloc(sizeof(struct camera_ncp6924_vreg_t) * count,
+		GFP_KERNEL);
+	if (!sensordata->cam_ncp6924_vreg) {
+		pr_err("%s failed %d\n", __func__, __LINE__);
+		return -ENOMEM;
+	}
+
+	sensordata->num_vreg = count;
+	for (i = 0; i < count; i++) {
+		rc = of_property_read_string_index(of_node,
+			"htc,ncp6924-vreg-name", i,
+			&sensordata->cam_ncp6924_vreg[i].reg_name);
+		CDBG("%s reg_name[%d] = %s\n", __func__, i,
+			sensordata->cam_ncp6924_vreg[i].reg_name);
+		if (rc < 0) {
+			pr_err("%s failed %d\n", __func__, __LINE__);
+			goto ERROR1;
+		}
+	}
+
+	vreg_array = kzalloc(sizeof(uint32_t) * count, GFP_KERNEL);
+	rc = of_property_read_u32_array(of_node, "htc,ncp6924-vreg-min-voltage",
+		vreg_array, count);
+	if (rc < 0) {
+		pr_err("%s failed %d\n", __func__, __LINE__);
+		goto ERROR2;
+	}
+	for (i = 0; i < count; i++) {
+		sensordata->cam_ncp6924_vreg[i].min_voltage = vreg_array[i];
+		CDBG("%s cam_ncp6924_vreg[%d].min_voltage = %d\n", __func__,
+			i, sensordata->cam_ncp6924_vreg[i].min_voltage);
+	}
+
+	rc = of_property_read_u32_array(of_node, "htc,ncp6924-vreg-max-voltage",
+		vreg_array, count);
+	if (rc < 0) {
+		pr_err("%s failed %d\n", __func__, __LINE__);
+		goto ERROR2;
+	}
+	for (i = 0; i < count; i++) {
+		sensordata->cam_ncp6924_vreg[i].max_voltage = vreg_array[i];
+		CDBG("%s cam_ncp6924_vreg[%d].max_voltage = %d\n", __func__,
+			i, sensordata->cam_ncp6924_vreg[i].max_voltage);
+	}
+
+	kfree(vreg_array);
+	return rc;
+ERROR2:
+	kfree(vreg_array);
+ERROR1:
+	kfree(sensordata->cam_ncp6924_vreg);
+	sensordata->num_vreg = 0;
 	return rc;
 }
 
