@@ -232,12 +232,12 @@ void mdss_dsi_cmd_test_pattern(struct mdss_dsi_ctrl_pdata *ctrl)
 	MIPI_OUTP((ctrl->ctrl_base) + 0x015c, 0x0);
 }
 
-void mdss_dsi_host_init(struct mdss_panel_data *pdata)
+void mdss_dsi_host_init(struct mipi_panel_info *pinfo,
+				struct mdss_panel_data *pdata)
 {
 	u32 dsi_ctrl, intr_ctrl;
 	u32 data;
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
-	struct mipi_panel_info *pinfo = NULL;
 
 	if (pdata == NULL) {
 		pr_err("%s: Invalid input data\n", __func__);
@@ -246,8 +246,6 @@ void mdss_dsi_host_init(struct mdss_panel_data *pdata)
 
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
-
-	pinfo = &pdata->panel_info.mipi;
 
 	pinfo->rgb_swap = DSI_RGB_SWAP_RGB;
 
@@ -957,7 +955,7 @@ int mdss_dsi_cmds_rx(struct mdss_dsi_ctrl_pdata *ctrl,
 
 	ctrl_restore = __mdss_dsi_cmd_mode_config(ctrl, 1);
 
-	if (rlen <= 2) {
+	if (rlen == 0) {
 		short_response = 1;
 		pkt_size = rlen;
 		rx_byte = 4;
@@ -1371,7 +1369,7 @@ int mdss_dsi_cmdlist_commit(struct mdss_dsi_ctrl_pdata *ctrl, int from_mdp)
 		mdss_dsi_set_tx_power_mode(1, &ctrl->panel_data);
 
 	mdss_iommu_ctrl(0);
-	mdss_dsi_clk_ctrl(ctrl, DSI_ALL_CLKS, 0);
+	mdss_dsi_clk_ctrl(ctrl, DSI_LINK_CLKS, 0);
 	mdss_bus_scale_set_quota(MDSS_HW_DSI0, 0, 0);
 need_lock:
 
@@ -1474,10 +1472,10 @@ static int dsi_event_thread(void *data)
 		if (todo & DSI_EV_MDP_FIFO_UNDERFLOW) {
 			mutex_lock(&ctrl->mutex);
 			if (ctrl->recovery) {
-				mdss_dsi_clk_ctrl(ctrl, DSI_ALL_CLKS, 1);
+				mdss_dsi_clk_ctrl(ctrl, DSI_LINK_CLKS, 1);
 				mdss_dsi_sw_reset_restore(ctrl);
 				ctrl->recovery->fxn(ctrl->recovery->data);
-				mdss_dsi_clk_ctrl(ctrl, DSI_ALL_CLKS, 0);
+				mdss_dsi_clk_ctrl(ctrl, DSI_LINK_CLKS, 0);
 			}
 			mutex_unlock(&ctrl->mutex);
 		}
@@ -1493,9 +1491,9 @@ static int dsi_event_thread(void *data)
 			spin_unlock_irqrestore(&ctrl->mdp_lock, flag);
 
 			/* enable dsi error interrupt */
-			mdss_dsi_clk_ctrl(ctrl, DSI_ALL_CLKS, 1);
+			mdss_dsi_clk_ctrl(ctrl, DSI_LINK_CLKS, 1);
 			mdss_dsi_err_intr_ctrl(ctrl, DSI_INTR_ERROR_MASK, 1);
-			mdss_dsi_clk_ctrl(ctrl, DSI_ALL_CLKS, 0);
+			mdss_dsi_clk_ctrl(ctrl, DSI_LINK_CLKS, 0);
 		}
 
 	}

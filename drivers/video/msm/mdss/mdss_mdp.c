@@ -51,6 +51,8 @@
 #include <mach/rpm-regulator-smd.h>
 #include <mach/scm.h>
 
+#include <mach/devices_cmdline.h>
+
 #include "mdss.h"
 #include "mdss_fb.h"
 #include "mdss_mdp.h"
@@ -67,12 +69,76 @@ static int mdss_fb_mem_get_iommu_domain(void)
 	return mdss_get_iommu_domain(MDSS_IOMMU_DOMAIN_UNSECURE);
 }
 
+static int mdss_mdp_get_fbmem_base(unsigned long *phys, size_t *size)
+{
+	struct ion_client *iclient = mdss_get_ionclient();
+	struct ion_handle *ihdl;
+	if (!iclient) {
+		pr_err("%s: iclient was NULL\n", __func__);
+		return -EINVAL;
+	}
+	ihdl = ion_alloc(iclient, *size, SZ_4K,
+			ION_HEAP(ION_FBMEM_HEAP_ID), 0);
+	if (IS_ERR_OR_NULL(ihdl)) {
+		pr_err("unable to alloc fbmem from ion (%p)\n", ihdl);
+		return -ENOMEM;
+	}
+
+	ion_phys(iclient, ihdl, phys, size);
+	ion_free(iclient, ihdl);
+
+	return 0;
+}
+
+static int mdss_mdp_fbmem_alloc(struct msm_fb_data_type *mfd)
+{
+	int dom = mdss_fb_mem_get_iommu_domain();
+	void *virt = NULL;
+	unsigned long phys = 0;
+	size_t size;
+	u32 yres = mfd->fbi->var.yres_virtual;
+	struct platform_device *pdev = mfd->pdev;
+
+	if (mfd->index != 0) {
+		mfd->fbi->screen_base = virt;
+		mfd->fbi->fix.smem_start = phys;
+		mfd->fbi->fix.smem_len = 0;
+		return 0;
+	}
+
+	if (!pdev || !pdev->dev.of_node) {
+		pr_err("Invalid device node\n");
+		return -ENODEV;
+	}
+
+	if (!of_property_read_bool(pdev->dev.of_node, "htc,fbmem-heap-remapping"))
+		return -ENODEV;
+
+	size = PAGE_ALIGN(mfd->fbi->fix.line_length * yres);
+	if (mdss_mdp_get_fbmem_base(&phys, &size) != 0)
+		return -ENOMEM;
+
+	virt = ioremap(phys, size);
+	msm_iommu_map_contig_buffer(phys, dom, 0, size, SZ_4K, 0,
+					    &mfd->iova);
+
+	pr_info("allocating %u bytes at %p (%lx phys) for fb%d\n",
+			size, virt, phys, mfd->index);
+
+	mfd->fbi->screen_base = virt;
+	mfd->fbi->fix.smem_start = phys;
+	mfd->fbi->fix.smem_len = size;
+
+	return 0;
+}
+
 struct msm_mdp_interface mdp5 = {
 	.init_fnc = mdss_mdp_overlay_init,
 	.fb_mem_get_iommu_domain = mdss_fb_mem_get_iommu_domain,
 	.panel_register_done = mdss_panel_register_done,
 	.fb_stride = mdss_mdp_fb_stride,
 	.check_dsi_status = mdss_check_dsi_ctrl_status,
+	.fb_mem_alloc_fnc = mdss_mdp_fbmem_alloc,
 };
 
 #define DEFAULT_TOTAL_RGB_PIPES 3
@@ -144,6 +210,7 @@ static int mdss_mdp_parse_dt_prefill(struct platform_device *pdev);
 static int mdss_mdp_parse_dt_misc(struct platform_device *pdev);
 static int mdss_mdp_parse_dt_ad_cfg(struct platform_device *pdev);
 static int mdss_mdp_parse_dt_bus_scale(struct platform_device *pdev);
+extern int mdss_mdp_parse_dt_dspp_pcc_setting(struct platform_device *pdev);
 
 u32 mdss_mdp_fb_stride(u32 fb_index, u32 xres, int bpp)
 {
@@ -330,6 +397,11 @@ static int mdss_mdp_bus_scale_register(struct mdss_data_type *mdata)
 		}
 
 		pr_debug("register bus_hdl=%x\n", mdata->bus_hdl);
+	}
+
+	if (board_mfg_mode() == MFG_MODE_POWER_TEST) {
+		pr_info("no vote mdss the bus bandwidth\n");
+		return 0;
 	}
 
 	return mdss_bus_scale_set_quota(MDSS_HW_MDP, AB_QUOTA, IB_QUOTA);
@@ -1652,6 +1724,12 @@ static int mdss_mdp_parse_dt(struct platform_device *pdev)
 		return rc;
 	}
 
+	rc = mdss_mdp_parse_dt_dspp_pcc_setting(pdev);
+	if (rc) {
+		pr_err("Error in device tree : dspp_pcc settings\n");
+		return rc;
+	}
+
 	return 0;
 }
 
@@ -2586,58 +2664,19 @@ static void mdss_mdp_footswitch_ctrl(struct mdss_data_type *mdata, int on)
 		pr_debug("Enable MDP FS\n");
 		if (!mdata->fs_ena) {
 			regulator_enable(mdata->fs);
-			if (!mdata->ulps) {
-				mdss_mdp_cx_ctrl(mdata, true);
-				mdss_mdp_batfet_ctrl(mdata, true);
-			}
+			mdss_mdp_cx_ctrl(mdata, true);
+			mdss_mdp_batfet_ctrl(mdata, true);
 		}
 		mdata->fs_ena = true;
 	} else {
 		pr_debug("Disable MDP FS\n");
 		if (mdata->fs_ena) {
 			regulator_disable(mdata->fs);
-			if (!mdata->ulps) {
-				mdss_mdp_cx_ctrl(mdata, false);
-				mdss_mdp_batfet_ctrl(mdata, false);
-			}
+			mdss_mdp_cx_ctrl(mdata, false);
+			mdss_mdp_batfet_ctrl(mdata, false);
 		}
 		mdata->fs_ena = false;
 	}
-}
-
-/**
- * mdss_mdp_footswitch_ctrl_ulps() - MDSS GDSC control with ULPS feature
- * @on: 1 to turn on footswitch, 0 to turn off footswitch
- * @dev: framebuffer device node
- *
- * MDSS GDSC can be voted off during idle-screen usecase for MIPI DSI command
- * mode displays with Ultra-Low Power State (ULPS) feature enabled. Upon
- * subsequent frame update, MDSS GDSC needs to turned back on and hw state
- * needs to be restored. It returns error if footswitch control API
- * fails.
- */
-int mdss_mdp_footswitch_ctrl_ulps(int on, struct device *dev)
-{
-	struct mdss_data_type *mdata = mdss_mdp_get_mdata();
-	int rc = 0;
-
-	pr_debug("called on=%d\n", on);
-	if (on) {
-		pm_runtime_get_sync(dev);
-		rc = mdss_iommu_ctrl(1);
-		if (IS_ERR_VALUE(rc)) {
-			pr_err("mdss iommu attach failed rc=%d\n", rc);
-			return rc;
-		}
-		mdss_hw_init(mdata);
-		mdata->ulps = false;
-		mdss_iommu_ctrl(0);
-	} else {
-		mdata->ulps = true;
-		pm_runtime_put_sync(dev);
-	}
-
-	return 0;
 }
 
 int mdss_mdp_secure_display_ctrl(unsigned int enable)
