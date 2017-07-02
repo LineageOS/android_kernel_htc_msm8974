@@ -282,7 +282,7 @@ static int voice_svc_dereg(char *svc, void **handle)
 		__func__, svc);
 
 done:
-	return 0;
+	return ret;
 }
 
 static int process_reg_cmd(struct voice_svc_register apr_reg_svc,
