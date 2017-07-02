@@ -223,6 +223,7 @@
 			<0xff 157>, /* sdc2_irq(0) */
 			<0xff 161>, /* lpass_irq_out_spare[4] */
 			<0xff 162>, /* lpass_irq_out_spare[5]*/
+			<0xff 166>,
 			<0xff 170>, /* sdc1_pwr_cmd_irq */
 			<0xff 173>, /* o_wcss_apss_smd_hi */
 			<0xff 174>, /* o_wcss_apss_smd_med */
@@ -299,7 +300,6 @@
 			<38  108>,
 			<39  109>,
 			<40  110>,
-			<41  115>,
 			<54  111>,
 			<55  113>;
 	};
@@ -338,6 +338,13 @@
 		reg = <0xfc19dba0 0x1000>;
 		reg-names = "phys_addr_base";
 		qcom,sleep-stats-version = <2>;
+	};
+
+	qcom,rpm-stats@fc19ffa0{
+		compatible = "qcom,rpm-stats";
+		reg = <0xfc19ffa0 0x60>;
+		reg-names = "phys_addr_base";
+		qcom,sleep-stats-version = <3>;
 	};
 
 	qcom,rpm-rbcpr-stats@fc000000 {

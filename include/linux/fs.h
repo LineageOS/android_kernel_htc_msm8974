@@ -754,6 +754,9 @@ struct posix_acl;
 #define IOP_LOOKUP	0x0002
 #define IOP_NOFOLLOW	0x0004
 
+#define AID_SDCARD_RW 1015
+#define AID_SDCARD_R  1028
+
 /*
  * Keep mostly read-only and often accessed (especially for
  * the RCU path lookup and 'stat' data) fields at the beginning
@@ -1508,6 +1511,9 @@ struct super_block {
 
 	/* Being remounted read-only */
 	int s_readonly_remount;
+
+#define FLAG_ASYNC_FSYNC       0x1
+	unsigned int fsync_flags;
 };
 
 /* superblock cache pruning functions */
@@ -2680,6 +2686,15 @@ static inline void inode_has_no_xattr(struct inode *inode)
 	if (!is_sxid(inode->i_mode) && (inode->i_sb->s_flags & MS_NOSEC))
 		inode->i_flags |= S_NOSEC;
 }
+
+struct fs_dbg_threshold {
+	uint64_t	threshold;
+	char		type[8];
+};
+#define FS_DBG_TYPE_READ		0
+#define FS_DBG_TYPE_WRITE		1
+#define FS_DBG_TYPE_ERASE		2
+extern void fs_debug_dump(unsigned int type, size_t bytes);
 
 #endif /* __KERNEL__ */
 #endif /* _LINUX_FS_H */

@@ -267,9 +267,12 @@ void q6usm_us_client_free(struct us_client *usc)
 	struct us_port_data *port;
 	uint32_t *p_mem_handle = NULL;
 
-	if ((usc == NULL) ||
-	    !(usc->session))
+	if (usc == NULL)
 		return;
+	if (!(usc->session)) {
+		kfree(usc);
+		return;
+	}
 
 	for (loopcnt = 0; loopcnt <= OUT; ++loopcnt) {
 		port = &usc->port[loopcnt];

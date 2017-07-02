@@ -27,8 +27,16 @@
 #define BUCK_VREF_0P494V 0x3F
 #define BUCK_VREF_1P8V 0xE6
 
+//HTC_AUD_ADD Only for MEM projects, HS no sound issue
+#if defined(CONFIG_MACH_MEM_WL) || defined(CONFIG_MACH_MEM_UL)
+#define BUCK_SETTLE_TIME_US 1000
+#define NCP_SETTLE_TIME_US 1000
+#else
 #define BUCK_SETTLE_TIME_US 50
 #define NCP_SETTLE_TIME_US 50
+#endif
+//HTC_AUD_END
+
 
 #define MAX_IMPED_PARAMS 13
 
@@ -441,6 +449,11 @@ wcd9xxx_enable_buck(struct snd_soc_codec *codec,
 	    (!enable && --clsh_d->buck_users == 0))
 		snd_soc_update_bits(codec, WCD9XXX_A_BUCK_MODE_1,
 				    0x80, enable ? 0x80 : 0x00);
+//HTC_AUD_ADD  Only for MEM project, HS no sound issue
+#if defined(CONFIG_MACH_MEM_WL) || defined(CONFIG_MACH_MEM_UL)
+	usleep_range(BUCK_SETTLE_TIME_US, BUCK_SETTLE_TIME_US);
+#endif
+//HTC_AUD_END
 	dev_dbg(codec->dev, "%s: buck_users %d, enable %d", __func__,
 		clsh_d->buck_users, enable);
 }

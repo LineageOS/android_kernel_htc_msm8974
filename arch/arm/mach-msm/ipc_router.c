@@ -814,7 +814,10 @@ static int post_pkt_to_port(struct msm_ipc_port *port_ptr,
 	}
 
 	mutex_lock(&port_ptr->port_rx_q_lock_lhb3);
-	wake_lock(&port_ptr->port_rx_wake_lock);
+    //+HTC, workaround to avoid long wake lock hold when quicboot power off
+	//wake_lock(&port_ptr->port_rx_wake_lock);
+    wake_lock_timeout(&port_ptr->port_rx_wake_lock, 10 * HZ);
+    //HTC-
 	list_add_tail(&temp_pkt->list, &port_ptr->port_rx_q);
 	wake_up(&port_ptr->port_rx_wait_q);
 	notify = port_ptr->notify;
