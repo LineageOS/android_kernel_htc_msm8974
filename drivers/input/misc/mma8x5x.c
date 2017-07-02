@@ -588,6 +588,9 @@ static int mma8x5x_enable_set(struct sensors_classdev *sensors_cdev,
 		}
 	} else if (enable == 0) {
 		if (pdata->active == MMA_ACTIVED) {
+			if (!pdata->use_int)
+				cancel_delayed_work_sync(&pdata->dwork);
+
 			val = i2c_smbus_read_byte_data(client,
 					MMA8X5X_CTRL_REG1);
 			if (val < 0) {
