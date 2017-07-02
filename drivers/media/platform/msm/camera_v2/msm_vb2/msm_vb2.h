@@ -61,6 +61,10 @@ struct msm_stream {
 	struct vb2_queue *vb2_q;
 	spinlock_t stream_lock;
 	struct list_head queued_list;
+	// HTC start
+	unsigned int num_total; // count total buf get from videobuf2
+	unsigned int num_lend;  // count buf lend to isp or someone
+	// HTC end
 };
 
 struct vb2_ops *msm_vb2_get_q_ops(void);

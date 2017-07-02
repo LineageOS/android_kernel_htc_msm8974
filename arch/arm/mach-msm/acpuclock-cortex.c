@@ -323,6 +323,7 @@ static int acpuclk_cortex_set_rate(int cpu, unsigned long rate,
 out:
 	if (reason == SETRATE_CPUFREQ)
 		mutex_unlock(&priv->lock);
+
 	return rc;
 }
 

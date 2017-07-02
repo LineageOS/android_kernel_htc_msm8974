@@ -595,6 +595,14 @@ config PMIC8XXX_VIBRATOR
 	  on the PM8XXX chips. The vibrator is controlled using the
 	  timed output class.
 
+config VIB_TRIGGERS
+	boolean "Vibrator trigger interface support"
+	default n
+	help
+	  This option enables trigger support for the vibrator function.
+	  These triggers allow kernel events to drive the vibrator. If
+	  unsure, say N.
+
 config PMIC8XXX_NFC
 	tristate "Qualcomm PM8XXX support for Near Field Communication"
 	depends on MFD_PM8XXX
@@ -665,6 +673,16 @@ config TI_DRV2667
 	  To compile this driver as a module, choose M here: the
 	  module will be called ti_drv2667.
 
+config CABLE_DETECT_8XXX
+	boolean "Cable detect driver"
+	default n
+	help
+	  Detect usb, ac and other accessories.
+
+config CABLE_DETECT_ACCESSORY
+	boolean "CABLE ACCESSORY DETECT"
+	default n
+
 config UID_CPUTIME
 	tristate "Per-UID cpu time statistics"
 	depends on PROFILING
@@ -678,5 +696,6 @@ source "drivers/misc/iwmc3200top/Kconfig"
 source "drivers/misc/ti-st/Kconfig"
 source "drivers/misc/lis3lv02d/Kconfig"
 source "drivers/misc/carma/Kconfig"
+source "drivers/misc/mpu3050/Kconfig"
 source "drivers/misc/altera-stapl/Kconfig"
 endmenu

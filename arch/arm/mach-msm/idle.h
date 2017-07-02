@@ -15,8 +15,9 @@
 #define _ARCH_ARM_MACH_MSM_IDLE_H_
 
 #ifdef CONFIG_CPU_V7
-extern unsigned long msm_pm_boot_vector[NR_CPUS];
 void msm_pm_boot_entry(void);
+extern unsigned long msm_pm_pc_pgd;
+extern unsigned long msm_pm_boot_vector[NR_CPUS];
 #else
 static inline void msm_pm_boot_entry(void)
 {

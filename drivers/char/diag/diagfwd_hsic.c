@@ -132,6 +132,10 @@ static void diag_read_hsic_work_fn(struct work_struct *work)
 static void diag_hsic_read_complete_callback(void *ctxt, char *buf,
 					int buf_size, int actual_size)
 {
+#if DIAG_XPST && defined(CONFIG_DIAGFWD_BRIDGE_CODE)
+	int type;
+	static int pkt_hdr, first_pkt = 1;
+#endif
 	int err = -2;
 	int index = (int)ctxt;
 	static DEFINE_RATELIMIT_STATE(rl, 10*HZ, 1);
@@ -156,6 +160,40 @@ static void diag_hsic_read_complete_callback(void *ctxt, char *buf,
 		if (!buf) {
 			pr_err("diag: Out of diagmem for HSIC\n");
 		} else {
+			DIAGFWD_9K_RAWDATA(buf, "9K", DIAG_DBG_READ);
+#if DIAG_XPST && defined(CONFIG_DIAGFWD_BRIDGE_CODE)
+			/* HTC: only route to user space if the packet smd received
+			 * is the head of the full packet to avoid route wrong packet
+			 * to userspace. BTW, to avoid lost 1st packet (do not know if
+			 * the head of packet), we always check 1st packet. It should
+			 * be the 0xc sync packet.
+			 * Note: The checkcmd only be applied if packet size > 0
+			 */
+			if ((pkt_hdr || (first_pkt == 1)) && actual_size > 0) {
+				if (unlikely(first_pkt == 1)) first_pkt = 0;
+				type = checkcmd_modem_epst(buf);
+				if (type) {
+					modem_to_userspace(buf, actual_size, type, 1);
+					pkt_hdr = 1;
+					/* HTC: release buffer to diagmem */
+						diagmem_free(driver,
+							(unsigned char *)buf, POOL_TYPE_HSIC);
+					return;
+				}
+				pkt_hdr = 0;
+			}
+
+			/* HTC: Because 0 length packet from HSIC is allowed, so we
+			 * should take care about the 0 length case. If we do the
+			 * check out of boundary, it have chance to make unexpected
+			 * result.
+			 */
+			if ((actual_size == 1 && *buf == CONTROL_CHAR) ||
+					((actual_size >= 2) &&
+					(*(buf+actual_size-1) == CONTROL_CHAR &&
+					 *(buf+actual_size-2) != ESC_CHAR)))
+				pkt_hdr = 1;
+#endif
 			/*
 			 * Send data in buf to be written on the
 			 * appropriate device, e.g. USB MDM channel
