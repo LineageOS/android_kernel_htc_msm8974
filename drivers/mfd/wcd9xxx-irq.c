@@ -99,8 +99,9 @@ static void wcd9xxx_irq_enable(struct irq_data *data)
 	struct wcd9xxx_core_resource *wcd9xxx_res =
 			irq_data_get_irq_chip_data(data);
 	int wcd9xxx_irq = virq_to_phyirq(wcd9xxx_res, data->irq);
-	wcd9xxx_res->irq_masks_cur[BIT_BYTE(wcd9xxx_irq)] &=
-		~(BYTE_BIT_MASK(wcd9xxx_irq));
+	if ((BIT_BYTE(wcd9xxx_irq) < WCD9XXX_MAX_IRQ_REGS) && (BIT_BYTE(wcd9xxx_irq) >= 0))
+		wcd9xxx_res->irq_masks_cur[BIT_BYTE(wcd9xxx_irq)] &=
+			~(BYTE_BIT_MASK(wcd9xxx_irq));
 }
 
 static void wcd9xxx_irq_disable(struct irq_data *data)
@@ -108,8 +109,9 @@ static void wcd9xxx_irq_disable(struct irq_data *data)
 	struct wcd9xxx_core_resource *wcd9xxx_res =
 			irq_data_get_irq_chip_data(data);
 	int wcd9xxx_irq = virq_to_phyirq(wcd9xxx_res, data->irq);
-	wcd9xxx_res->irq_masks_cur[BIT_BYTE(wcd9xxx_irq)]
-		|= BYTE_BIT_MASK(wcd9xxx_irq);
+	if ((BIT_BYTE(wcd9xxx_irq) < WCD9XXX_MAX_IRQ_REGS) && (BIT_BYTE(wcd9xxx_irq) >= 0))
+		wcd9xxx_res->irq_masks_cur[BIT_BYTE(wcd9xxx_irq)]
+			|= BYTE_BIT_MASK(wcd9xxx_irq);
 }
 
 static void wcd9xxx_irq_mask(struct irq_data *d)
@@ -317,7 +319,7 @@ static irqreturn_t wcd9xxx_irq_thread(int irq, void *data)
 
 		memset(status, 0xff, num_irq_regs);
 
-		ret = wcd9xxx_res->codec_bulk_write(wcd9xxx_res,
+		wcd9xxx_res->codec_bulk_write(wcd9xxx_res,
 				WCD9XXX_A_INTR_CLEAR0,
 				num_irq_regs, status);
 		if (wcd9xxx_get_intf_type() == WCD9XXX_INTERFACE_TYPE_I2C)
@@ -596,7 +598,10 @@ wcd9xxx_get_irq_drv_d(const struct wcd9xxx_core_resource *wcd9xxx_res)
 		return NULL;
 
 	domain = irq_find_host(pnode);
+	if (domain != NULL)
 	return (struct wcd9xxx_irq_drv_data *)domain->host_data;
+	else
+		return NULL;
 }
 
 static int phyirq_to_virq(struct wcd9xxx_core_resource *wcd9xxx_res, int offset)
