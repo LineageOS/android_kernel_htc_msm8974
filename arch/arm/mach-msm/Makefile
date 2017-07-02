@@ -291,6 +291,7 @@ obj-$(CONFIG_ARCH_MSM8610) += gdsc.o
 obj-$(CONFIG_ARCH_MPQ8092) += gdsc.o
 obj-$(CONFIG_ARCH_APQ8084) += gdsc.o
 obj-$(CONFIG_KRAIT_REGULATOR) += krait-regulator.o  krait-regulator-pmic.o
+obj-$(CONFIG_ARCH_MSM8974) += htc_awb_cal.o
 ifdef CONFIG_BT
   obj-$(CONFIG_ARCH_MSM8974) += htc_bdaddress.o
 endif #CONFIG_BT

@@ -865,6 +865,15 @@ static int gspca_init_transfer(struct gspca_dev *gspca_dev)
 
 	/* do the specific subdriver stuff before endpoint selection */
 	intf = usb_ifnum_to_if(gspca_dev->dev, gspca_dev->iface);
+
+	/* HTC_START , add to fix Klocwork issue */
+	if (intf == NULL) {
+		pr_err("usb_interface is NULL\n");
+		ret = -EIO;
+		goto unlock;
+	}
+	/* HTC_END */
+
 	gspca_dev->alt = gspca_dev->cam.bulk ? intf->num_altsetting : 0;
 	if (gspca_dev->sd_desc->isoc_init) {
 		ret = gspca_dev->sd_desc->isoc_init(gspca_dev);
