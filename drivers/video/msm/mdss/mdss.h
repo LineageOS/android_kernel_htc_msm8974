@@ -207,7 +207,6 @@ struct mdss_data_type {
 
 	int handoff_pending;
 	struct mdss_prefill_data prefill_data;
-	bool ulps;
 	int iommu_ref_cnt;
 
 	u64 ab[MDSS_MAX_HW_BLK];

@@ -300,10 +300,16 @@ int mdss_mdp_smp_reserve(struct mdss_mdp_pipe *pipe)
 	else
 		nlines = pipe->bwc_mode ? 1 : 2;
 
-	if (pipe->mixer->type == MDSS_MDP_MIXER_TYPE_WRITEBACK)
+	if (pipe->mixer && pipe->mixer->type == MDSS_MDP_MIXER_TYPE_WRITEBACK)
 		wb_mixer = 1;
 
-	force_alloc = pipe->flags & MDP_SMP_FORCE_ALLOC;
+	/*
+	 * Don't want to allow SMP changes for backend composition pipes
+	 * inorder to preserve SMPs as much as possible.
+	 * On the contrary for non backend composition pipes we should
+	 * allow SMP allocations to prevent composition failures.
+	 */
+	force_alloc = !(pipe->flags & MDP_BACKEND_COMPOSITION);
 
 	mutex_lock(&mdss_mdp_smp_lock);
 	for (i = (MAX_PLANES - 1); i >= ps.num_planes; i--) {
@@ -344,7 +350,7 @@ int mdss_mdp_smp_reserve(struct mdss_mdp_pipe *pipe)
 		for (; i >= 0; i--)
 			mdss_mdp_smp_mmb_free(pipe->smp_map[i].reserved,
 				false);
-		rc = -ENOBUFS;
+		rc = -ENOMEM;
 	}
 	mutex_unlock(&mdss_mdp_smp_lock);
 
@@ -438,14 +444,9 @@ int mdss_mdp_smp_handoff(struct mdss_data_type *mdata)
 		data = MDSS_MDP_REG_READ(MDSS_MDP_REG_SMP_ALLOC_W0 + off);
 		client_id = (data >> s) & 0xFF;
 		if (test_bit(i, mdata->mmb_alloc_map)) {
-			/*
-			 * Certain pipes may have a dedicated set of
-			 * SMP MMBs statically allocated to them. In
-			 * such cases, we do not need to do anything
-			 * here.
-			 */
-			pr_debug("smp mmb %d already assigned to pipe %d (client_id %d)"
-				, i, pipe->num, client_id);
+			if (pipe)
+				pr_debug("smp mmb %d already assigned to pipe %d (client_id %d)"
+					, i, pipe->num, client_id);
 			continue;
 		}
 
@@ -564,8 +565,6 @@ static struct mdss_mdp_pipe *mdss_mdp_pipe_init(struct mdss_mdp_mixer *mixer,
 		 * shared as long as its attached to a writeback mixer
 		 */
 		pipe = mdata->dma_pipes + mixer->num;
-		if (pipe->mixer->type != MDSS_MDP_MIXER_TYPE_WRITEBACK)
-			return NULL;
 		kref_get(&pipe->kref);
 		pr_debug("pipe sharing for pipe=%d\n", pipe->num);
 	} else {
@@ -866,10 +865,12 @@ int mdss_mdp_pipe_handoff(struct mdss_mdp_pipe *pipe)
 	}
 	pipe->src_fmt = mdss_mdp_get_format_params(src_fmt);
 
-	pr_debug("Pipe settings: src.h=%d src.w=%d dst.h=%d dst.w=%d bpp=%d\n"
-		, pipe->src.h, pipe->src.w, pipe->dst.h, pipe->dst.w,
-		pipe->src_fmt->bpp);
-
+	if (pipe->src_fmt)
+		pr_debug("Pipe settings: src.h=%d src.w=%d dst.h=%d dst.w=%d bpp=%d\n"
+			, pipe->src.h, pipe->src.w, pipe->dst.h, pipe->dst.w,
+			pipe->src_fmt->bpp);
+	else
+		pr_err("pipe->src_fmt was NULL\n");
 	pipe->is_handed_off = true;
 	pipe->play_cnt = 1;
 	kref_init(&pipe->kref);
