@@ -734,7 +734,13 @@ static struct logger_log VAR = { \
 
 DEFINE_LOGGER_DEVICE(log_main, LOGGER_LOG_MAIN, CONFIG_LOGCAT_SIZE*1024)
 DEFINE_LOGGER_DEVICE(log_events, LOGGER_LOG_EVENTS, CONFIG_LOGCAT_SIZE*1024)
+//+SSD_RIL: enlarge radio log buffer
+#ifdef CONFIG_ENLARGE_RADIO_BUFFER
+DEFINE_LOGGER_DEVICE(log_radio, LOGGER_LOG_RADIO, 2*CONFIG_LOGCAT_SIZE*1024)
+#else
 DEFINE_LOGGER_DEVICE(log_radio, LOGGER_LOG_RADIO, CONFIG_LOGCAT_SIZE*1024)
+#endif
+//-SSD_RIL: enlarge radio log buffer
 DEFINE_LOGGER_DEVICE(log_system, LOGGER_LOG_SYSTEM, CONFIG_LOGCAT_SIZE*1024)
 
 static struct logger_log *get_log_from_minor(int minor)
