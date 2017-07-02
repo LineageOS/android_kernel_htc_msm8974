@@ -28,6 +28,7 @@
 #include <linux/platform_device.h>
 #include <linux/of.h>
 #include <linux/devfreq.h>
+#include <mach/cpufreq.h>
 #include "governor.h"
 
 #include <mach/msm-krait-l2-accessors.h>
@@ -342,6 +343,8 @@ static int devfreq_cpubw_hwmon_get_freq(struct devfreq *df,
 	mbps = measure_bw_and_set_irq();
 	compute_bw(mbps, freq, df->data);
 
+	if (*freq < msm_cpufreq_get_bw())
+		*freq = msm_cpufreq_get_bw();
 	return 0;
 }
 
