@@ -202,7 +202,7 @@ static ssize_t sel_read_handle_unknown(struct file *filp, char __user *buf,
 {
 	char tmpbuf[TMPBUFLEN];
 	ssize_t length;
-	ino_t ino = filp->f_path.dentry->d_inode->i_ino;
+	ino_t ino = file_inode(filp)->i_ino;
 	int handle_unknown = (ino == SEL_REJECT_UNKNOWN) ?
 		security_get_reject_unknown() : !security_get_allow_unknown();
 
@@ -670,7 +670,7 @@ static ssize_t (*write_op[])(struct file *, char *, size_t) = {
 
 static ssize_t selinux_transaction_write(struct file *file, const char __user *buf, size_t size, loff_t *pos)
 {
-	ino_t ino = file->f_path.dentry->d_inode->i_ino;
+	ino_t ino = file_inode(file)->i_ino;
 	char *data;
 	ssize_t rv;
 
@@ -709,6 +709,7 @@ static ssize_t sel_write_access(struct file *file, char *buf, size_t size)
 	u16 tclass;
 	struct av_decision avd;
 	ssize_t length;
+	char format[32];
 
 	length = task_has_security(current, SECURITY__COMPUTE_AV);
 	if (length)
@@ -725,7 +726,8 @@ static ssize_t sel_write_access(struct file *file, char *buf, size_t size)
 		goto out;
 
 	length = -EINVAL;
-	if (sscanf(buf, "%s %s %hu", scon, tcon, &tclass) != 3)
+	snprintf(format, sizeof(format), "%%%ds %%%ds %%hu", size, size);
+	if (sscanf(buf, format, scon, tcon, &tclass) != 3)
 		goto out;
 
 	length = security_context_to_sid(scon, strlen(scon) + 1, &ssid);
@@ -759,6 +761,7 @@ static ssize_t sel_write_create(struct file *file, char *buf, size_t size)
 	char *newcon = NULL;
 	u32 len;
 	int nargs;
+	char format[32];
 
 	length = task_has_security(current, SECURITY__COMPUTE_CREATE);
 	if (length)
@@ -780,7 +783,8 @@ static ssize_t sel_write_create(struct file *file, char *buf, size_t size)
 		goto out;
 
 	length = -EINVAL;
-	nargs = sscanf(buf, "%s %s %hu %s", scon, tcon, &tclass, namebuf);
+	snprintf(format, sizeof(format), "%%%ds %%%ds %%hu %%%ds", size, size, size);
+	nargs = sscanf(buf, format, scon, tcon, &tclass, namebuf);
 	if (nargs < 3 || nargs > 4)
 		goto out;
 	if (nargs == 4) {
@@ -856,6 +860,7 @@ static ssize_t sel_write_relabel(struct file *file, char *buf, size_t size)
 	ssize_t length;
 	char *newcon = NULL;
 	u32 len;
+	char format[32];
 
 	length = task_has_security(current, SECURITY__COMPUTE_RELABEL);
 	if (length)
@@ -872,7 +877,8 @@ static ssize_t sel_write_relabel(struct file *file, char *buf, size_t size)
 		goto out;
 
 	length = -EINVAL;
-	if (sscanf(buf, "%s %s %hu", scon, tcon, &tclass) != 3)
+	snprintf(format, sizeof(format), "%%%ds %%%ds %%hu", size, size);
+	if (sscanf(buf, format, scon, tcon, &tclass) != 3)
 		goto out;
 
 	length = security_context_to_sid(scon, strlen(scon) + 1, &ssid);
@@ -912,6 +918,7 @@ static ssize_t sel_write_user(struct file *file, char *buf, size_t size)
 	char *newcon;
 	int i, rc;
 	u32 len, nsids;
+	char format[32];
 
 	length = task_has_security(current, SECURITY__COMPUTE_USER);
 	if (length)
@@ -928,7 +935,8 @@ static ssize_t sel_write_user(struct file *file, char *buf, size_t size)
 		goto out;
 
 	length = -EINVAL;
-	if (sscanf(buf, "%s %s", con, user) != 2)
+	snprintf(format, sizeof(format), "%%%ds %%%ds", size, size);
+	if (sscanf(buf, format, con, user) != 2)
 		goto out;
 
 	length = security_context_to_sid(con, strlen(con) + 1, &sid);
@@ -939,7 +947,7 @@ static ssize_t sel_write_user(struct file *file, char *buf, size_t size)
 	if (length)
 		goto out;
 
-	length = sprintf(buf, "%u", nsids) + 1;
+	length = snprintf(buf, PAGE_SIZE, "%u", nsids) + 1;
 	ptr = buf + length;
 	for (i = 0; i < nsids; i++) {
 		rc = security_sid_to_context(sids[i], &newcon, &len);
@@ -972,6 +980,7 @@ static ssize_t sel_write_member(struct file *file, char *buf, size_t size)
 	ssize_t length;
 	char *newcon = NULL;
 	u32 len;
+	char format[32];
 
 	length = task_has_security(current, SECURITY__COMPUTE_MEMBER);
 	if (length)
@@ -988,7 +997,8 @@ static ssize_t sel_write_member(struct file *file, char *buf, size_t size)
 		goto out;
 
 	length = -EINVAL;
-	if (sscanf(buf, "%s %s %hu", scon, tcon, &tclass) != 3)
+	snprintf(format, sizeof(format), "%%%ds %%%ds %%hu", size, size);
+	if (sscanf(buf, format, scon, tcon, &tclass) != 3)
 		goto out;
 
 	length = security_context_to_sid(scon, strlen(scon) + 1, &ssid);
@@ -1041,8 +1051,7 @@ static ssize_t sel_read_bool(struct file *filep, char __user *buf,
 	ssize_t length;
 	ssize_t ret;
 	int cur_enforcing;
-	struct inode *inode = filep->f_path.dentry->d_inode;
-	unsigned index = inode->i_ino & SEL_INO_MASK;
+	unsigned index = file_inode(filep)->i_ino & SEL_INO_MASK;
 	const char *name = filep->f_path.dentry->d_name.name;
 
 	mutex_lock(&sel_mutex);
@@ -1076,8 +1085,7 @@ static ssize_t sel_write_bool(struct file *filep, const char __user *buf,
 	char *page = NULL;
 	ssize_t length;
 	int new_value;
-	struct inode *inode = filep->f_path.dentry->d_inode;
-	unsigned index = inode->i_ino & SEL_INO_MASK;
+	unsigned index = file_inode(filep)->i_ino & SEL_INO_MASK;
 	const char *name = filep->f_path.dentry->d_name.name;
 
 	mutex_lock(&sel_mutex);
@@ -1488,13 +1496,11 @@ static int sel_make_avc_files(struct dentry *dir)
 static ssize_t sel_read_initcon(struct file *file, char __user *buf,
 				size_t count, loff_t *ppos)
 {
-	struct inode *inode;
 	char *con;
 	u32 sid, len;
 	ssize_t ret;
 
-	inode = file->f_path.dentry->d_inode;
-	sid = inode->i_ino&SEL_INO_MASK;
+	sid = file_inode(file)->i_ino&SEL_INO_MASK;
 	ret = security_sid_to_context(sid, &con, &len);
 	if (ret)
 		return ret;
@@ -1532,11 +1538,6 @@ static int sel_make_initcon_files(struct dentry *dir)
 	return 0;
 }
 
-static inline unsigned int sel_div(unsigned long a, unsigned long b)
-{
-	return a / b - (a % b < 0);
-}
-
 static inline unsigned long sel_class_to_ino(u16 class)
 {
 	return (class * (SEL_VEC_MAX + 1)) | SEL_CLASS_INO_OFFSET;
@@ -1544,7 +1545,7 @@ static inline unsigned long sel_class_to_ino(u16 class)
 
 static inline u16 sel_ino_to_class(unsigned long ino)
 {
-	return sel_div(ino & SEL_INO_MASK, SEL_VEC_MAX + 1);
+	return (ino & SEL_INO_MASK) / (SEL_VEC_MAX + 1);
 }
 
 static inline unsigned long sel_perm_to_ino(u16 class, u32 perm)
@@ -1562,7 +1563,7 @@ static ssize_t sel_read_class(struct file *file, char __user *buf,
 {
 	ssize_t rc, len;
 	char *page;
-	unsigned long ino = file->f_path.dentry->d_inode->i_ino;
+	unsigned long ino = file_inode(file)->i_ino;
 
 	page = (char *)__get_free_page(GFP_KERNEL);
 	if (!page)
@@ -1585,7 +1586,7 @@ static ssize_t sel_read_perm(struct file *file, char __user *buf,
 {
 	ssize_t rc, len;
 	char *page;
-	unsigned long ino = file->f_path.dentry->d_inode->i_ino;
+	unsigned long ino = file_inode(file)->i_ino;
 
 	page = (char *)__get_free_page(GFP_KERNEL);
 	if (!page)
@@ -1609,7 +1610,7 @@ static ssize_t sel_read_policycap(struct file *file, char __user *buf,
 	int value;
 	char tmpbuf[TMPBUFLEN];
 	ssize_t length;
-	unsigned long i_ino = file->f_path.dentry->d_inode->i_ino;
+	unsigned long i_ino = file_inode(file)->i_ino;
 
 	value = security_policycap_supported(i_ino & SEL_INO_MASK);
 	length = scnprintf(tmpbuf, TMPBUFLEN, "%d", value);

@@ -1959,6 +1959,7 @@ void account_page_dirtied(struct page *page, struct address_space *mapping)
 		__inc_bdi_stat(mapping->backing_dev_info, BDI_RECLAIMABLE);
 		__inc_bdi_stat(mapping->backing_dev_info, BDI_DIRTIED);
 		task_io_account_write(PAGE_CACHE_SIZE);
+		collect_io_stats(PAGE_CACHE_SIZE, WRITE);
 		current->nr_dirtied++;
 		this_cpu_inc(bdp_ratelimits);
 	}

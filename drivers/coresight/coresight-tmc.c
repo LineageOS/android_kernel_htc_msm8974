@@ -1212,7 +1212,7 @@ static ssize_t tmc_etr_store_out_mode(struct device *dev,
 
 	if (strlen(buf) >= 10)
 		return -EINVAL;
-	if (sscanf(buf, "%s", str) != 1)
+	if (sscanf(buf, "%10s", str) != 1)
 		return -EINVAL;
 
 	mutex_lock(&drvdata->usb_lock);

@@ -35,9 +35,7 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Netfilter Core Team <coreteam@netfilter.org>");
 MODULE_DESCRIPTION("IPv6 packet filter");
 
-/*#define DEBUG_IP_FIREWALL*/
-/*#define DEBUG_ALLOW_ALL*/ /* Useful for remote debugging */
-/*#define DEBUG_IP_FIREWALL_USER*/
+ 
 
 #ifdef DEBUG_IP_FIREWALL
 #define dprintf(format, args...) pr_info(format , ## args)
@@ -417,6 +415,13 @@ ip6t_do_table(struct sk_buff *skb,
 					verdict = NF_DROP;
 					break;
 				}
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+			if (IS_ERR(stackptr) || (!stackptr) || IS_ERR(e) || (!e) || IS_ERR(jumpstack) || (!jumpstack)) {
+			    printk("[NET] ptr error in %s\n", __func__);
+			    verdict = NF_DROP;
+			    break;
+			}
+#endif
 				jumpstack[(*stackptr)++] = e;
 			}
 

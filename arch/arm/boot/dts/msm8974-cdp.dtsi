@@ -730,7 +730,7 @@
 			  <&msmgpio 26 0>,
 			  <&msmgpio 27 0>,
 			  <&msmgpio 28 0>,
-			  <&msmgpio 89 0>,
+			  /*<&msmgpio 89 0>,*/
 			  <&msmgpio 90 0>,
 			  <&msmgpio 91 0>,
 			  <&msmgpio 92 0>;

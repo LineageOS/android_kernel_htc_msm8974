@@ -24,6 +24,8 @@
 #include <mach/socinfo.h>
 #include <asm/cputype.h>
 #include "acpuclock.h"
+#include "clock-krait.h"
+#include <linux/regulator/krait-regulator.h>
 
 #define CESR_DCTPE		BIT(0)
 #define CESR_DCDPE		BIT(1)
@@ -289,11 +291,14 @@ static irqreturn_t msm_l1_erp_irq(int irq, void *dev_id)
 	unsigned int cpu = smp_processor_id();
 	int print_regs = cesr & CESR_PRINT_MASK;
 	int log_event = cesr & CESR_LOG_EVENT_MASK;
+	int is_ldo_mode = 0, uV = 0;
 
 	if (print_regs) {
+		vreg_krait_get_info(cpu, &is_ldo_mode, &uV);
 		pr_alert("L1 / TLB Error detected on CPU %d!\n", cpu);
 		pr_alert("\tCESR      = 0x%08x\n", cesr);
-		pr_alert("\tCPU speed = %lu\n", acpuclk_get_rate(cpu));
+		pr_alert("\tCPU speed = %lu\n", clock_krait_get_rate(cpu));
+		pr_alert("\tmode = %s, uV = %d\n", (is_ldo_mode?"LDO_MODE":"HS_MODE"),uV);
 		pr_alert("\tMIDR      = 0x%08x\n", read_cpuid_id());
 		msm_erp_dump_regions();
 	}
@@ -368,6 +373,16 @@ static irqreturn_t msm_l1_erp_irq(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+
+#ifdef CONFIG_IGNORE_L2_FALSE_ALRAM
+	#define DUMP_L2_ERP_MIN_INTERVAL  (HZ / 2) // Dump will be show if interval is less than setting.
+
+	static unsigned long last_trigger_jiffies = 0; // Last time l2 generate error IRQ
+	int l2_erp_print=0;
+#else
+	int l2_erp_print=1;
+#endif
+
 static irqreturn_t msm_l2_erp_irq(int irq, void *dev_id)
 {
 	unsigned int l2esr;
@@ -386,7 +401,16 @@ static irqreturn_t msm_l2_erp_irq(int irq, void *dev_id)
 	l2ear0 = get_l2_indirect_reg(L2EAR0_IND_ADDR);
 	l2ear1 = get_l2_indirect_reg(L2EAR1_IND_ADDR);
 
-	print_alert = print_access_errors() || (l2esr & L2ESR_ACCESS_ERR_MASK);
+#ifdef CONFIG_IGNORE_L2_FALSE_ALRAM
+	if((last_trigger_jiffies == 0) || time_is_after_jiffies(last_trigger_jiffies + DUMP_L2_ERP_MIN_INTERVAL) )
+		l2_erp_print = 0;
+	else
+		l2_erp_print = 1;
+
+	last_trigger_jiffies = jiffies;
+#endif
+
+	print_alert = (l2_erp_print && print_access_errors()) || (l2esr & L2ESR_ACCESS_ERR_MASK);
 
 	if (print_alert) {
 		pr_alert("L2 Error detected!\n");
@@ -517,6 +541,7 @@ static int msm_erp_read_dump_regions(struct platform_device *pdev)
 
 	for (i = 0; i < num_dump_regions; i++) {
 		res = platform_get_resource(pdev, IORESOURCE_MEM, i);
+		if (!res) continue;
 		dump_regions[i].res = res;
 		dump_regions[i].va = devm_ioremap(&pdev->dev, res->start,
 						  resource_size(res));

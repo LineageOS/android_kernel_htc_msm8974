@@ -35,13 +35,7 @@
 #define UPDATE_BUSY_VAL		1000000
 #define UPDATE_BUSY		50
 
-/*
- * Expected delay for post-interrupt processing on A3xx.
- * The delay may be longer, gradually increase the delay
- * to compensate.  If the GPU isn't done by max delay,
- * it's working on something other than just the final
- * command sequence so stop waiting for it to be idle.
- */
+extern void set_gpu_clk(unsigned int);
 #define INIT_UDELAY		200
 #define MAX_UDELAY		2000
 
@@ -1095,7 +1089,10 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 		pwr->pwrlevels[i].io_fraction =
 			pdata->pwrlevel[i].io_fraction;
 	}
-	/* Do not set_rate for targets in sync with AXI */
+	if (strstr(device->name, "kgsl-3d") != NULL)
+		set_gpu_clk(pwr->pwrlevels[0].gpu_freq);
+
+	
 	if (pwr->pwrlevels[0].gpu_freq > 0)
 		clk_set_rate(pwr->grp_clks[0], pwr->
 				pwrlevels[pwr->num_pwrlevels - 1].gpu_freq);

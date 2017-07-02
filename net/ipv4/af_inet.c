@@ -138,7 +138,12 @@ static inline int current_has_network(void)
  */
 static struct list_head inetsw[SOCK_MAX];
 static DEFINE_SPINLOCK(inetsw_lock);
-
+/* ++SSD_RIL */
+#ifdef CONFIG_HTC_MONITOR
+void (*record_probe_data_fp)(struct sock *sk, int type, size_t size, unsigned long long t_pre) = NULL; /* SSD_RIL: Packet Monitor */
+EXPORT_SYMBOL(record_probe_data_fp);
+#endif
+/* --SSD_RIL */
 struct ipv4_config ipv4_config;
 EXPORT_SYMBOL(ipv4_config);
 
@@ -456,6 +461,12 @@ int inet_release(struct socket *sock)
 		    !(current->flags & PF_EXITING))
 			timeout = sk->sk_lingertime;
 		sock->sk = NULL;
+/* ++SSD_RIL */
+#ifdef CONFIG_HTC_MONITOR
+		if (record_probe_data_fp)
+			record_probe_data_fp(sk, 6, 0,0);
+#endif
+/* --SSD_RIL */
 		sk->sk_prot->close(sk, timeout);
 	}
 	return 0;
@@ -562,6 +573,11 @@ int inet_dgram_connect(struct socket *sock, struct sockaddr * uaddr,
 		       int addr_len, int flags)
 {
 	struct sock *sk = sock->sk;
+/* ++SSD_RIL */
+#ifdef CONFIG_HTC_MONITOR
+	int err;
+#endif
+/* --SSD_RIL */
 
 	if (addr_len < sizeof(uaddr->sa_family))
 		return -EINVAL;
@@ -570,7 +586,16 @@ int inet_dgram_connect(struct socket *sock, struct sockaddr * uaddr,
 
 	if (!inet_sk(sk)->inet_num && inet_autobind(sk))
 		return -EAGAIN;
+/* ++SSD_RIL */
+#ifdef CONFIG_HTC_MONITOR
+	err=sk->sk_prot->connect(sk, (struct sockaddr *)uaddr, addr_len);
+	if (0==err && record_probe_data_fp)
+		record_probe_data_fp(sk, 5, 0,0);
+	return err;
+#else
 	return sk->sk_prot->connect(sk, (struct sockaddr *)uaddr, addr_len);
+#endif
+/* --SSD_RIL */
 }
 EXPORT_SYMBOL(inet_dgram_connect);
 
@@ -589,6 +614,12 @@ static long inet_wait_for_connect(struct sock *sk, long timeo)
 		release_sock(sk);
 		timeo = schedule_timeout(timeo);
 		lock_sock(sk);
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+		if (!sk->sk_wq) {
+			pr_info("[NET] %s: socket connection state: %d. current process: %s, pid: %d.\n", __func__, sk->sk_state, current->comm, current->pid);
+			return timeo;
+		}
+#endif
 		if (signal_pending(current) || !timeo)
 			break;
 		prepare_to_wait(sk_sleep(sk), &wait, TASK_INTERRUPTIBLE);
@@ -601,6 +632,8 @@ static long inet_wait_for_connect(struct sock *sk, long timeo)
  *	Connect to a remote host. There is regrettably still a little
  *	TCP 'magic' in here.
  */
+int add_or_remove_port(struct sock *sk, int add_or_remove);	/* SSD_RIL: Garbage_Filter_TCP */
+
 int inet_stream_connect(struct socket *sock, struct sockaddr *uaddr,
 			int addr_len, int flags)
 {
@@ -638,8 +671,17 @@ int inet_stream_connect(struct socket *sock, struct sockaddr *uaddr,
 		err = sk->sk_prot->connect(sk, uaddr, addr_len);
 		if (err < 0)
 			goto out;
-
+/* ++SSD_RIL */
+#ifdef CONFIG_HTC_MONITOR
+		if(record_probe_data_fp)
+			record_probe_data_fp(sk, 4, 0,0);
+#endif
+/* --SSD_RIL */
 		sock->state = SS_CONNECTING;
+		/* ++SSD_RIL: Garbage_Filter_TCP */
+		if (sk != NULL)
+			add_or_remove_port(sk, 1);
+		/* --SSD_RIL: Garbage_Filter_TCP */
 
 		/* Just entered SS_CONNECTING state; the only
 		 * difference is that return value in non-blocking
@@ -652,6 +694,21 @@ int inet_stream_connect(struct socket *sock, struct sockaddr *uaddr,
 	timeo = sock_sndtimeo(sk, flags & O_NONBLOCK);
 
 	if ((1 << sk->sk_state) & (TCPF_SYN_SENT | TCPF_SYN_RECV)) {
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+				if (IS_ERR(sk->sk_wq) || (!sk->sk_wq)) {
+					printk(KERN_ERR "[NET] sk->sk_wq is NULL in %s!\n", __func__);
+					if (sk->sk_state)
+						printk(KERN_ERR "[NET]sk_state=%d\n",sk->sk_state);
+					if (sk->__sk_common.skc_daddr)
+						printk(KERN_ERR "[NET]skc_daddr=0x%08X\n",sk->__sk_common.skc_daddr);
+					if (sk->__sk_common.skc_rcv_saddr)
+						printk(KERN_ERR "[NET]skc_rcv_saddr=0x%08X\n",sk->__sk_common.skc_rcv_saddr);
+
+					goto sock_error;
+				}
+#endif
+
 		/* Error code is set above */
 		if (!timeo || !inet_wait_for_connect(sk, timeo))
 			goto out;
@@ -703,6 +760,12 @@ int inet_accept(struct socket *sock, struct socket *newsock, int flags)
 	lock_sock(sk2);
 
 	sock_rps_record_flow(sk2);
+/* ++SSD_RIL */
+#ifdef CONFIG_HTC_MONITOR
+	if(record_probe_data_fp)
+		record_probe_data_fp(sk2, 3, 0,0);
+#endif
+/* --SSD_RIL */
 	WARN_ON(!((1 << sk2->sk_state) &
 		  (TCPF_ESTABLISHED | TCPF_CLOSE_WAIT | TCPF_CLOSE)));
 
@@ -752,6 +815,12 @@ int inet_sendmsg(struct kiocb *iocb, struct socket *sock, struct msghdr *msg,
 		 size_t size)
 {
 	struct sock *sk = sock->sk;
+/* ++SSD_RIL */
+#ifdef CONFIG_HTC_MONITOR
+	int err;
+	unsigned long long t_pre;
+#endif
+/* --SSD_RIL */
 
 	sock_rps_record_flow(sk);
 
@@ -759,8 +828,17 @@ int inet_sendmsg(struct kiocb *iocb, struct socket *sock, struct msghdr *msg,
 	if (!inet_sk(sk)->inet_num && !sk->sk_prot->no_autobind &&
 	    inet_autobind(sk))
 		return -EAGAIN;
-
+/* ++SSD_RIL */
+#ifdef CONFIG_HTC_MONITOR
+	t_pre=sched_clock();
+	err=sk->sk_prot->sendmsg(iocb, sk, msg, size);
+	if (err >= 0 && record_probe_data_fp)
+		record_probe_data_fp(sk, 1, size,t_pre);
+	return err;
+#else
 	return sk->sk_prot->sendmsg(iocb, sk, msg, size);
+#endif
+/* --SSD_RIL */
 }
 EXPORT_SYMBOL(inet_sendmsg);
 
@@ -788,13 +866,31 @@ int inet_recvmsg(struct kiocb *iocb, struct socket *sock, struct msghdr *msg,
 	struct sock *sk = sock->sk;
 	int addr_len = 0;
 	int err;
+/* ++SSD_RIL */
+#ifdef CONFIG_HTC_MONITOR
+	unsigned long long t_pre;
+#endif
+/* --SSD_RIL */
 
 	sock_rps_record_flow(sk);
+/* ++SSD_RIL */
+#ifdef CONFIG_HTC_MONITOR
+	t_pre=sched_clock();
+#endif
+/* --SSD_RIL */
 
 	err = sk->sk_prot->recvmsg(iocb, sk, msg, size, flags & MSG_DONTWAIT,
 				   flags & ~MSG_DONTWAIT, &addr_len);
 	if (err >= 0)
+	{
 		msg->msg_namelen = addr_len;
+/* ++SSD_RIL */
+#ifdef CONFIG_HTC_MONITOR
+		if(record_probe_data_fp)
+			record_probe_data_fp(sk, 2, size,t_pre);
+#endif
+/* --SSD_RIL */
+	}
 	return err;
 }
 EXPORT_SYMBOL(inet_recvmsg);
@@ -1357,6 +1453,13 @@ static struct sk_buff **inet_gro_receive(struct sk_buff **head,
 		if (unlikely(!iph))
 			goto out;
 	}
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (IS_ERR(iph) || (!iph)) {
+		printk(KERN_ERR "[NET] iph is NULL in %s!\n", __func__);
+		goto out;
+	}
+#endif
 
 	proto = iph->protocol & (MAX_INET_PROTOS - 1);
 

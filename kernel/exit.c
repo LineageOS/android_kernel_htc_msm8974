@@ -58,6 +58,7 @@
 #include <asm/unistd.h>
 #include <asm/pgtable.h>
 #include <asm/mmu_context.h>
+#include <htc_debug/stability/htc_process_debug.h>
 
 static void exit_mm(struct task_struct * tsk);
 
@@ -279,11 +280,21 @@ static bool has_stopped_jobs(struct pid *pgrp)
 	return false;
 }
 
-/*
- * Check to see if any process groups have become orphaned as
- * a result of our exiting, and if they have any stopped jobs,
- * send them a SIGHUP and then a SIGCONT. (POSIX 3.2.2.2)
- */
+static bool is_in_zygote_pgrp(struct task_struct *tsk){
+        struct pid *pgrp = task_pgrp(tsk);
+        struct task_struct *p;
+
+        for_each_process(p){
+                if(!strncmp("main",p->comm,4) && p->parent->pid == 1){
+                        if(pgrp == task_pgrp(p))
+                                return 1;
+                        else
+                                return 0;
+                }
+        }
+        return 0;
+}
+
 static void
 kill_orphaned_pgrp(struct task_struct *tsk, struct task_struct *parent)
 {
@@ -304,7 +315,8 @@ kill_orphaned_pgrp(struct task_struct *tsk, struct task_struct *parent)
 	if (task_pgrp(parent) != pgrp &&
 	    task_session(parent) == task_session(tsk) &&
 	    will_become_orphaned_pgrp(pgrp, ignored_task) &&
-	    has_stopped_jobs(pgrp)) {
+	    has_stopped_jobs(pgrp) &&
+	    (!is_in_zygote_pgrp(tsk))) {
 		__kill_pgrp_info(SIGHUP, SEND_SIG_PRIV, pgrp);
 		__kill_pgrp_info(SIGCONT, SEND_SIG_PRIV, pgrp);
 	}
@@ -899,11 +911,19 @@ static void check_stack_usage(void)
 static inline void check_stack_usage(void) {}
 #endif
 
+#ifdef CONFIG_HTC_FD_MONITOR
+extern int clean_fd_list(const int cur_pid, const int callfrom);
+#endif
+
 void do_exit(long code)
 {
 	struct task_struct *tsk = current;
 	int group_dead;
 
+#ifdef CONFIG_HTC_FD_MONITOR
+	if(!(tsk->flags & PF_KTHREAD) && tsk->tgid == tsk->pid)
+		clean_fd_list(tsk->tgid, 0);
+#endif
 	profile_task_exit(tsk);
 
 	WARN_ON(blk_needs_flush_plug(tsk));
@@ -1102,8 +1122,10 @@ do_group_exit(int exit_code)
 {
 	struct signal_struct *sig = current->signal;
 
-	BUG_ON(exit_code & 0x80); /* core dumps don't get here */
-
+	BUG_ON(exit_code & 0x80); 
+#ifdef CONFIG_HTC_PROCESS_DEBUG
+	do_group_exit_debug_dump(exit_code);
+#endif
 	if (signal_group_exit(sig))
 		exit_code = sig->group_exit_code;
 	else if (!thread_group_empty(current)) {

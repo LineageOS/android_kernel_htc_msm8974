@@ -492,7 +492,7 @@ static int netlink_release(struct socket *sock)
 	struct sock *sk = sock->sk;
 	struct netlink_sock *nlk;
 
-	if (!sk)
+	if (IS_ERR(sk) || (!sk))
 		return 0;
 
 	netlink_remove(sk);
@@ -779,7 +779,7 @@ static struct sock *netlink_getsockbypid(struct sock *ssk, u32 pid)
 
 struct sock *netlink_getsockbyfilp(struct file *filp)
 {
-	struct inode *inode = filp->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(filp);
 	struct sock *sock;
 
 	if (!S_ISSOCK(inode->i_mode))

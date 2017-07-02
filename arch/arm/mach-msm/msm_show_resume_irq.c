@@ -15,7 +15,15 @@
 #include <linux/kernel.h>
 #include <linux/init.h>
 
+#ifdef CONFIG_HTC_POWER_DEBUG
+enum {
+          MSM_SHOW_IRQ_DEBUG_RESUME = BIT(0),
+};
+
+int msm_show_resume_irq_mask = MSM_SHOW_IRQ_DEBUG_RESUME;
+#else
 int msm_show_resume_irq_mask;
+#endif
 
 module_param_named(
 	debug_mask, msm_show_resume_irq_mask, int, S_IRUGO | S_IWUSR | S_IWGRP

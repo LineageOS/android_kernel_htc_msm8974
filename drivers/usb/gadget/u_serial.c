@@ -57,7 +57,7 @@
  * is managed in userspace ... OBEX, PTP, and MTP have been mentioned.
  */
 
-#define PREFIX	"ttyGS"
+#define PREFIX	"ttyHSUSB"
 
 /*
  * gserial is the lifecycle interface, used by USB functions
@@ -781,6 +781,9 @@ static int gs_open(struct tty_struct *tty, struct file *file)
 	struct gs_port	*port;
 	int		status;
 
+	if (port_num < 0 || port_num >= n_ports)
+		return -ENXIO;
+
 	do {
 		mutex_lock(&ports[port_num].lock);
 		port = ports[port_num].port;
@@ -1207,6 +1210,8 @@ static ssize_t debug_read_status(struct file *file, char __user *ubuf,
 
 	tty = ui_dev->port_tty;
 	gser = ui_dev->port_usb;
+	if (ui_dev->port_usb == NULL)
+		return -ENODEV;
 
 	buf = kzalloc(sizeof(char) * BUF_SIZE, GFP_KERNEL);
 	if (!buf)
@@ -1338,6 +1343,7 @@ int gserial_setup(struct usb_gadget *g, unsigned count)
 	if (!gs_tty_driver)
 		return -ENOMEM;
 
+	gs_tty_driver->owner = THIS_MODULE;
 	gs_tty_driver->driver_name = "g_serial";
 	gs_tty_driver->name = PREFIX;
 	/* uses dynamically assigned dev_t values */
@@ -1356,6 +1362,10 @@ int gserial_setup(struct usb_gadget *g, unsigned count)
 			B9600 | CS8 | CREAD | HUPCL | CLOCAL;
 	gs_tty_driver->init_termios.c_ispeed = 9600;
 	gs_tty_driver->init_termios.c_ospeed = 9600;
+
+	gs_tty_driver->init_termios.c_lflag = 0;
+	gs_tty_driver->init_termios.c_iflag = 0;
+	gs_tty_driver->init_termios.c_oflag = 0;
 
 	coding.dwDTERate = cpu_to_le32(9600);
 	coding.bCharFormat = 8;

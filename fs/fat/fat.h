@@ -22,6 +22,10 @@
 #define FAT_ERRORS_PANIC	2      /* panic on error */
 #define FAT_ERRORS_RO		3      /* remount r/o on error */
 
+#define FAT_CHARSET_ERROR	9999
+
+#define FAT_IOCTL_MOVE_CLUSTERS	_IOW('r', 0x16, __u32)
+
 struct fat_mount_options {
 	uid_t fs_uid;
 	gid_t fs_gid;
@@ -346,6 +350,8 @@ extern void fat_time_fat2unix(struct msdos_sb_info *sbi, struct timespec *ts,
 extern void fat_time_unix2fat(struct msdos_sb_info *sbi, struct timespec *ts,
 			      __le16 *time, __le16 *date, u8 *time_cs);
 extern int fat_sync_bhs(struct buffer_head **bhs, int nr_bhs);
+
+extern int fat_ioctl_move_cluster(struct file *filp, u32 __user *user_arg);
 
 int fat_cache_init(void);
 void fat_cache_destroy(void);

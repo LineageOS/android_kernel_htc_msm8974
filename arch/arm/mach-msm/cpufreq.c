@@ -108,6 +108,9 @@ out:
 	mutex_unlock(&l2bw_lock);
 }
 
+#ifdef CONFIG_ARCH_MSM8974
+static DEFINE_MUTEX(set_cpufreq_lock);
+#endif
 static int set_cpu_freq(struct cpufreq_policy *policy, unsigned int new_freq,
 			unsigned int index)
 {
@@ -117,6 +120,16 @@ static int set_cpu_freq(struct cpufreq_policy *policy, unsigned int new_freq,
 	struct cpufreq_freqs freqs;
 	struct sched_param param = { .sched_priority = MAX_RT_PRIO-1 };
 
+	/*
+	 * The cpu_clk[1..NR_CPUS] are not initialized at sync-cpu platform,
+	 * so for core1~coreN, they don't need to execute this function.
+	 */
+	if (policy->cpu >= 1 && is_sync)
+		return 0;
+
+#ifdef CONFIG_ARCH_MSM8974
+	mutex_lock(&set_cpufreq_lock);
+#endif
 	freqs.old = policy->cur;
 	freqs.new = new_freq;
 	freqs.cpu = policy->cpu;
@@ -157,6 +170,9 @@ static int set_cpu_freq(struct cpufreq_policy *policy, unsigned int new_freq,
 		param.sched_priority = saved_sched_rt_prio;
 		sched_setscheduler_nocheck(current, saved_sched_policy, &param);
 	}
+#ifdef CONFIG_ARCH_MSM8974
+	mutex_unlock(&set_cpufreq_lock);
+#endif
 	return ret;
 }
 
@@ -277,7 +293,10 @@ static int __cpuinit msm_cpufreq_init(struct cpufreq_policy *policy)
 #endif
 
 	if (is_clk)
-		cur_freq = clk_get_rate(cpu_clk[policy->cpu])/1000;
+		if (policy->cpu >= 1 && is_sync)
+			cur_freq = clk_get_rate(cpu_clk[0])/1000;
+		else
+			cur_freq = clk_get_rate(cpu_clk[policy->cpu])/1000;
 	else
 		cur_freq = acpuclk_get_rate(policy->cpu);
 
