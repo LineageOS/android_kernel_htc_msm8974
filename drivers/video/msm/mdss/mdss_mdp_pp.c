@@ -1613,6 +1613,23 @@ static int pp_dspp_setup(u32 disp_num, struct mdss_mdp_mixer *mixer)
 		ad_flags = 0;
 	}
 
+	if (ctl->mfd->panel_info->pcc_r && ctl->mfd->panel_info->pcc_g
+			&& ctl->mfd->panel_info->pcc_b ) {
+		if (!(mdss_pp_res->pcc_disp_cfg[disp_num].ops & MDP_PP_OPS_DISABLE)) {
+			mdss_pp_res->pcc_disp_cfg[disp_num].ops |= MDP_PP_OPS_WRITE;
+			mdss_pp_res->pcc_disp_cfg[disp_num].r.r = ctl->mfd->panel_info->pcc_r;
+			mdss_pp_res->pcc_disp_cfg[disp_num].g.g = ctl->mfd->panel_info->pcc_g;
+			mdss_pp_res->pcc_disp_cfg[disp_num].b.b = ctl->mfd->panel_info->pcc_b;
+			pp_update_pcc_regs(base + MDSS_MDP_REG_DSPP_PCC_BASE,
+					&mdss_pp_res->pcc_disp_cfg[disp_num]);
+			opmode |= (1 << 4);
+			flags |= PP_FLAGS_DIRTY_PCC;
+		} else {
+			opmode &= ~(1 << 4);
+			mdss_pp_res->pcc_disp_cfg[disp_num].ops &= ~MDP_PP_OPS_WRITE;
+		}
+	}
+
 	/* call calibration specific processing here */
 	if (ctl->mfd->calib_mode)
 		goto flush_exit;
@@ -3600,7 +3617,7 @@ int mdss_mdp_hist_intr_setup(struct mdss_intr *intr, int type)
 	unsigned long flag;
 	int ret = 0, req_clk = 0;
 	u32 en = 0, dis = 0;
-	u32 diff, init_curr;
+	u32 diff;
 	int init_state;
 	if (!intr) {
 		WARN(1, "NULL intr pointer");
@@ -3611,7 +3628,6 @@ int mdss_mdp_hist_intr_setup(struct mdss_intr *intr, int type)
 	spin_lock_irqsave(&intr->lock, flag);
 
 	init_state = intr->state;
-	init_curr = intr->curr;
 
 	if (type == MDSS_IRQ_RESUME) {
 		/* resume intrs */
@@ -3709,12 +3725,10 @@ static int pp_hist_collect(struct mdp_histogram_data *hist,
 		if (kick_ret == 0) {
 			ret = -ENODATA;
 			pr_debug("histogram kickoff not done yet");
-			spin_unlock_irqrestore(&hist_info->hist_lock, flag);
 			goto hist_collect_exit;
 		} else if (kick_ret < 0) {
 			ret = -EINTR;
 			pr_debug("histogram first kickoff interrupted");
-			spin_unlock_irqrestore(&hist_info->hist_lock, flag);
 			goto hist_collect_exit;
 		} else if (wait_ret == 0) {
 			ret = -ETIMEDOUT;
@@ -3739,8 +3753,7 @@ static int pp_hist_collect(struct mdp_histogram_data *hist,
 					__func__);
 			goto hist_collect_exit;
 		}
-		if (hist_info->col_state != HIST_READY &&
-				hist_info->col_state != HIST_UNKNOWN) {
+		if (hist_info->col_state != HIST_READY) {
 			ret = -ENODATA;
 			hist_info->col_state = HIST_READY;
 			pr_debug("%s: state is not ready: %d",
@@ -4472,7 +4485,7 @@ static void pp_ad_init_write(struct mdss_mdp_ad *ad_hw, struct mdss_ad_info *ad,
 	u32 num;
 	int side;
 	char __iomem *base;
-	bool is_calc, is_dual_pipe, split_mode;
+	bool is_dual_pipe, split_mode;
 	u32 mixer_id[MDSS_MDP_INTF_MAX_LAYERMIXER];
 	u32 mixer_num;
 	mixer_num = mdss_mdp_get_ctl_mixers(ctl->mfd->index, mixer_id);
@@ -4482,7 +4495,6 @@ static void pp_ad_init_write(struct mdss_mdp_ad *ad_hw, struct mdss_ad_info *ad,
 		is_dual_pipe = false;
 
 	base = ad_hw->base;
-	is_calc = ad->calc_hw_num == ad_hw->num;
 	split_mode = !!(ad->ops & MDSS_PP_SPLIT_MASK);
 
 	writel_relaxed(ad->init.i_control[0] & 0x1F,
@@ -4558,7 +4570,10 @@ static void pp_ad_init_write(struct mdss_mdp_ad *ad_hw, struct mdss_ad_info *ad,
 			frame_end = 0xFFFF;
 			procs_start = 0x0;
 			procs_end = 0xFFFF;
-			tile_ctrl = 0x0;
+			if (split_mode)
+				tile_ctrl = 0x0;
+			else
+				tile_ctrl = 0x1;
 		}
 
 

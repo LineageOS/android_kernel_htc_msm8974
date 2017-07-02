@@ -45,6 +45,8 @@
 #define MDP_PP_AD_BL_LINEAR	0x0
 #define MDP_PP_AD_BL_LINEAR_INV	0x1
 
+#define DEFAULT_BRIGHTNESS 143
+
 /**
  * enum mdp_notify_event - Different frame events to indicate frame update state
  *
@@ -135,7 +137,7 @@ struct msm_mdp_interface {
 	struct msm_sync_pt_data *(*get_sync_fnc)(struct msm_fb_data_type *mfd,
 				const struct mdp_buf_sync *buf_sync);
 	void (*check_dsi_status)(struct work_struct *work, uint32_t interval);
-	int (*configure_panel)(struct msm_fb_data_type *mfd, int mode);
+	void (*display_on)(struct msm_fb_data_type *mfd);
 	void *private1;
 };
 
@@ -180,6 +182,7 @@ struct msm_fb_data_type {
 
 	u32 dst_format;
 	int panel_power_on;
+	int request_display_on;
 	struct disp_info_type_suspend suspend;
 
 	struct ion_handle *ihdl;
@@ -230,12 +233,14 @@ struct msm_fb_data_type {
 	struct msm_fb_backup_type msm_fb_backup;
 	struct completion power_set_comp;
 	u32 is_power_setting;
+	u32 is_active;
 
 	u32 dcm_state;
 	struct list_head proc_list;
 	u32 wait_for_kickoff;
 	struct ion_client *fb_ion_client;
 	struct ion_handle *fb_ion_handle;
+	int pan_pid;
 };
 
 static inline void mdss_fb_update_notify_update(struct msm_fb_data_type *mfd)
