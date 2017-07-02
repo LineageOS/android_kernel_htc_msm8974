@@ -481,7 +481,7 @@ static char *msm_read_hardware_id(void)
 
 	string_generated = true;
 	return strncat(msm_soc_str, cpu_of_id[socinfo->v1.id].soc_id_string,
-			sizeof(msm_soc_str) - strlen(msm_soc_str));
+			sizeof(msm_soc_str) - strlen(msm_soc_str) - 1);
 err_path:
 	return "UNKNOWN SOC TYPE";
 }

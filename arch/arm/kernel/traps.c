@@ -150,9 +150,11 @@ static void dump_instr(const char *lvl, struct pt_regs *regs)
 		else
 			bad = __get_user(val, &((u32 *)addr)[i]);
 
-		if (!bad)
+		if (!bad) {
+                        BUG_ON(p>= str+sizeof(str)-width-3);
 			p += sprintf(p, i == 0 ? "(%0*x) " : "%0*x ",
 					width, val);
+                }
 		else {
 			p += sprintf(p, "bad PC value");
 			break;
