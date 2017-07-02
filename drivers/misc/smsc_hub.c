@@ -538,13 +538,13 @@ static int __devinit smsc_hub_probe(struct platform_device *pdev)
 
 	if (pdev->dev.of_node) {
 		dev_dbg(&pdev->dev, "device tree enabled\n");
-		hsic_host_auxdata = dev_get_platdata(&pdev->dev);
 		pdata = msm_hub_dt_to_pdata(pdev);
 		if (IS_ERR(pdata))
 			return PTR_ERR(pdata);
 	} else {
 		pdata = pdev->dev.platform_data;
 	}
+	hsic_host_auxdata = dev_get_platdata(&pdev->dev);
 
 	if (!pdata) {
 		dev_err(&pdev->dev, "No platform data\n");
