@@ -78,6 +78,13 @@ const struct spi_device_id *spi_get_device_id(const struct spi_device *sdev)
 {
 	const struct spi_driver *sdrv = to_spi_driver(sdev->dev.driver);
 
+	/* HTC_START , add to fix Klocwork issue */
+	if (sdrv == NULL) {
+		pr_err("%s: sdrv is NULL\n", __func__);
+		return NULL;
+	}
+	/* HTC_END */
+
 	return spi_match_id(sdrv->id_table, sdev);
 }
 EXPORT_SYMBOL_GPL(spi_get_device_id);
@@ -90,6 +97,13 @@ static int spi_match_device(struct device *dev, struct device_driver *drv)
 	/* Attempt an OF style match */
 	if (of_driver_match_device(dev, drv))
 		return 1;
+
+	/* HTC_START , add to fix Klocwork issue */
+	if (sdrv == NULL) {
+		pr_err("%s: sdrv is NULL\n", __func__);
+		return 0;
+	}
+	/* HTC_END */
 
 	if (sdrv->id_table)
 		return !!spi_match_id(sdrv->id_table, spi);
@@ -232,6 +246,13 @@ static int spi_drv_probe(struct device *dev)
 {
 	const struct spi_driver		*sdrv = to_spi_driver(dev->driver);
 
+	/* HTC_START , add to fix Klocwork issue */
+	if (sdrv == NULL) {
+		pr_err("%s: sdrv is NULL\n", __func__);
+		return -ENODEV;
+	}
+	/* HTC_END */
+
 	return sdrv->probe(to_spi_device(dev));
 }
 
@@ -239,12 +260,26 @@ static int spi_drv_remove(struct device *dev)
 {
 	const struct spi_driver		*sdrv = to_spi_driver(dev->driver);
 
+	/* HTC_START , add to fix Klocwork issue */
+	if (sdrv == NULL) {
+		pr_err("%s: sdrv is NULL\n", __func__);
+		return -ENODEV;
+	}
+	/* HTC_END */
+
 	return sdrv->remove(to_spi_device(dev));
 }
 
 static void spi_drv_shutdown(struct device *dev)
 {
 	const struct spi_driver		*sdrv = to_spi_driver(dev->driver);
+
+	/* HTC_START , add to fix Klocwork issue */
+	if (sdrv == NULL) {
+		pr_err("%s: sdrv is NULL\n", __func__);
+		return;
+	}
+	/* HTC_END */
 
 	sdrv->shutdown(to_spi_device(dev));
 }

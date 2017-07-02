@@ -636,6 +636,7 @@ int jbd2_log_wait_commit(journal_t *journal, tid_t tid)
 	int err = 0;
 
 	read_lock(&journal->j_state_lock);
+	atomic_inc(&journal->j_log_wait);
 #ifdef CONFIG_JBD2_DEBUG
 	if (!tid_geq(journal->j_commit_request, tid)) {
 		printk(KERN_EMERG
@@ -652,6 +653,7 @@ int jbd2_log_wait_commit(journal_t *journal, tid_t tid)
 				!tid_gt(tid, journal->j_commit_sequence));
 		read_lock(&journal->j_state_lock);
 	}
+	atomic_dec(&journal->j_log_wait);
 	read_unlock(&journal->j_state_lock);
 
 	if (unlikely(is_journal_aborted(journal))) {
@@ -1006,6 +1008,7 @@ static journal_t * journal_init_common (void)
 	}
 
 	spin_lock_init(&journal->j_history_lock);
+	atomic_set(&journal->j_log_wait, 0);
 
 	return journal;
 }

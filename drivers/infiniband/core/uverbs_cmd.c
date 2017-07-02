@@ -725,7 +725,7 @@ ssize_t ib_uverbs_open_xrcd(struct ib_uverbs_file *file,
 			goto err_tree_mutex_unlock;
 		}
 
-		inode = f->f_dentry->d_inode;
+		inode = file_inode(f);
 		if (!inode) {
 			ret = -EBADF;
 			goto err_tree_mutex_unlock;

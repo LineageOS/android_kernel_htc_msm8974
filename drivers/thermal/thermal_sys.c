@@ -42,6 +42,38 @@ MODULE_AUTHOR("Zhang Rui");
 MODULE_DESCRIPTION("Generic thermal management sysfs support");
 MODULE_LICENSE("GPL");
 
+#ifdef pr_emerg
+#undef pr_emerg
+#endif
+#define pr_emerg(fmt, args...) \
+	printk(KERN_EMERG "[THERMAL] " pr_fmt(fmt), ## args)
+
+#ifdef pr_err
+#undef pr_err
+#endif
+#define pr_err(fmt, args...) \
+	printk(KERN_ERR "[THERMAL] " pr_fmt(fmt), ## args)
+
+#ifdef pr_warning
+#undef pr_warning
+#endif
+#define pr_warning(fmt, args...) \
+	printk(KERN_WARNING "[THERMAL] " pr_fmt(fmt), ## args)
+
+#ifdef pr_info
+#undef pr_info
+#endif
+#define pr_info(fmt, args...) \
+	printk(KERN_INFO "[THERMAL] " pr_fmt(fmt), ## args)
+
+#if defined(DEBUG)
+#ifdef pr_debug
+#undef pr_debug
+#endif
+#define pr_debug(fmt, args...) \
+	printk(KERN_DEBUG "[THERMAL] " pr_fmt(fmt), ## args)
+#endif
+
 struct thermal_cooling_device_instance {
 	int id;
 	char name[THERMAL_NAME_LENGTH];
@@ -52,6 +84,10 @@ struct thermal_cooling_device_instance {
 	struct device_attribute attr;
 	struct list_head node;
 };
+
+static char *truly_shutdown[2] = { "CPU_TEMP=SHUTDOWN_TEMP", NULL };
+static char *shutdown_waring[2]    = { "CPU_TEMP=CLOSE_TO_SHUTDOWN_TEMP", NULL };
+static char *clr_shutdown_warning[2]   = { "CPU_TEMP=CLOSE_TO_SHUTDOWN_TEMP_CLR", NULL };
 
 static DEFINE_IDR(thermal_tz_idr);
 static DEFINE_IDR(thermal_cdev_idr);
@@ -471,6 +507,28 @@ temp_show(struct device *dev, struct device_attribute *attr, char *buf)
 }
 
 static ssize_t
+temp_notify_store(struct device *dev, struct device_attribute *attr,
+	   const char *buf, size_t count)
+{
+	struct thermal_zone_device *tz = to_thermal_zone(dev);
+	unsigned int status=0;
+	unsigned long  value=0;
+	if (strict_strtoul(buf, 10, &value))
+		return -EINVAL;
+
+	if (value == 1) 
+		status = kobject_uevent_env(&tz->device.kobj, KOBJ_CHANGE, clr_shutdown_warning);
+	if (value == 2)
+		status = kobject_uevent_env(&tz->device.kobj, KOBJ_CHANGE, shutdown_waring);
+	if (value == 3)
+		status = kobject_uevent_env(&tz->device.kobj, KOBJ_CHANGE, truly_shutdown);
+
+	pr_info("cpu temp uevent :temp=%s,sucess=%d\n",buf,status);
+
+	return count;
+}
+
+static ssize_t
 mode_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct thermal_zone_device *tz = to_thermal_zone(dev);
@@ -706,6 +764,7 @@ static DEVICE_ATTR(type, 0444, type_show, NULL);
 static DEVICE_ATTR(temp, 0444, temp_show, NULL);
 static DEVICE_ATTR(mode, 0644, mode_show, mode_store);
 static DEVICE_ATTR(passive, S_IRUGO | S_IWUSR, passive_show, passive_store);
+static DEVICE_ATTR(temp_notify, S_IWUSR, NULL, temp_notify_store);
 
 static struct device_attribute trip_point_attrs[] = {
 	__ATTR(trip_point_0_type, 0644, trip_point_type_show,
@@ -997,7 +1056,7 @@ thermal_add_hwmon_sysfs(struct thermal_zone_device *tz)
 	temp->tz = tz;
 	hwmon->count++;
 
-	snprintf(temp->temp_input.name, THERMAL_NAME_LENGTH,
+	snprintf(temp->temp_input.name, sizeof(temp->temp_input.name),
 		 "temp%d_input", hwmon->count);
 	temp->temp_input.attr.attr.name = temp->temp_input.name;
 	temp->temp_input.attr.attr.mode = 0444;
@@ -1010,7 +1069,7 @@ thermal_add_hwmon_sysfs(struct thermal_zone_device *tz)
 	if (tz->ops->get_crit_temp) {
 		unsigned long temperature;
 		if (!tz->ops->get_crit_temp(tz, &temperature)) {
-			snprintf(temp->temp_crit.name, THERMAL_NAME_LENGTH,
+			snprintf(temp->temp_crit.name, sizeof(temp->temp_crit.name),
 				"temp%d_crit", hwmon->count);
 			temp->temp_crit.attr.attr.name = temp->temp_crit.name;
 			temp->temp_crit.attr.attr.mode = 0444;
@@ -1241,7 +1300,7 @@ int thermal_zone_bind_cooling_device(struct thermal_zone_device *tz,
 	if (result)
 		goto release_idr;
 
-	sprintf(dev->attr_name, "cdev%d_trip_point", dev->id);
+	snprintf(dev->attr_name, THERMAL_NAME_LENGTH, "cdev%d_trip_point", dev->id);
 	sysfs_attr_init(&dev->attr.attr);
 	dev->attr.attr.name = dev->attr_name;
 	dev->attr.attr.mode = 0444;
@@ -1466,18 +1525,27 @@ void thermal_zone_device_update(struct thermal_zone_device *tz)
 	enum thermal_trip_type trip_type;
 	struct thermal_cooling_device_instance *instance;
 	struct thermal_cooling_device *cdev;
+	int denominator;
 
 	mutex_lock(&tz->lock);
+
+	if (!strcmp(tz->type, "pm8941_tz") || !strcmp(tz->type, "pm8841_tz"))
+		denominator = 1000;
+	else
+		denominator = 1;
 
 	if (tz->ops->get_temp(tz, &temp)) {
 		/* get_temp failed - retry it later */
 		pr_warn("failed to read out thermal zone %d\n", tz->id);
 		goto leave;
 	}
+	pr_info("%s: Current temperature (%ld C)\n",tz->device.kobj.name, temp/denominator);
 
 	for (count = 0; count < tz->trips; count++) {
 		tz->ops->get_trip_type(tz, count, &trip_type);
 		tz->ops->get_trip_temp(tz, count, &trip_temp);
+
+		pr_info("trip_temp:%ld, type:%d\n", trip_temp/denominator, trip_type);
 
 		switch (trip_type) {
 		case THERMAL_TRIP_CRITICAL:
@@ -1486,9 +1554,13 @@ void thermal_zone_device_update(struct thermal_zone_device *tz)
 					ret = tz->ops->notify(tz, count,
 							      trip_type);
 				if (!ret) {
+					pr_info("%s:%s: current temp(%ld) higher or equal max limit temp(%ld)\n",
+						__func__, tz->device.kobj.name, temp/denominator, trip_temp/denominator);
+#if defined(CONFIG_THERMAL_MAX_TEMP_PROTECT)
 					pr_emerg("Critical temperature reached (%ld C), shutting down\n",
-						 temp/1000);
+						 temp/denominator);
 					orderly_poweroff(true);
+#endif
 				}
 			}
 			break;
@@ -1513,11 +1585,13 @@ void thermal_zone_device_update(struct thermal_zone_device *tz)
 					ret = tz->ops->notify(tz, count,
 								trip_type);
 			if (!ret) {
-				printk(KERN_EMERG
-				"Critical temperature reached (%ld C), \
-					shutting down.\n", temp/1000);
+#if defined(CONFIG_THERMAL_MIN_TEMP_PROTECT)
+				pr_emerg("Critical temperature reached (%ld C), \
+					shutting down.\n", temp/denominator);
 				orderly_poweroff(true);
+#endif
 				}
+
 			}
 			break;
 		case THERMAL_TRIP_ACTIVE:
@@ -1664,6 +1738,10 @@ struct thermal_zone_device *thermal_zone_device_register(char *type,
 		result = device_create_file(&tz->device,
 					    &dev_attr_passive);
 
+	if (result)
+		goto unregister;
+
+	result = device_create_file(&tz->device, &dev_attr_temp_notify);
 	if (result)
 		goto unregister;
 

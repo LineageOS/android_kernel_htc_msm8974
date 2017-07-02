@@ -59,6 +59,7 @@ void connect_bridge(int process_cable, uint8_t index)
 							 index, err);
 
 		diag_bridge[index].usb_connected = 1;
+		driver->qxdmusb_drop = 0;
 	}
 
 	if (index == SMUX) {
@@ -133,6 +134,8 @@ int diagfwd_disconnect_bridge(int process_cable)
 			/* If the usb cable is being disconnected */
 			if (process_cable) {
 				diag_bridge[i].usb_connected = 0;
+				usb_diag_free_req(diag_bridge[i].ch);
+				driver->qxdmusb_drop = 1;
 			}
 
 			if (i == SMUX) {
@@ -151,12 +154,14 @@ int diagfwd_disconnect_bridge(int process_cable)
 				if (diag_hsic[i].hsic_device_enabled &&
 				     (driver->logging_mode != MEMORY_DEVICE_MODE
 				     || !diag_hsic[i].hsic_data_requested)) {
+#if !DIAG_XPST
 					diag_hsic[i].
 						in_busy_hsic_read_on_device = 1;
 					diag_hsic[i].in_busy_hsic_write = 1;
 					/* Turn off communication over usb
 					 * and HSIC */
 					diag_hsic_close(i);
+#endif
 				}
 			}
 			mutex_unlock(&diag_bridge[i].bridge_mutex);
@@ -195,10 +200,15 @@ int diagfwd_read_complete_bridge(struct diag_request *diag_read_ptr)
 	 * read has data to pass on to the HSIC. If so, pass the usb
 	 * mdm data on to the HSIC.
 	 */
+#if DIAG_XPST
+	if (!diag_hsic[index].in_busy_hsic_write &&
+		diag_bridge[index].usb_buf_out &&
+		(diag_bridge[index].read_len > 0) && !driver->nohdlc) {
+#else
 	if (!diag_hsic[index].in_busy_hsic_write &&
 		diag_bridge[index].usb_buf_out &&
 		(diag_bridge[index].read_len > 0)) {
-
+#endif
 		/*
 		 * Initiate the HSIC write. The HSIC write is
 		 * asynchronous. When complete the write

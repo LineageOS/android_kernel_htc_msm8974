@@ -13,10 +13,15 @@
 /dts-v1/;
 
 /include/ "apq8074-v2.0-1.dtsi"
+/include/ "msm8974-regulator.dtsi"
 /include/ "msm8974-liquid.dtsi"
 
 / {
 	model = "Qualcomm APQ 8074v2.0-1 LIQUID";
 	compatible = "qcom,apq8074-liquid", "qcom,apq8074", "qcom,liquid";
 	qcom,msm-id = <184 9 0x20000>;
+};
+
+&krait_pdn {
+	qcom,use-phase-switching;
 };

@@ -266,6 +266,10 @@ static void end_buffer_async_read(struct buffer_head *bh, int uptodate)
 	BUG_ON(!buffer_async_read(bh));
 
 	page = bh->b_page;
+	if (!page_has_buffers(page)) {
+		WARN(1, "%s: page %p has no buffers\n", __func__, page);
+		return;
+	}
 	if (uptodate) {
 		set_buffer_uptodate(bh);
 	} else {
@@ -1036,6 +1040,9 @@ grow_buffers(struct block_device *bdev, sector_t block, int size)
 static struct buffer_head *
 __getblk_slow(struct block_device *bdev, sector_t block, int size)
 {
+	sector_t maxsector;
+	unsigned int nr_sectors;
+
 	/* Size must be multiple of hard sectorsize */
 	if (unlikely(size & (bdev_logical_block_size(bdev)-1) ||
 			(size < 512 || size > PAGE_SIZE))) {
@@ -1044,6 +1051,17 @@ __getblk_slow(struct block_device *bdev, sector_t block, int size)
 		printk(KERN_ERR "logical block size: %d\n",
 					bdev_logical_block_size(bdev));
 
+		dump_stack();
+		return NULL;
+	}
+	maxsector = i_size_read(bdev->bd_inode) >> 9;
+	nr_sectors = size >> 9;
+	if (maxsector && (block + nr_sectors > maxsector)) {
+		char b[BDEVNAME_SIZE];
+		pr_err("%s(%d): %s access(block %llu,size %u) beyond end of device (%s max %llu)\n",
+				current->comm, current->pid, __func__,
+				(unsigned long long)block, nr_sectors,
+				bdevname(bdev, b), (unsigned long long)maxsector);
 		dump_stack();
 		return NULL;
 	}
@@ -2346,7 +2364,7 @@ int __block_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf,
 			 get_block_t get_block)
 {
 	struct page *page = vmf->page;
-	struct inode *inode = vma->vm_file->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(vma->vm_file);
 	unsigned long end;
 	loff_t size;
 	int ret;
@@ -2396,7 +2414,7 @@ int block_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf,
 		   get_block_t get_block)
 {
 	int ret;
-	struct super_block *sb = vma->vm_file->f_path.dentry->d_inode->i_sb;
+	struct super_block *sb = file_inode(vma->vm_file)->i_sb;
 
 	/*
 	 * This check is racy but catches the common case. The check in

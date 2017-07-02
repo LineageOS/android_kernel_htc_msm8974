@@ -804,7 +804,11 @@ module_param(ep_addr_txdbg_mask, uint, S_IRUGO | S_IWUSR);
 #define DBG_DATA_MSG   64UL
 
 /* Maximum number of messages */
+#ifdef CONFIG_HTC_USB_DEBUG_FLAG
+#define DBG_DATA_MAX   1024UL
+#else
 #define DBG_DATA_MAX   128UL
+#endif
 
 static struct {
 	char     (buf[DBG_DATA_MAX])[DBG_DATA_MSG];   /* buffer */
