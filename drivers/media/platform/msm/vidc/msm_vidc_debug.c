@@ -13,9 +13,10 @@
 
 #include "msm_vidc_debug.h"
 #include "vidc_hfi_api.h"
+#include "htc_msm_smem.h"
 
 #define MAX_DBG_BUF_SIZE 4096
-int msm_vidc_debug = VIDC_ERR | VIDC_WARN;
+int msm_vidc_debug = VIDC_ERR ;
 int msm_vidc_debug_out = VIDC_OUT_PRINTK;
 int msm_fw_debug = 0x18;
 int msm_fw_debug_mode = 0x1;
@@ -248,6 +249,16 @@ static ssize_t inst_info_read(struct file *file, char __user *buf,
 		size_t count, loff_t *ppos)
 {
 	struct msm_vidc_inst *inst = file->private_data;
+
+	
+	struct buffer_info *temp = NULL;
+	struct buffer_info *dummy = NULL;
+	struct list_head *list = NULL;
+	struct internal_buf *internal_buf = NULL;
+	struct list_head *ptr, *next;
+	struct ion_handle *ion_handle = NULL;
+	
+
 	int i, j;
 	if (!inst) {
 		dprintk(VIDC_ERR, "Invalid params, core: %p\n", inst);
@@ -263,6 +274,7 @@ static ssize_t inst_info_read(struct file *file, char __user *buf,
 	write_str(&dbg_buf, "width: %d\n", inst->prop.width[CAPTURE_PORT]);
 	write_str(&dbg_buf, "fps: %d\n", inst->prop.fps);
 	write_str(&dbg_buf, "state: %d\n", inst->state);
+	write_str(&dbg_buf, "Calling Process id: %d, name: %s\n", inst->call_pid, inst->process_name);
 	write_str(&dbg_buf, "-----------Formats-------------\n");
 	for (i = 0; i < MAX_PORT_NUM; i++) {
 		write_str(&dbg_buf, "capability: %s\n", i == OUTPUT_PORT ?
@@ -299,6 +311,38 @@ static ssize_t inst_info_read(struct file *file, char __user *buf,
 	write_str(&dbg_buf, "EBD Count: %d\n", inst->count.ebd);
 	write_str(&dbg_buf, "FTB Count: %d\n", inst->count.ftb);
 	write_str(&dbg_buf, "FBD Count: %d\n", inst->count.fbd);
+
+	
+	list = &inst->internalbufs;
+	mutex_lock(&inst->lock);
+	write_str(&dbg_buf, "-----------Buffer Information-----------\n");
+	list_for_each_safe(ptr, next, &inst->internalbufs) {
+		internal_buf = list_entry(ptr, struct internal_buf, list);
+		if (internal_buf) {
+			ion_handle = internal_buf->handle->smem_priv;
+			write_str(&dbg_buf,
+				"Scratch Buffer: ion_buffer: %p, size: %d\n",
+				ion_handle->buffer,
+				internal_buf->handle->size);
+		}
+	}
+
+	list = &inst->registered_bufs;
+	list_for_each_entry_safe(temp, dummy, list, list) {
+		if (temp) {
+			ion_handle = temp->handle[0]->smem_priv;
+			write_str(&dbg_buf,
+				"%s Buffer: User vaddr: %lx, ion_buffer: %p, size: %d\n",
+				(temp->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) ? "Output" : "Input",
+				temp->uvaddr[0],
+				ion_handle->buffer,
+				temp->size[0]);
+		} else {
+			write_str(&dbg_buf, "Failed Read\n");
+		}
+	}
+	mutex_unlock(&inst->lock);
+	
 	publish_unreleased_reference(inst);
 
 	return simple_read_from_buffer(buf, count, ppos,

@@ -2258,7 +2258,7 @@ static int hub_port_wait_reset(struct usb_hub *hub, int port1,
 
 			/* bomb out completely if the connection bounced */
 			if ((portchange & USB_PORT_STAT_C_CONNECTION))
-				return -ENOTCONN;
+				return -EAGAIN;
 
 			/* if we`ve finished resetting, then break out of
 			 * the loop
@@ -3200,7 +3200,6 @@ hub_port_init (struct usb_hub *hub, struct usb_device *udev, int port1,
 			}
 			udev->descriptor.bMaxPacketSize0 =
 					buf->bMaxPacketSize0;
-			kfree(buf);
 
 			/*
 			 * If it is a HSET Test device, we don't issue a
@@ -3219,6 +3218,9 @@ hub_port_init (struct usb_hub *hub, struct usb_device *udev, int port1,
 					goto fail;
 				}
 			}
+
+			kfree(buf);
+
 			if (r) {
 				dev_err(&udev->dev,
 					"device descriptor read/64, error %d\n",

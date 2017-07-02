@@ -15,10 +15,12 @@
 /include/ "msm8926-v1.dtsi"
 /include/ "msm8226-720p-mtp.dtsi"
 /include/ "msm8226-camera-sensor-mtp.dtsi"
+*/
 
 / {
 	model = "Qualcomm MSM 8926 MTP";
 	compatible = "qcom,msm8926-mtp", "qcom,msm8926", "qcom,mtp";
+	qcom,msm-id = <200 8 0>;
 	qcom,board-id = <8 0>;
 };
 

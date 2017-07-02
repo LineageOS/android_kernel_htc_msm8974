@@ -1538,7 +1538,7 @@ EXPORT_SYMBOL(touch_atime);
 
 void file_update_time(struct file *file)
 {
-	struct inode *inode = file->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(file);
 	struct timespec now;
 	enum { S_MTIME = 1, S_CTIME = 2, S_VERSION = 4 } sync_it = 0;
 
@@ -1737,6 +1737,9 @@ bool inode_owner_or_capable(const struct inode *inode)
 	if (current_user_ns() == ns && current_fsuid() == inode->i_uid)
 		return true;
 	if (ns_capable(ns, CAP_FOWNER))
+		return true;
+	if (current_user_ns() == ns &&
+		(inode->i_gid == AID_SDCARD_RW || inode->i_gid == AID_SDCARD_R))
 		return true;
 	return false;
 }

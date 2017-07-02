@@ -27,6 +27,20 @@
 #include <linux/seq_file.h>
 
 /**
+ * enum ion_heap_mem_usage - list of all ion memory statistics categories
+ * @ION_IN_USE:		Number of pages used by clients from heaps in ION_HEAP_TYPE_SYSTEM type
+ * @ION_TOTAL:		Number of pages allocated from buddy, including pages in use
+ *			and in free page pools
+ *
+ * @ION_USAGE_MAX:	Helper for iterating over memory statistics
+ */
+enum ion_heap_mem_usage {
+	ION_IN_USE = 0U,
+	ION_TOTAL = 1U,
+	ION_USAGE_MAX,
+};
+
+/**
  * struct mem_map_data - represents information about the memory map for a heap
  * @node:		list node used to store in the list of mem_map_data
  * @addr:		start address of memory region.
@@ -117,6 +131,26 @@ int ion_heap_allow_secure_allocation(enum ion_heap_type type);
 int ion_heap_allow_heap_secure(enum ion_heap_type type);
 
 int ion_heap_allow_handle_secure(enum ion_heap_type type);
+
+/**
+ * ion_alloc_inc_usage - Add memory usage into ion memory statistics
+ * 			 according to its usage
+ *
+ * @usage - the location of used memory
+ * @size - the size of used memory
+ */
+void ion_alloc_inc_usage(const enum ion_heap_mem_usage usage,
+			 const size_t size);
+
+/**
+ * ion_alloc_dec_usage - subtract memory usage from ion memory statistics
+ * 			 according to its usage
+ *
+ * @usage - the location of used memory
+ * @size - the size of used memory
+ */
+void ion_alloc_dec_usage(const enum ion_heap_mem_usage usage,
+			 const size_t size);
 
 /**
  * ion_create_chunked_sg_table - helper function to create sg table

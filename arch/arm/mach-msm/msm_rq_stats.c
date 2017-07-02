@@ -37,6 +37,7 @@
 #define DEFAULT_DEF_TIMER_JIFFIES 5
 
 struct notifier_block freq_transition;
+struct notifier_block policy_change;
 struct notifier_block cpu_hotplug;
 
 struct cpu_load_data {
@@ -187,6 +188,21 @@ static int cpufreq_transition_handler(struct notifier_block *nb,
 		break;
 	}
 	return 0;
+}
+
+static int policy_change_handler(struct notifier_block *nb,
+			unsigned long val, void *data)
+{
+	struct cpufreq_policy *policy = data;
+	switch (val) {
+	case CPUFREQ_NOTIFY:
+		{
+			struct cpu_load_data *pcpu = &per_cpu(cpuload, policy->cpu);
+			pcpu->policy_max = policy->max;
+			break;
+		}
+	}
+	return NOTIFY_OK;
 }
 
 static int cpu_hotplug_handler(struct notifier_block *nb,
@@ -405,9 +421,12 @@ static int __init msm_rq_stats_init(void)
 		cpumask_copy(pcpu->related_cpus, cpu_policy.cpus);
 	}
 	freq_transition.notifier_call = cpufreq_transition_handler;
+	policy_change.notifier_call = policy_change_handler;
 	cpu_hotplug.notifier_call = cpu_hotplug_handler;
 	cpufreq_register_notifier(&freq_transition,
 					CPUFREQ_TRANSITION_NOTIFIER);
+	cpufreq_register_notifier(&policy_change,
+					CPUFREQ_POLICY_NOTIFIER);
 	register_hotcpu_notifier(&cpu_hotplug);
 
 	return ret;
