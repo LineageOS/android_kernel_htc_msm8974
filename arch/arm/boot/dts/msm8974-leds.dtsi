@@ -12,45 +12,6 @@
  */
 
 &pm8941_lsid1 {
-	qcom,leds@d000 {
-		status = "okay";
-		qcom,rgb_0 {
-			label = "rgb";
-			linux,name = "led:rgb_red";
-			qcom,mode = "pwm";
-			qcom,pwm-channel = <6>;
-			qcom,pwm-us = <1000>;
-			qcom,max-current = <12>;
-			qcom,default-state = "off";
-			qcom,id = <3>;
-			linux,default-trigger =
-				"battery-charging";
-		};
-
-		qcom,rgb_1 {
-			label = "rgb";
-			linux,name = "led:rgb_green";
-			qcom,mode = "pwm";
-			qcom,pwm-channel = <5>;
-			qcom,pwm-us = <1000>;
-			qcom,max-current = <12>;
-			qcom,default-state = "off";
-			qcom,id = <4>;
-			linux,default-trigger = "battery-full";
-		};
-
-		qcom,rgb_2 {
-			label = "rgb";
-			linux,name = "led:rgb_blue";
-			qcom,mode = "pwm";
-			qcom,pwm-channel = <4>;
-			qcom,pwm-us = <1000>;
-			qcom,max-current = <12>;
-			qcom,id = <5>;
-			status = "disabled";
-		};
-	};
-
 	qcom,leds@d100 {
 		status = "disabled";
 	};
@@ -60,7 +21,7 @@
 	};
 
 	qcom,leds@d300 {
-		status = "okay";
+		status = "disable";
 		pm8941_flash0: qcom,flash_0 {
 			qcom,max-current = <1000>;
 			qcom,default-state = "off";
@@ -75,6 +36,7 @@
 			qcom,id = <1>;
 			linux,name = "led:flash_0";
 			qcom,current = <625>;
+			qcom,turn-off-delay-ms = <600>;
 		};
 
 		pm8941_flash1: qcom,flash_1 {
@@ -91,6 +53,7 @@
 			qcom,id = <2>;
 			linux,name = "led:flash_1";
 			qcom,current = <625>;
+			qcom,turn-off-delay-ms = <600>;
 		};
 
 		pm8941_torch: qcom,flash_torch {
@@ -105,6 +68,10 @@
 			linux,name = "led:flash_torch";
 			qcom,current = <200>;
 			qcom,torch-enable;
+		};
+
+		qcom,leds@e200 {
+			status = "disabled";
 		};
 	};
 
