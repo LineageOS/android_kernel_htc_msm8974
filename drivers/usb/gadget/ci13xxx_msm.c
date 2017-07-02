@@ -11,6 +11,7 @@
 #include <linux/usb/msm_hsusb_hw.h>
 #include <linux/usb/ulpi.h>
 #include <linux/gpio.h>
+#include <linux/usb/htc_info.h>
 
 #include "ci13xxx_udc.c"
 
@@ -361,9 +362,19 @@ int ci13xxx_msm_remove(struct platform_device *pdev)
 	return 0;
 }
 
-void ci13xxx_msm_shutdown(struct platform_device *pdev)
+static void ci13xxx_msm_shutdown(struct platform_device *pdev)
 {
-	ci13xxx_pullup(&_udc->gadget, 0);
+	struct msm_otg *motg;
+	struct ci13xxx *udc = _udc;
+
+	if (!udc || !udc->transceiver)
+		return;
+
+	motg = container_of(udc->transceiver, struct msm_otg, phy);
+
+	if (!atomic_read(&motg->in_lpm))
+		ci13xxx_pullup(&udc->gadget, 0);
+
 }
 
 void msm_hw_bam_disable(bool bam_disable)
