@@ -104,6 +104,10 @@ static int do_il2_rw(char *str_tmp)
 	il2index = 0;
 	sscanf(str_tmp, "%lx:%c:%lx:%d", &il2index, &rw, &write_value,
 								&cpu);
+	if (cpu >= NR_CPUS) {
+		pr_err("cpaccess: Wrong Entry for 'cpu'.\n");
+		return -EINVAL;
+	}
 	per_cpu(cp_param.il2index, cpu) = il2index;
 	per_cpu(cp_param.rw, cpu) = rw;
 	per_cpu(cp_param.write_value, cpu) = write_value;
@@ -226,7 +230,11 @@ static int get_register_params(char *str_tmp)
 	int cnt = 0;
 
 	il2index = 0;
-	strncpy(type, strsep(&str_tmp, ":"), TYPE_MAX_CHARACTERS);
+	if (!strchr(str_tmp, ':')) {
+		pr_err("cpaccess: Not a valid input. Entered: %s\n", str_tmp);
+		return -EINVAL;
+	}
+	strncpy(type, strsep(&str_tmp, ":"), sizeof(type) - 1);
 
 	if (strncasecmp(type, "C", TYPE_MAX_CHARACTERS) == 0) {
 

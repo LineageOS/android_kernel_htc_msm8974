@@ -53,6 +53,18 @@ skip_pc_debug3:
 
 	.data
 
+	.globl msm_pm_pc_pgd
+msm_pm_pc_pgd:
+	.long	0x0
+
+	.globl msm_saved_state
+msm_saved_state:
+	.long	0x0
+
+	.globl msm_saved_state_phys
+msm_saved_state_phys:
+	.long	0x0
+
 	.globl msm_pm_boot_vector
 msm_pm_boot_vector:
 	.space  4 * NR_CPUS

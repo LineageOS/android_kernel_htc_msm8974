@@ -28,15 +28,22 @@
 #include <linux/of_gpio.h>
 
 #include <mach/subsystem_restart.h>
+#include <mach/restart.h>
 #include <mach/clk.h>
 #include <mach/msm_smsm.h>
 #include <mach/ramdump.h>
 #include <mach/msm_smem.h>
+#if defined(CONFIG_HTC_FEATURES_SSR)
+#include <mach/devices_dtb.h>
+#include <mach/devices_cmdline.h>
+#endif
 
+#include "smd_private.h"
 #include "peripheral-loader.h"
 #include "pil-q6v5.h"
 #include "pil-msa.h"
 #include "sysmon.h"
+ #include "pil-q6v5-mss-debug.h"
 
 #define MAX_VDD_MSS_UV		1150000
 #define PROXY_TIMEOUT_MS	10000
@@ -83,6 +90,7 @@ static void restart_modem(struct modem_data *drv)
 {
 	log_modem_sfr();
 	drv->ignore_errors = true;
+	modem_read_spmi_setting(get_radio_flag() & BIT(3));
 	subsystem_restart_dev(drv->subsys);
 }
 
@@ -96,7 +104,13 @@ static irqreturn_t modem_err_fatal_intr_handler(int irq, void *dev_id)
 
 	pr_err("Fatal error on the modem.\n");
 	subsys_set_crash_status(drv->subsys, true);
-	restart_modem(drv);
+	if (smd_smsm_erase_efs()) {
+		pr_err("Unrecoverable efs, need to reboot and erase"
+				"modem_st1/st2 partitions...\n");
+		msm_restart(RESTART_MODE_ERASE_EFS, "force-hard");
+	} else {
+		restart_modem(drv);
+	}
 	return IRQ_HANDLED;
 }
 
@@ -189,7 +203,7 @@ static int adsp_state_notifier_fn(struct notifier_block *this,
 	int ret;
 	ret = sysmon_send_event(SYSMON_SS_MODEM, "adsp", code);
 	if (ret < 0)
-		pr_err("%s: sysmon_send_event failed (%d).", __func__, ret);
+		pr_err("%s: sysmon_send_event failed (%d).\n", __func__, ret);
 	return NOTIFY_DONE;
 }
 
@@ -261,6 +275,52 @@ static int __devinit pil_subsys_init(struct modem_data *drv,
 		goto err_subsys;
 	}
 
+#if defined(CONFIG_HTC_FEATURES_SSR)
+	/*modem restart condition and ramdump rule would follow below
+	1. Modem restart default enable
+	- flag [6] 0,   [8] 0 -> enable restart, no ramdump
+	- flag [6] 800, [8] 0 -> reboot
+	- flag [6] 800, [8] 8 -> disable restart, go DL mode
+	- flag [6] 0,   [8] 8 -> enable restart, online ramdump
+	2. Modem restart default disable
+	- flag [6] 0,   [8] 0 -> reboot
+	- flag [6] 800, [8] 0 -> enable restart, no ramdump
+	- flag [6] 800, [8] 8 -> enable restartm online ramdump
+	- flag [6] 0,   [8] 8 -> disable restart, go DL mode
+	3. Always disable Modem SSR if boot_mode != normal
+	*/
+#if defined(CONFIG_HTC_FEATURES_SSR_MODEM_ENABLE)
+	if (get_kernel_flag() & (KERNEL_FLAG_ENABLE_SSR_MODEM)) {
+			subsys_set_restart_level(drv->subsys, RESET_SOC);
+			subsys_set_enable_ramdump(drv->subsys, DISABLE_RAMDUMP);
+	}
+	else {
+		subsys_set_restart_level(drv->subsys, RESET_SUBSYS_COUPLED);
+		if (get_radio_flag() & BIT(3))
+			subsys_set_enable_ramdump(drv->subsys, ENABLE_RAMDUMP);
+		else
+			subsys_set_enable_ramdump(drv->subsys, DISABLE_RAMDUMP);
+	}
+#else
+	if (get_kernel_flag() & (KERNEL_FLAG_ENABLE_SSR_MODEM)) {
+		subsys_set_restart_level(drv->subsys, RESET_SUBSYS_COUPLED);
+		if (get_radio_flag() & BIT(3))
+			subsys_set_enable_ramdump(drv->subsys, ENABLE_RAMDUMP);
+		else
+			subsys_set_enable_ramdump(drv->subsys, DISABLE_RAMDUMP);
+	}
+	else {
+		subsys_set_restart_level(drv->subsys, RESET_SOC);
+		subsys_set_enable_ramdump(drv->subsys, DISABLE_RAMDUMP);
+	}
+#endif
+
+	if (board_mfg_mode() != 0) {
+		subsys_set_restart_level(drv->subsys, RESET_SOC);
+		subsys_set_enable_ramdump(drv->subsys, DISABLE_RAMDUMP);
+	}
+#endif
+
 	drv->ramdump_dev = create_ramdump_device("modem", &pdev->dev);
 	if (!drv->ramdump_dev) {
 		pr_err("%s: Unable to create a modem ramdump device.\n",
@@ -273,7 +333,7 @@ static int __devinit pil_subsys_init(struct modem_data *drv,
 						&adsp_state_notifier_block);
 	if (IS_ERR(drv->adsp_state_notifier)) {
 		ret = PTR_ERR(drv->adsp_state_notifier);
-		dev_err(&pdev->dev, "%s: Registration with the SSR notification driver failed (%d)",
+		dev_err(&pdev->dev, "%s: Registration with the SSR notification driver failed (%d)\n",
 			__func__, ret);
 		goto err_irq;
 	}
@@ -319,7 +379,10 @@ static int __devinit pil_mss_loadable_init(struct modem_data *drv,
 	if (q6->self_auth) {
 		res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
 						    "rmb_base");
+		if (!res)
+			return -ENOMEM;
 		q6->rmb_base = devm_request_and_ioremap(&pdev->dev, res);
+		q6->rmb_base_phys = (phys_addr_t*)res->start;
 		if (!q6->rmb_base)
 			return -ENOMEM;
 		mba->rmb_base = q6->rmb_base;

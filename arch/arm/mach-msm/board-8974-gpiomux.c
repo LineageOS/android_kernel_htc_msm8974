@@ -19,8 +19,9 @@
 #include <mach/gpiomux.h>
 #include <mach/socinfo.h>
 
+#if 0
 #define KS8851_IRQ_GPIO 94
-
+#endif
 #define WLAN_CLK	40
 #define WLAN_SET	39
 #define WLAN_DATA0	38
@@ -136,6 +137,7 @@ static struct gpiomux_setting slimbus = {
 };
 
 #if defined(CONFIG_KS8851) || defined(CONFIG_KS8851_MODULE)
+#if 0
 static struct gpiomux_setting gpio_eth_config = {
 	.pull = GPIOMUX_PULL_UP,
 	.drv = GPIOMUX_DRV_2MA,
@@ -147,12 +149,13 @@ static struct gpiomux_setting gpio_spi_cs2_config = {
 	.drv = GPIOMUX_DRV_6MA,
 	.pull = GPIOMUX_PULL_DOWN,
 };
-
+#endif
 static struct gpiomux_setting gpio_spi_config = {
 	.func = GPIOMUX_FUNC_1,
 	.drv = GPIOMUX_DRV_12MA,
 	.pull = GPIOMUX_PULL_NONE,
 };
+#if 0
 static struct gpiomux_setting gpio_spi_susp_config = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_2MA,
@@ -173,6 +176,7 @@ static struct msm_gpiomux_config msm_eth_configs[] = {
 		}
 	},
 };
+#endif
 #endif
 
 static struct gpiomux_setting gpio_suspend_config[] = {
@@ -310,6 +314,7 @@ static struct gpiomux_setting taiko_int = {
 	.drv = GPIOMUX_DRV_2MA,
 	.pull = GPIOMUX_PULL_NONE,
 };
+#if 0
 static struct gpiomux_setting hap_lvl_shft_suspended_config = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_2MA,
@@ -330,6 +335,7 @@ static struct msm_gpiomux_config hap_lvl_shft_config[] __initdata = {
 		},
 	},
 };
+#endif
 
 static struct msm_gpiomux_config msm_touch_configs[] __initdata = {
 	{
@@ -379,6 +385,48 @@ static struct gpiomux_setting hsic_resume_susp_cfg = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_2MA,
 	.pull = GPIOMUX_PULL_NONE,
+};
+
+static struct gpiomux_setting cir_cfg = {
+	.func = GPIOMUX_FUNC_2,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_NONE,
+};
+
+static struct msm_gpiomux_config msm_cir_configs[] = {
+	{
+		.gpio = 0,               /*CIR TX*/
+		.settings = {
+			[GPIOMUX_ACTIVE] = &cir_cfg,
+		},
+	},
+	{
+		.gpio = 1,               /*CIR RX */
+		.settings = {
+			[GPIOMUX_ACTIVE] = &cir_cfg,
+		},
+	},
+};
+
+static struct gpiomux_setting felica_cfg = {
+	.func = GPIOMUX_FUNC_2,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_NONE,
+};
+
+static struct msm_gpiomux_config msm_felica_configs[] = {
+	{
+		.gpio = 85,               /*FELICA TX*/
+		.settings = {
+			[GPIOMUX_ACTIVE] = &felica_cfg,
+		},
+	},
+	{
+		.gpio = 86,               /*FELICA RX */
+		.settings = {
+			[GPIOMUX_ACTIVE] = &felica_cfg,
+		},
+	},
 };
 
 static struct msm_gpiomux_config msm_hsic_configs[] = {
@@ -572,12 +620,14 @@ static struct msm_gpiomux_config msm_epm_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &gpio_epm_config,
 		},
 	},
+#if 0
 	{
 		.gpio      = 85,		/* EPM MARKER2 */
 		.settings = {
 			[GPIOMUX_SUSPENDED] = &gpio_epm_marker_config,
 		},
 	},
+#endif
 	{
 		.gpio      = 96,		/* EPM MARKER1 */
 		.settings = {
@@ -588,6 +638,7 @@ static struct msm_gpiomux_config msm_epm_configs[] __initdata = {
 
 static struct msm_gpiomux_config msm_blsp_configs[] __initdata = {
 #if defined(CONFIG_KS8851) || defined(CONFIG_KS8851_MODULE)
+#if 0
 	{
 		.gpio      = 0,		/* BLSP1 QUP SPI_DATA_MOSI */
 		.settings = {
@@ -609,6 +660,8 @@ static struct msm_gpiomux_config msm_blsp_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &gpio_spi_susp_config,
 		},
 	},
+#endif
+#if 0 	/*These 2 pins are used by headset 1-wire*/
 	{
 		.gpio      = 9,		/* BLSP1 QUP SPI_CS2A_N */
 		.settings = {
@@ -623,6 +676,7 @@ static struct msm_gpiomux_config msm_blsp_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &gpio_spi_susp_config,
 		},
 	},
+#endif
 #endif
 	{
 		.gpio      = 6,		/* BLSP1 QUP2 I2C_DAT */
@@ -674,6 +728,7 @@ static struct msm_gpiomux_config msm_blsp_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &gpio_i2c_config,
 		},
 	},
+#if defined(CONFIG_KS8851) || defined(CONFIG_KS8851_MODULE)
 	{
 		.gpio      = 53,		/* BLSP2 QUP4 SPI_DATA_MOSI */
 		.settings = {
@@ -702,6 +757,7 @@ static struct msm_gpiomux_config msm_blsp_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &gpio_suspend_config[0],
 		},
 	},
+#endif
 };
 
 static struct msm_gpiomux_config msm8974_slimbus_config[] __initdata = {
@@ -795,6 +851,7 @@ static struct msm_gpiomux_config msm_sensor_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &cam_settings[1],
 		},
 	},
+#if 0
 	{
 		.gpio = 18, /* WEBCAM1_RESET_N / CAM_MCLK3 */
 		.settings = {
@@ -802,6 +859,7 @@ static struct msm_gpiomux_config msm_sensor_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &cam_settings[4],
 		},
 	},
+#endif
 	{
 		.gpio = 19, /* CCI_I2C_SDA0 */
 		.settings = {
@@ -830,6 +888,7 @@ static struct msm_gpiomux_config msm_sensor_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &gpio_suspend_config[0],
 		},
 	},
+#if 0
 	{
 		.gpio = 23, /* FLASH_LED_EN */
 		.settings = {
@@ -837,6 +896,7 @@ static struct msm_gpiomux_config msm_sensor_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &gpio_suspend_config[1],
 		},
 	},
+#endif
 	{
 		.gpio = 24, /* FLASH_LED_NOW */
 		.settings = {
@@ -886,6 +946,7 @@ static struct msm_gpiomux_config msm_sensor_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &gpio_suspend_config[1],
 		},
 	},
+#if 0	/*used by headset driver */
 	{
 		.gpio = 91, /* CAM2_STANDBY_N */
 		.settings = {
@@ -893,6 +954,7 @@ static struct msm_gpiomux_config msm_sensor_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &gpio_suspend_config[1],
 		},
 	},
+#endif
 	{
 		.gpio = 92, /* CAM2_RST_N */
 		.settings = {
@@ -1046,6 +1108,7 @@ static struct gpiomux_setting auxpcm_sus_cfg = {
 
 /* Primary AUXPCM port sharing GPIO lines with Primary MI2S */
 static struct msm_gpiomux_config msm8974_pri_pri_auxpcm_configs[] __initdata = {
+#if 0 /*This pin is used by headset detection*/
 	{
 		.gpio = 65,
 		.settings = {
@@ -1053,6 +1116,7 @@ static struct msm_gpiomux_config msm8974_pri_pri_auxpcm_configs[] __initdata = {
 			[GPIOMUX_ACTIVE] = &auxpcm_act_cfg,
 		},
 	},
+#endif
 	{
 		.gpio = 66,
 		.settings = {
@@ -1445,11 +1509,6 @@ void __init msm_8974_init_gpiomux(void)
 	if (socinfo_get_version() >= 0x20000)
 		msm_tlmm_misc_reg_write(TLMM_SPARE_REG, 0xf);
 
-#if defined(CONFIG_KS8851) || defined(CONFIG_KS8851_MODULE)
-	if (!(of_board_is_dragonboard() && machine_is_apq8074()))
-		msm_gpiomux_install(msm_eth_configs, \
-			ARRAY_SIZE(msm_eth_configs));
-#endif
 	msm_gpiomux_install(msm_blsp_configs, ARRAY_SIZE(msm_blsp_configs));
 	msm_gpiomux_install(msm_blsp2_uart7_configs,
 			 ARRAY_SIZE(msm_blsp2_uart7_configs));
@@ -1462,8 +1521,10 @@ void __init msm_8974_init_gpiomux(void)
 			ARRAY_SIZE(msm8974_slimbus_config));
 
 	msm_gpiomux_install(msm_touch_configs, ARRAY_SIZE(msm_touch_configs));
+#if 0
 		msm_gpiomux_install(hap_lvl_shft_config,
 				ARRAY_SIZE(hap_lvl_shft_config));
+#endif
 
 	if (of_board_is_dragonboard() && machine_is_apq8074())
 		msm_gpiomux_install(msm_sensor_configs_dragonboard, \
@@ -1514,6 +1575,11 @@ void __init msm_8974_init_gpiomux(void)
 	if (of_board_is_rumi())
 		msm_gpiomux_install(msm_rumi_blsp_configs,
 				    ARRAY_SIZE(msm_rumi_blsp_configs));
+
+	msm_gpiomux_install(msm_cir_configs, ARRAY_SIZE(msm_cir_configs));
+
+	if (of_machine_pid() == 268 || of_board_is_m8wlj())
+		msm_gpiomux_install(msm_felica_configs, ARRAY_SIZE(msm_felica_configs));
 
 	if (socinfo_get_platform_subtype() == PLATFORM_SUBTYPE_MDM)
 		msm_gpiomux_install(mdm_configs,

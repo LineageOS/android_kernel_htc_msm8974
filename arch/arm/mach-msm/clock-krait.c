@@ -29,6 +29,10 @@
 
 static DEFINE_SPINLOCK(kpss_clock_reg_lock);
 
+static struct drv_data drv = {
+	.name = "clock_krait_drv",
+};
+
 #define LPL_SHIFT	8
 static void __kpss_mux_set_sel(struct mux_clk *mux, int sel)
 {
@@ -521,3 +525,21 @@ struct clk_ops clk_ops_kpss_l2 = {
 	.list_rate = kpss_core_list_rate,
 	.handoff = kpss_l2_handoff,
 };
+
+void clock_krait_init(struct device * dev,
+				const struct kpss_core_clk **krait_clk, int krait_clk_size, int speed, int pvs, int rev)
+{
+	drv.dev = dev;
+	drv.krait_clk = kmemdup(krait_clk, krait_clk_size, GFP_KERNEL);
+	BUG_ON(!drv.krait_clk);
+	drv.speed_bin = speed;
+	drv.pvs_bin = pvs;
+	drv.pvs_rev = rev;
+}
+
+unsigned long clock_krait_get_rate(int cpu)
+{
+	if(drv.krait_clk)
+		return drv.krait_clk[cpu]->c.rate;
+	return 0;
+}
