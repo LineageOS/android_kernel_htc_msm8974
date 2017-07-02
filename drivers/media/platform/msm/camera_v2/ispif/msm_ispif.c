@@ -50,6 +50,9 @@
 #define CDBG(fmt, args...) do { } while (0)
 #endif
 
+// HTC: for subcam no ack issue
+int g_subcam_vfe_intf = 0;
+
 static void msm_ispif_io_dump_reg(struct ispif_device *ispif)
 {
 	if (!ispif->enb_dump_reg)
@@ -556,6 +559,11 @@ static int msm_ispif_config(struct ispif_device *ispif,
 		intftype = params->entries[i].intftype;
 
 		vfe_intf = params->entries[i].vfe_intf;
+		// HTC: for subcam no ack issue
+		if(params->entries[i].csid == 1) {
+			g_subcam_vfe_intf = vfe_intf;
+			pr_info(" %s: sub cam  vfe_intf %d\n", __func__,g_subcam_vfe_intf);
+		}
 
 		CDBG("%s intftype %x, vfe_intf %d, csid %d\n", __func__,
 			intftype, vfe_intf, params->entries[i].csid);
@@ -1032,6 +1040,11 @@ end:
 static void msm_ispif_release(struct ispif_device *ispif)
 {
 	BUG_ON(!ispif);
+
+	if (!ispif->base) {
+		pr_err("%s: ispif base is NULL\n", __func__);
+		return;
+	}
 
 	if (ispif->ispif_state != ISPIF_POWER_UP) {
 		pr_err("%s: ispif invalid state %d\n", __func__,
