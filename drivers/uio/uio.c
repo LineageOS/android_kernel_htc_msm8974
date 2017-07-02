@@ -263,7 +263,7 @@ static struct class uio_class = {
  */
 static int uio_dev_add_attributes(struct uio_device *idev)
 {
-	int ret;
+	int ret = 0;
 	int mi, pi;
 	int map_found = 0;
 	int portio_found = 0;

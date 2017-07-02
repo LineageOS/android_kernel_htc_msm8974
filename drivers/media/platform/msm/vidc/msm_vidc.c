@@ -20,6 +20,7 @@
 #include "msm_venc.h"
 #include "msm_vidc_common.h"
 #include "msm_smem.h"
+#include "htc_msm_smem.h"
 #include <linux/delay.h>
 #include "vidc_hfi_api.h"
 
@@ -78,7 +79,6 @@ int msm_vidc_poll(void *instance, struct file *filp,
 	return get_poll_flags(inst);
 }
 
-/* Kernel client alternative for msm_vidc_poll */
 int msm_vidc_wait(void *instance)
 {
 	struct msm_vidc_inst *inst = instance;
@@ -399,14 +399,12 @@ static inline enum hal_buffer get_hal_buffer_type(
 	if (inst->session_type == MSM_VIDC_DECODER) {
 		if (b->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE)
 			return HAL_BUFFER_INPUT;
-		else /* V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE */
+		else 
 			return HAL_BUFFER_OUTPUT;
 	} else {
-		/* FIXME in the future.  See comment in msm_comm_get_\
-		 * domain_partition. Same problem here. */
 		if (b->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE)
 			return HAL_BUFFER_OUTPUT;
-		else /* V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE */
+		else 
 			return HAL_BUFFER_INPUT;
 	}
 	return -EINVAL;
@@ -480,14 +478,6 @@ int map_and_register_buf(struct msm_vidc_inst *inst, struct v4l2_buffer *b)
 
 		if (temp && is_dynamic_output_buffer_mode(b, inst) &&
 			(i == 0)) {
-			/*
-			* Buffer is already present in registered list
-			* increment ref_count, populate new values of v4l2
-			* buffer in existing buffer_info struct.
-			*
-			* We will use the saved buffer info and queue it when
-			* we receive RELEASE_BUFFER_REFERENCE EVENT from f/w.
-			*/
 			dprintk(VIDC_DBG, "[MAP] Buffer already prepared\n");
 			rc = buf_ref_get(inst, temp);
 			if (rc > 0) {
@@ -512,6 +502,12 @@ int map_and_register_buf(struct msm_vidc_inst *inst, struct v4l2_buffer *b)
 			binfo->handle[i] = same_fd_handle;
 		} else {
 			if (inst->map_output_buffer) {
+				
+				dprintk(VIDC_WARN,
+					"[Vidc_Mem][%p] Import_%s: UsrAddr(%x) FD(%d)\n",
+					inst, ((get_hal_buffer_type(inst, b) == HAL_BUFFER_INPUT)? "I":"O"),
+					binfo->uvaddr[i], b->m.planes[i].reserved[0]);
+				
 				binfo->handle[i] =
 					map_buffer(inst, &b->m.planes[i],
 						get_hal_buffer_type(inst, b));
@@ -530,7 +526,7 @@ int map_and_register_buf(struct msm_vidc_inst *inst, struct v4l2_buffer *b)
 					b->m.planes[i].m.userptr;
 			}
 		}
-		/* We maintain one ref count for all planes*/
+		
 		if ((i == 0) && is_dynamic_output_buffer_mode(b, inst)) {
 			rc = buf_ref_get(inst, binfo);
 			if (rc < 0)
@@ -567,10 +563,6 @@ int unmap_and_deregister_buf(struct msm_vidc_inst *inst,
 
 	mutex_lock(&inst->lock);
 	list = &inst->registered_bufs;
-	/*
-	* Make sure the buffer to be unmapped and deleted
-	* from the registered list is present in the list.
-	*/
 	list_for_each_entry_safe(temp, dummy, list, list) {
 		if (temp == binfo) {
 			found = true;
@@ -578,12 +570,6 @@ int unmap_and_deregister_buf(struct msm_vidc_inst *inst,
 		}
 	}
 
-	/*
-	* Free the buffer info only if
-	* - buffer info has not been deleted from registered list
-	* - vidc client has called dqbuf on the buffer
-	* - no references are held on the buffer
-	*/
 	if (!found || !temp || !temp->pending_deletion || !temp->dequeued)
 		goto exit;
 
@@ -593,15 +579,6 @@ int unmap_and_deregister_buf(struct msm_vidc_inst *inst,
 			__func__, temp, i, temp->handle[i],
 			temp->device_addr[i], temp->fd[i],
 			temp->buff_off[i], temp->mapped[i]);
-		/*
-		* Unmap the handle only if the buffer has been mapped and no
-		* other buffer has a reference to this buffer.
-		* In case of buffers with same fd, we will map the buffer only
-		* once and subsequent buffers will refer to the mapped buffer's
-		* device address.
-		* For buffers which share the same fd, do not unmap and keep
-		* the buffer info in registered list.
-		*/
 		if (temp->handle[i] && temp->mapped[i] &&
 			!temp->same_fd_ref[i]) {
 			dprintk(VIDC_DBG,
@@ -711,7 +688,7 @@ int msm_vidc_prepare_buf(void *instance, struct v4l2_buffer *b)
 		return -EINVAL;
 	}
 
-	/* Map the buffer only for non-kernel clients*/
+	
 	if (b->m.planes[0].reserved[0]) {
 		inst->map_output_buffer = true;
 		if (map_and_register_buf(inst, b))
@@ -733,6 +710,7 @@ int msm_vidc_release_buffers(void *instance, int buffer_type)
 	struct v4l2_buffer buffer_info;
 	struct v4l2_plane plane[VIDEO_MAX_PLANES];
 	int i, rc = 0;
+	bool release_buf = false;
 
 	if (!inst)
 		return -EINVAL;
@@ -746,11 +724,6 @@ int msm_vidc_release_buffers(void *instance, int buffer_type)
 		}
 	}
 
-	/*
-	* In dynamic buffer mode, driver needs to release resources,
-	* but not call release buffers on firmware, as the buffers
-	* were never registered with firmware.
-	*/
 	if ((buffer_type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) &&
 		(inst->buffer_mode_set[CAPTURE_PORT] ==
 				HAL_BUFFER_MODE_DYNAMIC)) {
@@ -758,7 +731,6 @@ int msm_vidc_release_buffers(void *instance, int buffer_type)
 	}
 
 	list_for_each_safe(ptr, next, &inst->registered_bufs) {
-		bool release_buf = false;
 		mutex_lock(&inst->lock);
 		bi = list_entry(ptr, struct buffer_info, list);
 		if (bi->type == buffer_type) {
@@ -1094,11 +1066,17 @@ void *msm_vidc_smem_get_client(void *instance)
 {
 	struct msm_vidc_inst *inst = instance;
 
-	if (!inst || !inst->mem_client) {
-		dprintk(VIDC_ERR, "%s: invalid instance or client = %p %p\n",
-				__func__, inst, inst->mem_client);
-		return NULL;
-	}
+        
+        if (!inst) {
+                dprintk(VIDC_ERR, "%s: invalid NULL instance\n", __func__);
+                return NULL;
+        }
+        if (!inst->mem_client) {
+                dprintk(VIDC_ERR, "%s: invalid NULL client (instance: %p)\n",
+                                __func__, inst);
+                return NULL;
+        }
+        
 
 	return inst->mem_client;
 }
@@ -1194,6 +1172,7 @@ void *msm_vidc_open(int core_id, int session_type)
 {
 	struct msm_vidc_inst *inst = NULL;
 	struct msm_vidc_core *core = NULL;
+	struct smem_client *smem_client = NULL;
 	int rc = 0;
 	int i = 0;
 	if (core_id >= MSM_VIDC_CORES_MAX ||
@@ -1223,7 +1202,7 @@ void *msm_vidc_open(int core_id, int session_type)
 	mutex_init(&inst->bufq[OUTPUT_PORT].lock);
 	mutex_init(&inst->lock);
 	inst->session_type = session_type;
-	INIT_MSM_VIDC_LIST(&inst->pendingq);
+	INIT_LIST_HEAD(&inst->pendingq);
 	INIT_LIST_HEAD(&inst->internalbufs);
 	INIT_LIST_HEAD(&inst->persistbufs);
 	INIT_LIST_HEAD(&inst->registered_bufs);
@@ -1237,12 +1216,18 @@ void *msm_vidc_open(int core_id, int session_type)
 		i <= SESSION_MSG_INDEX(SESSION_MSG_END); i++) {
 		init_completion(&inst->completions[i]);
 	}
-	inst->mem_client = msm_smem_new_client(SMEM_ION,
+	inst->mem_client = htc_msm_smem_new_client(SMEM_ION,
 					&inst->core->resources);
 	if (!inst->mem_client) {
 		dprintk(VIDC_ERR, "Failed to create memory client\n");
 		goto fail_mem_client;
 	}
+
+	
+	smem_client = inst->mem_client;
+	smem_client->inst = inst;
+	
+
 	if (session_type == MSM_VIDC_DECODER) {
 		msm_vdec_inst_init(inst);
 		msm_vdec_ctrl_init(inst);
@@ -1306,16 +1291,18 @@ err_invalid_core:
 
 static void cleanup_instance(struct msm_vidc_inst *inst)
 {
-	struct vb2_buf_entry *entry, *dummy;
+	struct list_head *ptr, *next;
+	struct vb2_buf_entry *entry;
 	if (inst) {
-		mutex_lock(&inst->pendingq.lock);
-		list_for_each_entry_safe(entry, dummy, &inst->pendingq.list,
-				list) {
-			list_del(&entry->list);
-			kfree(entry);
-		}
-		mutex_unlock(&inst->pendingq.lock);
 		mutex_lock(&inst->lock);
+		if (!list_empty(&inst->pendingq)) {
+			list_for_each_safe(ptr, next, &inst->pendingq) {
+				entry = list_entry(ptr, struct vb2_buf_entry,
+						list);
+				list_del(&entry->list);
+				kfree(entry);
+			}
+		}
 		if (!list_empty(&inst->internalbufs)) {
 			mutex_unlock(&inst->lock);
 			if (msm_comm_release_scratch_buffers(inst))

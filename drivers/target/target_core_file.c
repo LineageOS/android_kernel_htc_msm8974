@@ -304,7 +304,7 @@ static int fd_do_readv(struct se_task *task)
 	 * the expected virt_size for struct file w/o a backing struct
 	 * block_device.
 	 */
-	if (S_ISBLK(fd->f_dentry->d_inode->i_mode)) {
+	if (S_ISBLK(file_inode(fd)->i_mode)) {
 		if (ret < 0 || ret != task->task_size) {
 			pr_err("vfs_readv() returned %d,"
 				" expecting %d for S_ISBLK\n", ret,

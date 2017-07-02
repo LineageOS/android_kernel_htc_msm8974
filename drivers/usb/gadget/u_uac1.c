@@ -264,11 +264,12 @@ static int capture_prepare_params(struct gaudio_snd_dev *snd)
 
 	runtime->frame_bits = snd_pcm_format_physical_width(runtime->format);
 
-	kfree(params);
-
 	swparams = kzalloc(sizeof(*swparams), GFP_KERNEL);
 	if (!swparams) {
 		pr_err("Failed to allocate sw params");
+/*++ 2014/09/17, USB Team, PCN00046 ++*/
+		kfree(params);
+/*-- 2014/09/17, USB Team, PCN00046 --*/
 		return -ENOMEM;
 	}
 
@@ -276,6 +277,10 @@ static int capture_prepare_params(struct gaudio_snd_dev *snd)
 	period_size = pcm_period_size(params);
 	swparams->avail_min = period_size/2;
 	swparams->xfer_align = period_size/2;
+
+/*++ 2014/09/17, USB Team, PCN00046 ++*/
+	kfree(params);
+/*-- 2014/09/17, USB Team, PCN00046 --*/
 
 	swparams->tstamp_mode = SNDRV_PCM_TSTAMP_NONE;
 	swparams->period_step = 1;

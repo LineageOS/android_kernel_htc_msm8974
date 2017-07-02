@@ -20,7 +20,6 @@
 
 #define TZ_PROTECT_MEMORY 0x1
 
-/* filesystem parameters */
 #define MPU_MAGIC_LOCK 0x11
 #define MPU_MAGIC_UNLOCK 0x10
 
@@ -63,12 +62,6 @@ static void mem_prot_region(u64 start, u64 size, bool lock)
 
 	request.address = PAGE_ALIGN(start);
 	request.size =  PAGE_ALIGN(size);
-	/*
-	 * Permissions:  Write:         Read
-	 * 0x1           TZ             Anyone
-	 * 0x2           TZ             Tz, APPS
-	 * 0x3           TZ             Tz
-	 */
 	request.permission  = 0x1;
 	request.lock = lock;
 	request.arg = 0;

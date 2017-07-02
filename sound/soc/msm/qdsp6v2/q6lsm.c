@@ -59,11 +59,6 @@ struct lsm_common {
 
 static struct lsm_common lsm_common;
 
-/*
- * mmap_handle_p can point either client->sound_model.mem_map_handle or
- * lsm_common.mmap_handle_for_cal.
- * mmap_lock must be held while accessing this.
- */
 static spinlock_t mmap_lock;
 static uint32_t *mmap_handle_p;
 
@@ -247,6 +242,7 @@ void q6lsm_client_free(struct lsm_client *client)
 		return;
 	if (CHECK_SESSION(client->session)) {
 		pr_err("%s: Invalid Session %d", __func__, client->session);
+		kfree(client);
 		return;
 	}
 	apr_deregister(client->apr);
@@ -257,12 +253,6 @@ void q6lsm_client_free(struct lsm_client *client)
 	kfree(client);
 }
 
-/*
- * q6lsm_apr_send_pkt : If wait == true, hold mutex to prevent from preempting
- *			other thread's wait.
- *			If mmap_handle_p != NULL, disable irq and spin lock to
- *			protect mmap_handle_p
- */
 static int q6lsm_apr_send_pkt(struct lsm_client *client, void *handle,
 			      void *data, bool wait, uint32_t *mmap_p)
 {
@@ -439,7 +429,7 @@ int q6lsm_register_sound_model(struct lsm_client *client,
 	cmd.model_addr_lsw = lower_32_bits(client->sound_model.phys);
 	cmd.model_addr_msw = upper_32_bits(client->sound_model.phys);
 	cmd.model_size = client->sound_model.size;
-	/* read updated mem_map_handle by q6lsm_mmapcallback */
+	
 	rmb();
 	cmd.mem_map_handle = client->sound_model.mem_map_handle;
 
@@ -511,6 +501,8 @@ static int q6lsm_memory_map_regions(struct lsm_client *client,
 	int rc;
 	int cmd_size = 0;
 
+	if (!client)
+		return -EINVAL;
 	pr_debug("%s: dma_addr_p 0x%pa, dma_buf_sz %d, mmap_p 0x%p, session %d\n",
 		__func__, &dma_addr_p, dma_buf_sz, mmap_p,
 		client->session);
@@ -556,6 +548,9 @@ static int q6lsm_memory_unmap_regions(struct lsm_client *client,
 	struct avs_cmd_shared_mem_unmap_regions unmap;
 	int rc = 0;
 	int cmd_size = 0;
+
+	if (!client)
+		return -EINVAL;
 	if (CHECK_SESSION(client->session))
 		return -EINVAL;
 	cmd_size = sizeof(struct avs_cmd_shared_mem_unmap_regions);
@@ -581,12 +576,14 @@ static int q6lsm_send_cal(struct lsm_client *client)
 	struct lsm_cmd_set_params params;
 	struct acdb_cal_block lsm_cal;
 
+	if (!client)
+		return -EINVAL;
 	pr_debug("%s: Session %d\n", __func__, client->session);
 	if (CHECK_SESSION(client->session))
 		return -EINVAL;
 	memset(&lsm_cal, 0, sizeof(lsm_cal));
 	get_lsm_cal(&lsm_cal);
-	/* Cache mmap address, only map once or if new addr */
+	
 	lsm_common.common_client[client->session].session = client->session;
 	q6lsm_add_hdr(client, &params.hdr, sizeof(params), true);
 	params.hdr.opcode = LSM_SESSION_CMD_SET_PARAMS;
@@ -606,6 +603,8 @@ int q6lsm_snd_model_buf_free(struct lsm_client *client)
 {
 	int rc;
 
+	if (!client)
+		return -EINVAL;
 	pr_debug("%s: Session id %d\n", __func__, client->session);
 	if (CHECK_SESSION(client->session))
 		return -EINVAL;
@@ -639,7 +638,6 @@ static struct lsm_client *q6lsm_get_lsm_client(int session_id)
 	struct lsm_client *client = NULL;
 
 	if (session_id == LSM_CONTROL_SESSION) {
-		client = &lsm_common.common_client[session_id];
 		goto done;
 	}
 
@@ -655,9 +653,6 @@ done:
 	return client;
 }
 
-/*
- * q6lsm_mmapcallback : atomic context
- */
 static int q6lsm_mmapcallback(struct apr_client_data *data, void *priv)
 {
 	unsigned long flags;
@@ -692,7 +687,7 @@ static int q6lsm_mmapcallback(struct apr_client_data *data, void *priv)
 		if (atomic_read(&client->cmd_state) == CMD_STATE_WAIT_RESP) {
 			spin_lock_irqsave(&mmap_lock, flags);
 			*mmap_handle_p = command;
-			/* spin_unlock_irqrestore implies barrier */
+			
 			spin_unlock_irqrestore(&mmap_lock, flags);
 			atomic_set(&client->cmd_state, CMD_STATE_CLEARED);
 			wake_up(&client->cmd_wait);

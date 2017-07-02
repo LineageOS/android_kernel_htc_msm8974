@@ -245,6 +245,11 @@ flow_cache_lookup(struct net *net, const struct flowi *key, u16 family, u8 dir,
 		}
 	}
 
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (IS_ERR(fle))
+		printk(KERN_ERR "[CORE] fle is NULL in %s!\n", __func__);
+#endif
+
 	if (unlikely(!fle)) {
 		if (fcp->hash_count > fc->high_watermark)
 			flow_cache_shrink(fc, fcp);
@@ -374,6 +379,11 @@ static int __cpuinit flow_cache_cpu_prepare(struct flow_cache *fc, int cpu)
 {
 	struct flow_cache_percpu *fcp = per_cpu_ptr(fc->percpu, cpu);
 	size_t sz = sizeof(struct hlist_head) * flow_cache_hash_size(fc);
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (IS_ERR(fcp) || (!fcp))
+		printk(KERN_ERR "[CORE] fcp is NULL in %s!\n", __func__);
+#endif
 
 	if (!fcp->hash_table) {
 		fcp->hash_table = kzalloc_node(sz, GFP_KERNEL, cpu_to_node(cpu));

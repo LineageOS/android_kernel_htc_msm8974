@@ -195,6 +195,8 @@ bool mc_check_owner_fd(struct mc_instance *instance, int32_t fd)
 		return true;
 
 	fp = fcheck_files(current->files, fd);
+	if (!fp)
+		goto out;
 	s = __get_socket(fp);
 	if (s) {
 		peer = get_pid_task(s->sk_peer_pid, PIDTYPE_PID);

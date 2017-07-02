@@ -18,7 +18,6 @@
 #include <mach/camera.h>
 #include "msm_camera_i2c_mux.h"
 
-/* TODO move this somewhere else */
 #define MSM_I2C_MUX_DRV_NAME "msm_cam_i2c_mux"
 static int msm_i2c_mux_config(struct i2c_mux_device *mux_device, uint8_t *mode)
 {
@@ -161,7 +160,7 @@ static int __devinit i2c_mux_probe(struct platform_device *pdev)
 i2c_mux_no_resource:
 	mutex_destroy(&mux_device->mutex);
 	kfree(mux_device);
-	return 0;
+	return rc;
 }
 
 static struct platform_driver i2c_mux_driver = {

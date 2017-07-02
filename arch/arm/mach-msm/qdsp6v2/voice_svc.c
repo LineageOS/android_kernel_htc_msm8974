@@ -57,6 +57,7 @@ struct apr_response_list {
 
 static struct voice_svc_device *voice_svc_dev;
 static struct class *voice_svc_class;
+
 static bool reg_dummy_sess;
 static void *dummy_q6_mvm;
 static void *dummy_q6_cvs;
@@ -137,7 +138,7 @@ static int32_t qdsp_apr_callback(struct apr_client_data *data, void *priv)
 
 static int32_t qdsp_dummy_apr_callback(struct apr_client_data *data, void *priv)
 {
-	/* Do Nothing */
+	
 	return 0;
 }
 
@@ -277,7 +278,7 @@ static int voice_svc_dereg(char *svc, void **handle)
 		__func__, svc);
 
 done:
-	return 0;
+	return ret;
 }
 
 static int process_reg_cmd(struct voice_svc_register apr_reg_svc,
@@ -540,16 +541,11 @@ static int voice_svc_open(struct inode *inode, struct file *file)
 
 	file->private_data = (void*)prtd;
 
-	/* Current APR implementation doesn't support session based
-	 * multiple service registrations. The apr_deregister()
-	 * function sets the destination and client IDs to zero, if
-	 * deregister is called for a single service instance.
-	 * To avoid this, register for additional services.
-	 */
 	if (!reg_dummy_sess) {
 		voice_svc_dummy_reg();
 		reg_dummy_sess = 1;
 	}
+
 	return 0;
 }
 

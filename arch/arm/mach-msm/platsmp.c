@@ -26,6 +26,9 @@
 #include <mach/socinfo.h>
 #include <mach/hardware.h>
 #include <mach/msm_iomap.h>
+#ifdef CONFIG_HTC_DEBUG_FOOTPRINT
+#include <mach/htc_footprint.h>
+#endif
 
 #include "pm.h"
 #include "platsmp.h"
@@ -367,6 +370,10 @@ static void __init msm_platform_smp_prepare_cpus(unsigned int max_cpus)
 		}
 		flags |= cold_boot_flags[map];
 	}
+
+#ifdef CONFIG_HTC_DEBUG_FOOTPRINT
+	init_cpu_debug_counter_for_cold_boot();
+#endif
 
 	if (scm_set_boot_addr(virt_to_phys(msm_secondary_startup), flags))
 		pr_warn("Failed to set CPU boot address\n");

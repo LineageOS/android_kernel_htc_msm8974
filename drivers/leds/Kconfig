@@ -50,6 +50,14 @@ config LEDS_LM3530
 	  controlled manually or using PWM input or using ambient
 	  light automatically.
 
+config LEDS_LM3697
+	tristate "LCD Backlight driver for LM3697"
+	depends on LEDS_CLASS
+	depends on I2C
+	help
+	  This option enables support for the LCD backlight using
+	  LM3697 chip.
+
 config LEDS_LOCOMO
 	tristate "LED Support for Locomo device"
 	depends on LEDS_CLASS
@@ -568,6 +576,43 @@ config LEDS_TRIGGER_DEFAULT_ON
 	help
 	  This allows LEDs to be initialised in the ON state.
 	  If unsure, say Y.
+
+config FLASHLIGHT_TPS61310
+        tristate "TI TPS61310 flashlight"
+        help
+          Say Y here to enable the TI TPS61310 flashlight
+
+config FLASHLIGHT_TPS61310_FRONT
+        tristate "TI TPS61310 flashlight"
+        help
+          Say Y here to enable the TI TPS61310 flashlight
+
+config FLASHLIGHT_LM3643
+         tristate "TI LM3643 flashlight"
+         help
+           Say Y here to enable the TI LM3643 flashlight
+
+config FLASHLIGHT_1500mA
+	bool "FLASHLIGHT_1500mA"
+	depends on FLASHLIGHT_TPS61310
+	default n
+        help
+          Say Y here to enable the TI TPS61310 flashlight
+
+config FRONT_FLASHLIGHT_COMMON
+	tristate "FRONT_FLASHLIGHT_COMMON"
+          help
+            Say Y here to enable the front flashlight common
+
+
+config LEDS_LP5521_HTC
+	tristate "LED Support for N.S. LP5521 LED driver chip"
+	depends on LEDS_CLASS && I2C
+	help
+	  If you say yes here you get support for the National Semiconductor
+	  LP5521 LED driver. It is 3 channel chip with programmable engines.
+	  Driver provides direct control via LED class and interface for
+	  programming the engines.
 
 config LEDS_TRIGGER_SLEEP
 	tristate "LED Sleep Mode Trigger"

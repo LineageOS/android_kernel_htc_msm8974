@@ -940,6 +940,9 @@ struct journal_s
 	 * superblock pointer here
 	 */
 	void *j_private;
+
+	/* waiting for journal commit to complete */
+	atomic_t j_log_wait;
 };
 
 /*

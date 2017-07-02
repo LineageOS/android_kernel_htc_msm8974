@@ -37,7 +37,7 @@
 
 #ifndef ION_ADSPRPC_HEAP_ID
 #define ION_ADSPRPC_HEAP_ID ION_AUDIO_HEAP_ID
-#endif /*ION_ADSPRPC_HEAP_ID*/
+#endif 
 
 #define RPC_TIMEOUT	(5 * HZ)
 #define RPC_HASH_BITS	5
@@ -1312,9 +1312,6 @@ static int fastrpc_device_open(struct inode *inode, struct file *filp)
 	filp->private_data = 0;
 	if (0 != try_module_get(THIS_MODULE)) {
 		struct file_data *fdata = 0;
-		/* This call will cause a dev to be created
-		 * which will addref this module
-		 */
 		VERIFY(err, 0 != (fdata = kzalloc(sizeof(*fdata), GFP_KERNEL)));
 		if (err)
 			goto bail;

@@ -69,4 +69,4 @@ static inline gid_t user_ns_map_gid(struct user_namespace *to,
 
 #endif
 
-#endif /* _LINUX_USER_H */
+#endif 

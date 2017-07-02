@@ -562,18 +562,6 @@ struct hal_profile_level {
 	u32 profile;
 	u32 level;
 };
-/*
-struct hal_profile_level_range {
-	u32 profile;
-	u32 min_level;
-	u32 max_level;
-}
-
-struct hal_profile_level_supported {
-	u32 profile_count;
-	struct hal_profile_level_range profile_level[1];
-};
-*/
 enum hal_h264_entropy {
 	HAL_H264_ENTROPY_CAVLC = 1,
 	HAL_H264_ENTROPY_CABAC = 2,
@@ -719,7 +707,7 @@ struct hal_buffer_requirements {
 	u32 buffer_alignment;
 };
 
-enum hal_priority {/* Priority increases with number */
+enum hal_priority {
 	HAL_PRIORITY_LOW = 10,
 	HAL_PRIOIRTY_MEDIUM = 20,
 	HAL_PRIORITY_HIGH = 30,
@@ -943,10 +931,8 @@ struct hal_ltruse {
 struct hal_ltrmark {
 	u32 markframe;
 };
-/* HAL Response */
 
 enum command_response {
-/* SYSTEM COMMANDS_DONE*/
 	VIDC_EVENT_CHANGE,
 	SYS_INIT_DONE,
 	SET_RESOURCE_DONE,
@@ -957,7 +943,6 @@ enum command_response {
 	SYS_DEBUG,
 	SYS_WATCHDOG_TIMEOUT,
 	SYS_ERROR,
-/* SESSION COMMANDS_DONE */
 	SESSION_LOAD_RESOURCE_DONE,
 	SESSION_INIT_DONE,
 	SESSION_END_DONE,
@@ -980,7 +965,6 @@ enum command_response {
 	RESPONSE_UNUSED = 0x10000000,
 };
 
-/* Command Callback structure */
 
 struct msm_vidc_cb_cmd_done {
 	u32 device_id;
@@ -1001,7 +985,6 @@ struct msm_vidc_cb_event {
 	u8 *exra_data_buffer;
 };
 
-/* Data callback structure */
 
 struct vidc_hal_ebd {
 	u32 timestamp_hi;
@@ -1117,7 +1100,7 @@ enum dev_info {
 struct hfi_device {
 	void *hfi_device_data;
 
-	/*Add function pointers for all the hfi functions below*/
+	
 	int (*core_init)(void *device);
 	int (*core_release)(void *device);
 	int (*core_pc_prep)(void *device);
@@ -1181,4 +1164,4 @@ void vidc_hfi_deinitialize(enum msm_vidc_hfi_type hfi_type,
 			struct hfi_device *hdev);
 
 
-#endif /*__VIDC_HFI_API_H__ */
+#endif 

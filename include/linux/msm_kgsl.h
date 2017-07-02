@@ -849,6 +849,23 @@ struct kgsl_gpumem_sync_cache_bulk {
 
 #define IOCTL_KGSL_GPUMEM_SYNC_CACHE_BULK \
 	_IOWR(KGSL_IOC_TYPE, 0x3C, struct kgsl_gpumem_sync_cache_bulk)
+/*
+* kgsl_get_alloc_size - acquire memory size allocated in kernel space by kgsl
+* @detailed: to indicate if need detailed info,
+* set detailed to 1, if need the detailed info
+* of each gfx process for different type memory usage,
+* said ion, ashmem, kernel ...etc
+*
+* Returns allocated memory size and prints kgsl meminfo in kernel log if set detailed
+*/
+#ifdef CONFIG_MSM_KGSL
+unsigned int kgsl_get_alloc_size(int detailed);
+#else
+static inline int kgsl_get_alloc_size(int detailed)
+{
+	return 0;
+}
+#endif
 
 /*
  * struct kgsl_cmd_syncpoint_timestamp
