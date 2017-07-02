@@ -86,11 +86,18 @@ enum msm_camera_i2c_data_type {
 	MSM_CAMERA_I2C_DATA_TYPE_MAX,
 };
 
+enum msm_camera_i2c_command_type {
+	MSM_CAMERA_I2C_COMMAND_WRITE,
+	MSM_CAMERA_I2C_COMMAND_POLL,
+};
+
 enum msm_sensor_power_seq_type_t {
 	SENSOR_CLK,
 	SENSOR_GPIO,
 	SENSOR_VREG,
+	SENSOR_VREG_NCP6924,
 	SENSOR_I2C_MUX,
+	SENSOR_CHECK_CAMID,
 };
 
 enum msm_sensor_clk_type_t {
@@ -102,6 +109,7 @@ enum msm_sensor_clk_type_t {
 enum msm_sensor_power_seq_gpio_t {
 	SENSOR_GPIO_RESET,
 	SENSOR_GPIO_STANDBY,
+	SENSOR_GPIO_VCM_PWD,
 	SENSOR_GPIO_AF_PWDM,
 	SENSOR_GPIO_VIO,
 	SENSOR_GPIO_VANA,
@@ -109,6 +117,7 @@ enum msm_sensor_power_seq_gpio_t {
 	SENSOR_GPIO_VAF,
 	SENSOR_GPIO_FL_EN,
 	SENSOR_GPIO_FL_NOW,
+	SENSOR_GPIO_CAMID,
 	SENSOR_GPIO_MAX,
 };
 
@@ -118,6 +127,14 @@ enum msm_camera_vreg_name_t {
 	CAM_VANA,
 	CAM_VAF,
 	CAM_VREG_MAX,
+};
+
+enum msm_camera_ncp6924_vreg_name_t {
+	NCP6924_VDIG,
+	NCP6924_VIO,
+	NCP6924_VANA,
+	NCP6924_VAF,
+	NCP6924_VREG_MAX,
 };
 
 enum msm_sensor_resolution_t {
@@ -272,6 +289,7 @@ struct msm_camera_i2c_reg_setting {
 	enum msm_camera_i2c_reg_addr_type addr_type;
 	enum msm_camera_i2c_data_type data_type;
 	uint16_t delay;
+	enum msm_camera_i2c_command_type cmd_type;
 };
 
 struct msm_camera_i2c_seq_reg_array {
@@ -346,6 +364,7 @@ struct csi_lane_params_t {
 enum camb_position_t {
 	BACK_CAMERA_B,
 	FRONT_CAMERA_B,
+	SUB_CAMERA_B,
 	INVALID_CAMERA_B,
 };
 
@@ -357,6 +376,10 @@ struct msm_sensor_info_t {
 	uint32_t sensor_mount_angle;
 	int modes_supported;
 	enum camb_position_t position;
+
+	uint32_t  sensor_mirror_flip;
+	uint8_t  OTP_INFO[5];
+	uint8_t  fuse_id[4];
 };
 
 struct camera_vreg_t {
@@ -365,6 +388,7 @@ struct camera_vreg_t {
 	int min_voltage;
 	int max_voltage;
 	int op_mode;
+	int32_t gpios_index;
 	uint32_t delay;
 };
 
@@ -383,6 +407,34 @@ struct msm_sensor_init_params {
 	uint32_t            sensor_mount_angle;
 };
 
+struct fuse_id{
+	uint32_t fuse_id_word1;
+	uint32_t fuse_id_word2;
+	uint32_t fuse_id_word3;
+	uint32_t fuse_id_word4;
+};
+
+typedef struct{
+	char    ACT_NAME[MAX_ACT_NAME_SIZE];
+	uint8_t VCM_START_MSB;
+	uint8_t VCM_START_LSB;
+	uint8_t AF_INF_MSB;
+	uint8_t AF_INF_LSB;
+	uint8_t AF_MACRO_MSB;
+	uint8_t AF_MACRO_LSB;
+	uint8_t VCM_BIAS;
+	uint8_t VCM_OFFSET;
+	uint8_t VCM_BOTTOM_MECH_MSB;
+	uint8_t VCM_BOTTOM_MECH_LSB;
+	uint8_t VCM_TOP_MECH_MSB;
+	uint8_t VCM_TOP_MECH_LSB;
+	uint8_t VCM_VENDOR_ID_VERSION;
+	uint8_t VCM_VENDOR;
+	uint8_t ACT_ID;
+	uint32_t MODULE_ID_AB;
+	uint8_t LENS_ID;
+}af_value_t;
+
 struct msm_camera_sensor_slave_info {
 	char sensor_name[32];
 	char eeprom_name[32];
@@ -398,10 +450,15 @@ struct msm_camera_sensor_slave_info {
 
 struct sensorb_cfg_data {
 	int cfgtype;
+	int8_t sensor_ver;
+	int8_t lens_id;
+	af_value_t af_value;
 	union {
 		struct msm_sensor_info_t      sensor_info;
 		struct msm_sensor_init_params sensor_init_params;
 		void                         *setting;
+
+		struct fuse_id fuse;
 	} cfg;
 };
 
@@ -487,16 +544,66 @@ enum msm_sensor_cfg_type_t {
 	CFG_SET_WHITE_BALANCE,
 	CFG_SET_AUTOFOCUS,
 	CFG_CANCEL_AUTOFOCUS,
+	CFG_RAWCHIPII_SETTING,
+	CFG_I2C_IOCTL_R_OTP,
+	CFG_RAWCHIPII_STOP,
+};
+
+enum msm_camera_pixel_order_default {
+	MSM_CAMERA_PIXEL_ORDER_GR,
+	MSM_CAMERA_PIXEL_ORDER_RG,
+	MSM_CAMERA_PIXEL_ORDER_BG,
+	MSM_CAMERA_PIXEL_ORDER_GB,
+};
+
+enum htc_camera_image_type {
+	HTC_CAMERA_IMAGE_NONE,
+	HTC_CAMERA_IMAGE_YUSHANII,
+	HTC_CAMERA_IMAGE_MAX,
+};
+
+struct msm_rawchip2_cfg_data {
+	uint16_t x_output;
+	uint16_t y_output;
+	uint16_t line_length_pclk;
+	uint16_t frame_length_lines;
+	uint32_t vt_pixel_clk;
+	uint32_t op_pixel_clk;
+	uint8_t dt;
+	uint8_t lane_cnt;
+	int mirror_flip;
+	uint8_t is_hdr;
+	int res;
+	uint16_t x_addr_start;
+	uint16_t y_addr_start;
+	uint16_t binning_factor;
+	enum msm_camera_pixel_order_default pixel_order_default;
+	uint8_t yushan_status_line_enable;
+	uint8_t yushan_status_line;
+	int stop_yushanii_first;
+	int yushanII_switch_virtual_channel;
+	uint8_t yushan_sensor_status_line;
+	int channel_offset;
+	int channel_B_offset;
+	int channel_GB_offset;
+	int channel_GR_offset;
+	int channel_R_offset;
 };
 
 enum msm_actuator_cfg_type_t {
+	CFG_SET_ACTUATOR_AF_VALUE,
 	CFG_GET_ACTUATOR_INFO,
 	CFG_SET_ACTUATOR_INFO,
 	CFG_SET_DEFAULT_FOCUS,
 	CFG_MOVE_FOCUS,
 	CFG_SET_POSITION,
-	CFG_ACTUATOR_POWERDOWN,
-	CFG_ACTUATOR_POWERUP,
+	CFG_ACTUATOR_STOP,
+	CFG_SET_OIS_MODE,
+	CFG_UPDATE_OIS_TBL,
+	CFG_IAF_MOVE_FOCUS,
+	CFG_GET_VCM_SORTING,
+	CFG_GET_VCM_LOOP_GAIN_SORTING,
+	CFG_GET_ACT_STABLE_INFO,
 };
 
 enum actuator_type {
@@ -514,18 +621,9 @@ enum msm_actuator_addr_type {
 	MSM_ACTUATOR_WORD_ADDR,
 };
 
-enum msm_actuator_i2c_operation {
-	MSM_ACT_WRITE = 0,
-	MSM_ACT_POLL,
-};
-
 struct reg_settings_t {
 	uint16_t reg_addr;
-	enum msm_actuator_addr_type addr_type;
 	uint16_t reg_data;
-	enum msm_actuator_data_type data_type;
-	enum msm_actuator_i2c_operation i2c_operation;
-	uint32_t delay;
 };
 
 struct region_params_t {
@@ -571,9 +669,17 @@ struct msm_actuator_params_t {
 	struct reg_settings_t *init_settings;
 };
 
+enum actuator_I2C_func_select {
+	WRITE_SEQ_TABLE,
+	WRITE_TABLE_W_MICRODELAY,
+	WRITE_MULTI_TABLE
+};
+
 struct msm_actuator_set_info_t {
 	struct msm_actuator_params_t actuator_params;
 	struct msm_actuator_tuning_params_t af_tuning_params;
+	uint16_t *step_position_table;
+	enum actuator_I2C_func_select act_i2c_select;
 };
 
 struct msm_actuator_get_info_t {
@@ -603,6 +709,72 @@ enum af_camera_name {
 	ACTUATOR_WEB_CAM_2,
 };
 
+struct msm_actuator_af_OTP_info_t {
+	uint8_t VCM_OTP_Read;
+	uint16_t VCM_Start;
+	uint16_t VCM_Infinity;
+	uint16_t VCM_Macro;
+
+	uint8_t VCM_Bias;
+	uint8_t VCM_Offset;
+	uint16_t VCM_Bottom_Mech;
+	uint16_t VCM_Top_Mech;
+	uint8_t VCM_Vendor_Id_Version;
+
+	uint8_t VCM_Vendor;
+	uint8_t act_id;
+	char act_name[MAX_SENSOR_NAME];
+	uint32_t MODULE_ID_AB;
+	uint8_t LENS_ID;
+};
+
+struct msm_actuator_get_ois_info_t {
+	uint32_t gyro_info;
+	uint8_t ois_index;
+};
+
+struct msm_actuator_get_ois_tbl_t {
+	uint32_t tbl_thre[5];
+	uint32_t tbl_info[9][2];
+};
+
+enum ois_cal_mode_type_t {
+	OIS_CAL_MODE_READ_FIRMWARE,
+	OIS_CAL_MODE_COLLECT_DATA,
+	OIS_CAL_MODE_WRITE_FIRMWARE,
+};
+
+struct msm_actuator_get_ois_cal_info_t {
+	int16_t x_offset;
+	int16_t y_offset;
+	int16_t temperature;
+	int8_t x_slope;
+	int8_t y_slope;
+
+	enum ois_cal_mode_type_t ois_cal_mode;
+	int16_t cal_collect_interval;
+	int16_t lens_position;
+	int8_t write_flash_status;
+	int8_t otp_check_pass;
+	int8_t cal_method;
+	int8_t cal_current_point;
+	int8_t cal_max_point;
+	int8_t bypass_ois_cal;
+};
+
+typedef enum {
+	CAM_MODE_CAMERA_PREVIEW,
+	CAM_MODE_VIDEO_RECORDING,
+} camera_video_mode_type;
+
+struct sensor_actuator_info_t {
+	int16_t startup_mode;
+	camera_video_mode_type cam_mode;
+	uint32_t cur_line_cnt;
+	uint32_t cur_exp_time;
+	int32_t zoom_level;
+	int16_t fast_reset_mode;
+};
 
 struct msm_actuator_set_position_t {
 	uint16_t number_of_steps;
@@ -613,13 +785,32 @@ struct msm_actuator_set_position_t {
 struct msm_actuator_cfg_data {
 	int cfgtype;
 	uint8_t is_af_supported;
+	int is_ois_supported;
+	char act_name[MAX_ACT_NAME_SIZE];
+
+	uint8_t small_step_damping;
+	uint8_t medium_step_damping;
+	uint8_t big_step_damping;
+	uint8_t is_af_infinity_supported;
+	int32_t is_act_unstable;
 	union {
 		struct msm_actuator_move_params_t move;
 		struct msm_actuator_set_info_t set_info;
 		struct msm_actuator_get_info_t get_info;
 		struct msm_actuator_set_position_t setpos;
 		enum af_camera_name cam_name;
+
+		af_value_t af_value;
+
+		int16_t ois_mode;
+		struct sensor_actuator_info_t sensor_actuator_info;
 	} cfg;
+
+	int16_t max_diff;
+	uint32_t gain_G1[5];
+	uint32_t gain_G2[5];
+	uint8_t vcm_freq;
+	uint16_t vcm_freq_ms22e;
 };
 
 enum msm_actuator_write_type {
@@ -645,6 +836,7 @@ enum msm_camera_led_config_t {
 
 struct msm_camera_led_cfg_t {
 	enum msm_camera_led_config_t cfgtype;
+	uint32_t ma_value;
 	uint32_t torch_current;
 	uint32_t flash_current[2];
 };
