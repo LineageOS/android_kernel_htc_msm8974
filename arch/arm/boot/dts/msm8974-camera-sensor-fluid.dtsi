@@ -59,8 +59,8 @@
 		qcom,cam-vreg-op-mode = <105000 0 80000 100000>;
 		qcom,gpio-no-mux = <0>;
 		gpios = <&msmgpio 15 0>,
-			<&msmgpio 90 0>,
-			<&msmgpio 89 0>;
+			<&msmgpio 90 0>;
+			/*<&msmgpio 89 0>;*/
 		qcom,gpio-reset = <1>;
 		qcom,gpio-standby = <2>;
 		qcom,gpio-req-tbl-num = <0 1 2>;
@@ -101,8 +101,8 @@
 		qcom,cam-vreg-op-mode = <105000 0 80000 100000>;
 		qcom,gpio-no-mux = <0>;
 		gpios = <&msmgpio 15 0>,
-			<&msmgpio 90 0>,
-			<&msmgpio 89 0>;
+			<&msmgpio 90 0>;
+			/*<&msmgpio 89 0>;*/
 		qcom,gpio-reset = <1>;
 		qcom,gpio-standby = <2>;
 		qcom,gpio-req-tbl-num = <0 1 2>;

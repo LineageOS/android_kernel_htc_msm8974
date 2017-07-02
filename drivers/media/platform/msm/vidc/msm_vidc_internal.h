@@ -101,17 +101,6 @@ struct buf_info {
 	struct vb2_buffer *buf;
 };
 
-struct msm_vidc_list {
-	struct list_head list;
-	struct mutex lock;
-};
-
-static inline void INIT_MSM_VIDC_LIST(struct msm_vidc_list *mlist)
-{
-	mutex_init(&mlist->lock);
-	INIT_LIST_HEAD(&mlist->list);
-}
-
 enum buffer_owner {
 	DRIVER,
 	FIRMWARE,
@@ -238,7 +227,7 @@ struct msm_vidc_inst {
 	int state;
 	struct msm_vidc_format *fmts[MAX_PORT_NUM];
 	struct buf_queue bufq[MAX_PORT_NUM];
-	struct msm_vidc_list pendingq;
+	struct list_head pendingq;
 	struct list_head internalbufs;
 	struct list_head persistbufs;
 	struct list_head outputbufs;
@@ -266,6 +255,10 @@ struct msm_vidc_inst {
 	struct list_head registered_bufs;
 	bool map_output_buffer;
 	struct v4l2_ctrl **ctrls;
+	/* HTC_START: Pass calling process id and name in kernel space */
+	pid_t call_pid;
+	char process_name[50];
+	/* HTC_END */
 };
 
 extern struct msm_vidc_drv *vidc_driver;

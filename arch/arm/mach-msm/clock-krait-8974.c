@@ -72,6 +72,7 @@ static struct hfpll_clk hfpll0_clk = {
 		.fmax = hfpll_fmax,
 		.num_fmax = ARRAY_SIZE(hfpll_fmax),
 		CLK_INIT(hfpll0_clk.c),
+		.flags = CLKFLAG_VOTE_VDD_DELAY,
 	},
 };
 
@@ -88,6 +89,7 @@ static struct hfpll_clk hfpll1_clk = {
 		.fmax = hfpll_fmax,
 		.num_fmax = ARRAY_SIZE(hfpll_fmax),
 		CLK_INIT(hfpll1_clk.c),
+		.flags = CLKFLAG_VOTE_VDD_DELAY,
 	},
 };
 
@@ -104,6 +106,7 @@ static struct hfpll_clk hfpll2_clk = {
 		.fmax = hfpll_fmax,
 		.num_fmax = ARRAY_SIZE(hfpll_fmax),
 		CLK_INIT(hfpll2_clk.c),
+		.flags = CLKFLAG_VOTE_VDD_DELAY,
 	},
 };
 
@@ -120,6 +123,7 @@ static struct hfpll_clk hfpll3_clk = {
 		.fmax = hfpll_fmax,
 		.num_fmax = ARRAY_SIZE(hfpll_fmax),
 		CLK_INIT(hfpll3_clk.c),
+		.flags = CLKFLAG_VOTE_VDD_DELAY,
 	},
 };
 
@@ -136,6 +140,7 @@ static struct hfpll_clk hfpll_l2_clk = {
 		.fmax = hfpll_fmax,
 		.num_fmax = ARRAY_SIZE(hfpll_fmax),
 		CLK_INIT(hfpll_l2_clk.c),
+		.flags = CLKFLAG_VOTE_VDD_DELAY,
 	},
 };
 
@@ -320,6 +325,7 @@ static struct kpss_core_clk krait0_clk = {
 		.ops = &clk_ops_kpss_cpu,
 		.vdd_class = &vdd_krait0,
 		CLK_INIT(krait0_clk.c),
+		.flags = CLKFLAG_CPU_CLK | CLKFLAG_VOTE_VDD_DELAY,
 	},
 };
 
@@ -332,6 +338,7 @@ static struct kpss_core_clk krait1_clk = {
 		.ops = &clk_ops_kpss_cpu,
 		.vdd_class = &vdd_krait1,
 		CLK_INIT(krait1_clk.c),
+		.flags = CLKFLAG_CPU_CLK | CLKFLAG_VOTE_VDD_DELAY,
 	},
 };
 
@@ -344,6 +351,7 @@ static struct kpss_core_clk krait2_clk = {
 		.ops = &clk_ops_kpss_cpu,
 		.vdd_class = &vdd_krait2,
 		CLK_INIT(krait2_clk.c),
+		.flags = CLKFLAG_CPU_CLK | CLKFLAG_VOTE_VDD_DELAY,
 	},
 };
 
@@ -356,6 +364,7 @@ static struct kpss_core_clk krait3_clk = {
 		.ops = &clk_ops_kpss_cpu,
 		.vdd_class = &vdd_krait3,
 		CLK_INIT(krait3_clk.c),
+		.flags = CLKFLAG_CPU_CLK | CLKFLAG_VOTE_VDD_DELAY,
 	},
 };
 
@@ -367,6 +376,7 @@ static struct kpss_core_clk l2_clk = {
 		.ops = &clk_ops_kpss_l2,
 		.vdd_class = &vdd_l2,
 		CLK_INIT(l2_clk.c),
+		.flags = CLKFLAG_L2_CLK | CLKFLAG_VOTE_VDD_DELAY,
 	},
 };
 
@@ -411,6 +421,14 @@ static struct clk *cpu_clk[] = {
 	&krait1_clk.c,
 	&krait2_clk.c,
 	&krait3_clk.c,
+};
+
+static struct kpss_core_clk *krait_clk[] = {
+	&krait0_clk,
+	&krait1_clk,
+	&krait2_clk,
+	&krait3_clk,
+	&l2_clk,
 };
 
 static void get_krait_bin_format_b(struct platform_device *pdev,
@@ -685,7 +703,7 @@ static int clock_krait_8974_driver_probe(struct platform_device *pdev)
 	}
 
 	get_krait_bin_format_b(pdev, &speed, &pvs, &pvs_ver);
-	snprintf(table_name, ARRAY_SIZE(table_name),
+	snprintf(table_name, sizeof(table_name) - 1,
 			"qcom,speed%d-pvs%d-bin-v%d", speed, pvs, pvs_ver);
 
 	rows = parse_tbl(dev, table_name, 3,
@@ -783,6 +801,8 @@ static int clock_krait_8974_driver_probe(struct platform_device *pdev)
 		clk_set_rate(c, clk_round_rate(c, cur_rate));
 		pr_info("CPU%d @ %lu KHz\n", cpu, clk_get_rate(c) / 1000);
 	}
+
+	clock_krait_init(dev, (const struct kpss_core_clk **)krait_clk, sizeof(krait_clk), speed, pvs, pvs_ver);
 
 	return 0;
 }

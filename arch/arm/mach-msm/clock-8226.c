@@ -26,6 +26,10 @@
 #include <mach/rpm-smd.h>
 #include <mach/clock-generic.h>
 
+#ifdef CONFIG_HTC_RPM_CMD
+#include "rpm_htc_cmd.h"
+#endif
+
 #include "clock-local2.h"
 #include "clock-pll.h"
 #include "clock-rpm.h"
@@ -2855,6 +2859,7 @@ static struct pll_clk a7sspll = {
 		.main_output_mask = BIT(0),
 	},
 	.base = &virt_bases[APCS_PLL_BASE],
+	.rcg_debug_base = &virt_bases[APCS_BASE],
 	.c = {
 		.parent = &xo_a_clk.c,
 		.dbg_name = "a7sspll",
@@ -3147,9 +3152,8 @@ static struct clk_lookup msm_clocks_8226[] = {
 	CLK_LOOKUP("iface_clk",   gcc_mss_cfg_ahb_clk.c, "fc880000.qcom,mss"),
 	CLK_LOOKUP("mem_clk",    gcc_boot_rom_ahb_clk.c, "fc880000.qcom,mss"),
 
-	/* NFC */
-	CLK_LOOKUP("ref_clk",            cxo_d1_a_pin.c, ""),
-	CLK_LOOKUP("ref_clk",            cxo_d1_pin.c, "2-000e"),
+	
+	CLK_LOOKUP("ref_clk",            cxo_d1_a_pin.c, "2-000e"),
 
 	/* PIL-PRONTO */
 	CLK_LOOKUP("xo", cxo_pil_pronto_clk.c, "fb21b000.qcom,pronto"),
@@ -3285,15 +3289,27 @@ static struct clk_lookup msm_clocks_8226[] = {
 	CLK_LOOKUP("iface_clk",          gcc_blsp1_ahb_clk.c, "f9926000.i2c"),
 	CLK_LOOKUP("core_clk", gcc_blsp1_qup4_i2c_apps_clk.c, "f9926000.i2c"),
 
-	CLK_LOOKUP("iface_clk", gcc_blsp1_ahb_clk.c, "f9927000.i2c"),
+	CLK_LOOKUP("iface_clk",          gcc_blsp1_ahb_clk.c, "f9927000.i2c"),
 	CLK_LOOKUP("core_clk", gcc_blsp1_qup5_i2c_apps_clk.c, "f9927000.i2c"),
 
-	/* I2C Clocks nfc */
-	CLK_LOOKUP("iface_clk",          gcc_blsp1_ahb_clk.c, "f9925000.i2c"),
-	CLK_LOOKUP("core_clk", gcc_blsp1_qup3_i2c_apps_clk.c, "f9925000.i2c"),
-	/* lsuart-v14 Clocks */
-	CLK_LOOKUP("iface_clk",       gcc_blsp1_ahb_clk.c, "f991f000.serial"),
-	CLK_LOOKUP("core_clk", gcc_blsp1_uart3_apps_clk.c, "f991f000.serial"),
+	CLK_LOOKUP("iface_clk",          gcc_blsp1_ahb_clk.c, "f9928000.i2c"),
+	CLK_LOOKUP("core_clk", gcc_blsp1_qup6_i2c_apps_clk.c, "f9928000.i2c"),
+
+	CLK_LOOKUP("iface_clk",          gcc_blsp1_ahb_clk.c, "f9924000.i2c"),
+	CLK_LOOKUP("core_clk", gcc_blsp1_qup2_i2c_apps_clk.c, "f9924000.i2c"),
+
+	CLK_LOOKUP("iface_clk",          gcc_blsp1_ahb_clk.c, "f9923000.i2c"),
+	CLK_LOOKUP("core_clk", gcc_blsp1_qup1_i2c_apps_clk.c, "f9923000.i2c"),
+
+	
+	
+	
+
+	CLK_LOOKUP("iface_clk", gcc_blsp1_ahb_clk.c, "f991e000.serial"),
+	CLK_LOOKUP("core_clk", gcc_blsp1_uart2_apps_clk.c, "f991e000.serial"),
+
+	CLK_LOOKUP("iface_clk", gcc_blsp1_ahb_clk.c, "f9920000.serial"),
+	CLK_LOOKUP("core_clk", gcc_blsp1_uart4_apps_clk.c, "f9920000.serial"),
 
 	CLK_LOOKUP("iface_clk",       gcc_blsp1_ahb_clk.c, "f995e000.serial"),
 	CLK_LOOKUP("core_clk", gcc_blsp1_uart2_apps_clk.c, "f995e000.serial"),
@@ -3414,17 +3430,15 @@ static struct clk_lookup msm_clocks_8226[] = {
 	CLK_LOOKUP("cam_src_clk", mclk0_clk_src.c, "6d.qcom,camera"),
 	CLK_LOOKUP("cam_src_clk", mclk0_clk_src.c, "6a.qcom,camera"),
 	CLK_LOOKUP("cam_src_clk", mclk0_clk_src.c, "6c.qcom,camera"),
-	CLK_LOOKUP("cam_src_clk", mclk0_clk_src.c, "20.qcom,camera"),
+	CLK_LOOKUP("cam_src_clk", mclk1_clk_src.c, "20.qcom,camera"), 
+	CLK_LOOKUP("cam_src_clk", mclk1_clk_src.c, "22.qcom,camera"), 
 	CLK_LOOKUP("cam_clk", camss_mclk0_clk.c, "6f.qcom,camera"),
 	CLK_LOOKUP("cam_clk", camss_mclk1_clk.c, "90.qcom,camera"),
 	CLK_LOOKUP("cam_clk", camss_mclk0_clk.c, "6d.qcom,camera"),
 	CLK_LOOKUP("cam_clk", camss_mclk0_clk.c, "6a.qcom,camera"),
 	CLK_LOOKUP("cam_clk", camss_mclk0_clk.c, "6c.qcom,camera"),
-	CLK_LOOKUP("cam_clk", camss_mclk0_clk.c, "20.qcom,camera"),
-	CLK_LOOKUP("cam_src_clk", mclk0_clk_src.c, "0.qcom,camera"),
-	CLK_LOOKUP("cam_src_clk", mclk0_clk_src.c, "1.qcom,camera"),
-	CLK_LOOKUP("cam_clk", camss_mclk0_clk.c, "0.qcom,camera"),
-	CLK_LOOKUP("cam_clk", camss_mclk0_clk.c, "1.qcom,camera"),
+	CLK_LOOKUP("cam_clk", camss_mclk1_clk.c, "20.qcom,camera"), 
+	CLK_LOOKUP("cam_clk", camss_mclk1_clk.c, "22.qcom,camera"), 
 
 	/* eeprom clocks */
 	CLK_LOOKUP("cam_src_clk", mclk0_clk_src.c, "6c.qcom,eeprom"),
@@ -3796,3 +3810,15 @@ struct clock_init_data msm8226_clock_init_data __initdata = {
 	.pre_init = msm8226_clock_pre_init,
 	.post_init = msm8226_clock_post_init,
 };
+
+void keep_dig_voltage_low_in_idle(bool on)
+{
+#ifdef CONFIG_HTC_RPM_CMD
+	htc_rpm_cmd_hold_vdd_dig(on);
+#else
+	if (on)
+		vote_vdd_level(&vdd_dig, VDD_DIG_LOW);
+	else
+		unvote_vdd_level(&vdd_dig, VDD_DIG_LOW);
+#endif
+}

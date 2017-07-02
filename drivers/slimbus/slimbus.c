@@ -291,6 +291,7 @@ static void slim_report(struct work_struct *work)
 	struct slim_driver *sbdrv;
 	struct slim_device *sbdev =
 			container_of(work, struct slim_device, wd);
+
 	if (!sbdev->dev.driver)
 		return;
 	/* check if device-up or down needs to be called */
@@ -657,7 +658,8 @@ void slim_framer_booted(struct slim_controller *ctrl)
 	mutex_lock(&ctrl->m_ctrl);
 	list_for_each_safe(pos, next, &ctrl->devs) {
 		struct slim_driver *sbdrv;
-		sbdev = list_entry(pos, struct slim_device, dev_list);
+		if (pos)
+			sbdev = list_entry(pos, struct slim_device, dev_list);
 		mutex_unlock(&ctrl->m_ctrl);
 		if (sbdev && sbdev->dev.driver) {
 			sbdrv = to_slim_driver(sbdev->dev.driver);
