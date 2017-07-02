@@ -461,3 +461,21 @@ config SND_SOC_MSM_HDMI_CODEC_RX
 	help
 	HDMI audio drivers should be built only if the platform
         supports hdmi panel.
+
+config AMP_RT5506
+	tristate "Richtek RT5506 AMP Driver"
+	depends on I2C=y
+	help
+	  Richtek RT5506 AMP Driver implemented by HTC.
+
+config AMP_TFA9887
+	tristate "NXP TFA9887 Speaker AMP Driver"
+	depends on I2C=y
+	help
+	  NXP TFA9887 Speaker AMP Driver implemented by HTC.
+
+config AMP_TFA9887L
+	tristate "NXP TFA9887L Speaker AMP Driver"
+	depends on I2C=y
+	help
+	  NXP TFA9887L Speaker AMP Driver implemented by HTC.
