@@ -123,6 +123,7 @@ obj-$(CONFIG_VLYNQ)		+= vlynq/
 obj-$(CONFIG_STAGING)		+= staging/
 obj-y				+= platform/
 obj-y				+= ieee802154/
+obj-$(CONFIG_FELICA_CXD2235_DD)	+= felica/
 #common clk code
 obj-y				+= clk/
 

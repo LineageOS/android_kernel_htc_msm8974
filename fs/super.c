@@ -787,10 +787,15 @@ cancel_readonly:
 	return retval;
 }
 
+extern int get_partition_num_by_name(char *name);
 static void do_emergency_remount(struct work_struct *work)
 {
 	struct super_block *sb, *p = NULL;
+	char ptn_name[64];
 
+	/* umount devlog before emergency remount */
+	umount2("/devlog", MNT_DETACH);
+	umount2("/fataldevlog", MNT_DETACH);
 	spin_lock(&sb_lock);
 	list_for_each_entry(sb, &super_blocks, s_list) {
 		if (hlist_unhashed(&sb->s_instances))
@@ -803,7 +808,10 @@ static void do_emergency_remount(struct work_struct *work)
 			/*
 			 * What lock protects sb->s_flags??
 			 */
-			do_remount_sb(sb, MS_RDONLY, NULL, 1);
+			/* ext4 KP workaround: don't remount devlog partition */
+			sprintf(ptn_name, "mmcblk0p%d", get_partition_num_by_name("devlog"));
+			if (strcmp(sb->s_id, ptn_name))
+				do_remount_sb(sb, MS_RDONLY, NULL, 1);
 		}
 		up_write(&sb->s_umount);
 		spin_lock(&sb_lock);
