@@ -1254,7 +1254,14 @@ int gpio_request(unsigned gpio, const char *label)
 		desc_set_label(desc, label ? : "?");
 		status = 0;
 	} else {
+		const char* desc_label = NULL;
 		status = -EBUSY;
+#ifdef CONFIG_DEBUG_FS
+		/* the `desc->label' only exists when CONFIG_DEBUG_FS is set */
+		desc_label = desc->label;
+#endif
+		pr_err("gpio_request: request gpio-%d (%s) but already occupied by %s\n",
+			gpio, label ? : "?", desc_label ? : "unknown");
 		module_put(chip->owner);
 		goto done;
 	}

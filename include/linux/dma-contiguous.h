@@ -67,6 +67,7 @@ struct device;
 
 
 phys_addr_t cma_get_base(struct device *dev);
+bool cma_area_exist(struct device *dev);
 
 extern struct cma *dma_contiguous_def_area;
 
@@ -149,6 +150,11 @@ bool dma_release_from_contiguous(struct device *dev, struct page *pages,
 static inline phys_addr_t cma_get_base(struct device *dev)
 {
 	return 0;
+}
+
+static inline bool cma_area_exist(struct device *dev)
+{
+	return false;
 }
 
 #endif

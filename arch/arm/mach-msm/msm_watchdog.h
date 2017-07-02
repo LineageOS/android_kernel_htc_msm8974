@@ -80,4 +80,8 @@ void pet_watchdog(void);
 static inline void pet_watchdog(void) { }
 #endif
 
+static inline void msm_watchdog_bark(void) {}
+static inline int msm_watchdog_suspend_deferred(void) { return 0; }
+static inline int msm_watchdog_resume_deferred(void) { return 0; }
+
 #endif
