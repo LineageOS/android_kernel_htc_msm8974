@@ -51,9 +51,11 @@
 #include <asm/byteorder.h>
 #include <mach/board.h>
 #include <mach/msm_serial_hs_lite.h>
+#include <mach/devices_dtb.h>
 #include <mach/msm_bus.h>
 #include <asm/mach-types.h>
 #include "msm_serial_hs_hwreg.h"
+#include <mach/devices_cmdline.h>
 
 /*
  * There are 3 different kind of UART Core available on MSM.
@@ -97,6 +99,9 @@ struct msm_hsl_port {
 	/* BLSP UART required BUS Scaling data */
 	struct msm_bus_scale_pdata *bus_scale_table;
 };
+
+static int msm_serial_hsl_enable;
+static unsigned msm_serial_hsl_felica;
 
 #define UARTDM_VERSION_11_13	0
 #define UARTDM_VERSION_14	1
@@ -1347,6 +1352,33 @@ static struct msm_hsl_port msm_hsl_uart_ports[] = {
 			.line = 2,
 		},
 	},
+	{
+		.uart = {
+			.iotype = UPIO_MEM,
+			.ops = &msm_hsl_uart_pops,
+			.flags = UPF_BOOT_AUTOCONF,
+			.fifosize = 64,
+			.line = 3,
+		},
+	},
+	{
+		.uart = {
+			.iotype = UPIO_MEM,
+			.ops = &msm_hsl_uart_pops,
+			.flags = UPF_BOOT_AUTOCONF,
+			.fifosize = 64,
+			.line = 4,
+		},
+	},
+	{
+		.uart = {
+			.iotype = UPIO_MEM,
+			.ops = &msm_hsl_uart_pops,
+			.flags = UPF_BOOT_AUTOCONF,
+			.fifosize = 64,
+			.line = 5,
+		},
+	},
 };
 
 #define UART_NR	ARRAY_SIZE(msm_hsl_uart_ports)
@@ -1681,6 +1713,13 @@ static struct msm_serial_hslite_platform_data
 
 	pdata->use_pm = of_property_read_bool(node, "qcom,use-pm");
 
+	msm_serial_hsl_felica = 0;
+	ret = of_property_read_u32(node, "felica,line",
+				&msm_serial_hsl_felica);
+	if ((ret == 0) && (msm_serial_hsl_felica != 0)) {
+		pr_info("felica detected: %d\n", msm_serial_hsl_felica);
+	}
+
 	return pdata;
 }
 
@@ -1719,6 +1758,11 @@ static int __devinit msm_serial_hsl_probe(struct platform_device *pdev)
 			return PTR_ERR(pdata);
 
 		pdev->dev.platform_data = pdata;
+	}
+
+	if (msm_serial_hsl_felica != 0) {
+		pdev->id = msm_serial_hsl_felica;
+		line = pdev->id;
 	}
 
 	if (unlikely(line < 0 || line >= UART_NR))
@@ -1960,6 +2004,13 @@ static int __init msm_serial_hsl_init(void)
 {
 	int ret;
 
+	/* Switch Uart Debug by Kernel Flag  */
+	if (get_kernel_flag() & KERNEL_FLAG_SERIAL_HSL_ENABLE)
+		msm_serial_hsl_enable = 1;
+
+	if (!msm_serial_hsl_enable)
+		msm_hsl_uart_driver.cons = NULL;
+
 	ret = uart_register_driver(&msm_hsl_uart_driver);
 	if (unlikely(ret))
 		return ret;
@@ -1981,7 +2032,8 @@ static void __exit msm_serial_hsl_exit(void)
 {
 	debugfs_remove_recursive(debug_base);
 #ifdef CONFIG_SERIAL_MSM_HSL_CONSOLE
-	unregister_console(&msm_hsl_console);
+	if (msm_serial_hsl_enable)
+		unregister_console(&msm_hsl_console);
 #endif
 	platform_driver_unregister(&msm_hsl_platform_driver);
 	uart_unregister_driver(&msm_hsl_uart_driver);
