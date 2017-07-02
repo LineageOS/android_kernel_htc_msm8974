@@ -200,7 +200,8 @@ static int xhci_plat_probe(struct platform_device *pdev)
 		pm_runtime_no_callbacks(&pdev->dev);
 	}
 
-	pm_runtime_put(&pdev->dev);
+	/* HTC: don't allow usb to suspend even if no OTG device is attached */
+	//pm_runtime_put(&pdev->dev);
 
 	return 0;
 

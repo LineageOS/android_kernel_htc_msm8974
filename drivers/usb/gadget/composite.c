@@ -65,6 +65,82 @@ MODULE_PARM_DESC(iSerialNumber, "SerialNumber string");
 
 static char composite_manufacturer[50];
 
+#define REQUEST_RESET_DELAYED (HZ / 10) /* 100 ms */
+int htcctusbcmd;
+void mfg_check_white_line(void);
+
+static ssize_t print_switch_name(struct switch_dev *sdev, char *buf)
+{
+	return sprintf(buf, "%s\n", sdev->name);
+}
+
+static ssize_t print_switch_state(struct switch_dev *sdev, char *buf)
+{
+	return sprintf(buf, "%s\n", (htcctusbcmd ? "Capture" : "None"));
+}
+
+static char *envp[3] = {"SWITCH_NAME=htcctusbcmd",
+			"SWITCH_STATE=Capture", 0};
+
+static char *vzw_cdrom_envp_type3[4] = {"SWITCH_NAME=htcctusbcmd",
+			"SWITCH_STATE=UNMOUNTEDCDROM",
+			"CDROM_TYPE=3", 0};
+
+static char *vzw_cdrom_envp_type4[4] = {"SWITCH_NAME=htcctusbcmd",
+			"SWITCH_STATE=UNMOUNTEDCDROM",
+			"CDROM_TYPE=4", 0};
+
+static const char ctusbcmd_switch_name[] = "htcctusbcmd";
+
+static void ctusbcmd_do_work(struct work_struct *w)
+{
+	struct usb_composite_dev *cdev = container_of(w, struct usb_composite_dev, cdusbcmdwork);
+
+	pr_debug("%s: Capture !\n", __func__);
+	kobject_uevent_env(&cdev->compositesdev.dev->kobj, KOBJ_CHANGE, envp);
+}
+
+static void ctusbcmd_vzw_unmount_work(struct work_struct *w)
+{
+	struct usb_composite_dev *cdev = container_of(w, struct usb_composite_dev, cdusbcmd_vzw_unmount_work.work);
+	pr_debug("%s: UNMOUNTEDCDROM !mask 0x%x\n", __func__,cdev->unmount_cdrom_mask);
+	if (cdev->unmount_cdrom_mask & 1 << 3)
+		kobject_uevent_env(&cdev->compositesdev.dev->kobj, KOBJ_CHANGE, vzw_cdrom_envp_type3);
+	if (cdev->unmount_cdrom_mask & 1 << 4)
+		kobject_uevent_env(&cdev->compositesdev.dev->kobj, KOBJ_CHANGE, vzw_cdrom_envp_type4);
+}
+
+static void composite_disconnect(struct usb_gadget *gadget);
+static int usb_autobot_mode(void);
+static void mtp_update_mode(int _mac_mtp_mode);
+static void fsg_update_mode(int _linux_fsg_mode);
+static bool is_mtp_enable(void);
+void usb_composite_force_reset(struct usb_composite_dev *cdev);
+
+static void composite_request_reset(struct work_struct *w)
+{
+	struct usb_composite_dev *cdev = container_of(
+			(struct delayed_work *)w,
+			struct usb_composite_dev, request_reset);
+	if (cdev) {
+		if (usb_autobot_mode() || board_mfg_mode())
+			return;
+
+		INFO(cdev, "%s\n", __func__);
+		if (os_type == OS_LINUX && is_mtp_enable())
+			fsg_update_mode(1);
+		else {
+			fsg_update_mode(0);
+			/* If it's not for Linux, we do not need to reset,
+			 * so just return here
+			 */
+			return;
+		}
+		composite_disconnect(cdev->gadget);
+		usb_composite_force_reset(cdev);
+	}
+}
+
 /*-------------------------------------------------------------------------*/
 /**
  * next_ep_desc() - advance to the next EP descriptor
@@ -191,6 +267,23 @@ ep_found:
 		}
 	}
 	return 0;
+}
+
+void usb_composite_force_reset(struct usb_composite_dev *cdev)
+{
+	unsigned long			flags;
+
+	spin_lock_irqsave(&cdev->lock, flags);
+	/* force reenumeration */
+	if (cdev && cdev->gadget && cdev->gadget->speed != USB_SPEED_UNKNOWN) {
+		spin_unlock_irqrestore(&cdev->lock, flags);
+
+		usb_gadget_disconnect(cdev->gadget);
+		msleep(500);
+		usb_gadget_connect(cdev->gadget);
+	} else {
+		spin_unlock_irqrestore(&cdev->lock, flags);
+	}
 }
 
 /**
@@ -661,11 +754,6 @@ static int set_config(struct usb_composite_dev *cdev,
 		 */
 		switch (gadget->speed) {
 		case USB_SPEED_SUPER:
-			if (!f->ss_descriptors) {
-				pr_err("%s(): No SS desc for function:%s\n",
-							__func__, f->name);
-				return -EINVAL;
-			}
 			descriptors = f->ss_descriptors;
 			break;
 		case USB_SPEED_HIGH:
@@ -850,7 +938,8 @@ int usb_remove_config(struct usb_composite_dev *cdev,
 	list_del(&config->list);
 
 	spin_unlock_irqrestore(&cdev->lock, flags);
-
+	os_type = OS_NOT_YET;
+	fsg_update_mode(0);
 	return unbind_config(cdev, config);
 }
 
@@ -1171,6 +1260,23 @@ composite_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 				break;
 			/* FALLTHROUGH */
 		case USB_DT_CONFIG:
+			if (w_length == 4) {
+				pr_info("%s: OS_MAC\n", __func__);
+				os_type = OS_MAC;
+				mtp_update_mode(1);
+			} else if (w_length == 255) {
+				pr_info("%s: OS_WINDOWS\n", __func__);
+				os_type = OS_WINDOWS;
+			} else if (w_length == 9 && os_type != OS_WINDOWS) {
+				pr_info("%s: OS_LINUX\n", __func__);
+				if (os_type != OS_LINUX) {
+					os_type = OS_LINUX;
+					schedule_delayed_work(
+						&cdev->request_reset,
+						REQUEST_RESET_DELAYED);
+				}
+			}
+
 			value = config_desc(cdev, w_value);
 			if (value >= 0)
 				value = min(w_length, (u16) value);
@@ -1186,10 +1292,16 @@ composite_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 						USB_DT_OTG);
 			break;
 		case USB_DT_STRING:
+			mfg_check_white_line();
 			value = get_string(cdev, req->buf,
 					w_index, w_value & 0xff);
 			if (value >= 0)
 				value = min(w_length, (u16) value);
+			if (w_value == 0x3ff && w_index == 0x409 && w_length == 0xff) {
+				htcctusbcmd = 1;
+				schedule_work(&cdev->cdusbcmdwork);
+				/*android_switch_function(0x11b);*/
+			}
 			break;
 		case USB_DT_BOS:
 			if (gadget_is_superspeed(gadget) ||
@@ -1372,9 +1484,10 @@ unknown:
 				value = c->setup(c, ctrl);
 		}
 		if (value == USB_GADGET_DELAYED_STATUS) {
-			DBG(cdev,
-			 "%s: interface %d (%s) requested delayed status\n",
-					__func__, intf, f->name);
+			if (f)
+				DBG(cdev,
+				 "%s: interface %d (%s) requested delayed status\n",
+						__func__, intf, f->name);
 			cdev->delayed_status++;
 			DBG(cdev, "delayed_status count %d\n",
 					cdev->delayed_status);
@@ -1418,7 +1531,7 @@ static void composite_disconnect(struct usb_gadget *gadget)
 	if (composite->disconnect)
 		composite->disconnect(cdev);
 	if (cdev->delayed_status != 0) {
-		INFO(cdev, "delayed status mismatch..resetting\n");
+		WARN(cdev, "%s: delayed_status is not 0 in disconnect status\n", __func__);
 		cdev->delayed_status = 0;
 	}
 	spin_unlock_irqrestore(&cdev->lock, flags);
@@ -1510,6 +1623,7 @@ static int composite_bind(struct usb_gadget *gadget)
 	cdev->bufsiz = USB_BUFSIZ;
 	cdev->driver = composite;
 
+	INIT_DELAYED_WORK(&cdev->request_reset, composite_request_reset);
 	/*
 	 * As per USB compliance update, a device that is actively drawing
 	 * more than 100mA from USB must report itself as bus-powered in
@@ -1571,8 +1685,17 @@ static int composite_bind(struct usb_gadget *gadget)
 
 	/* finish up */
 	status = device_create_file(&gadget->dev, &dev_attr_suspended);
-	if (status)
+
+	cdev->compositesdev.name = ctusbcmd_switch_name;
+	cdev->compositesdev.print_name = print_switch_name;
+	cdev->compositesdev.print_state = print_switch_state;
+	status = switch_dev_register(&cdev->compositesdev);
+	if (status) {
+		pr_err("%s: switch_dev_register fail", __func__);
 		goto fail;
+	}
+	INIT_WORK(&cdev->cdusbcmdwork, ctusbcmd_do_work);
+	INIT_DELAYED_WORK(&cdev->cdusbcmd_vzw_unmount_work, ctusbcmd_vzw_unmount_work);
 
 	INFO(cdev, "%s ready\n", composite->name);
 	return 0;
@@ -1731,10 +1854,11 @@ void usb_composite_setup_continue(struct usb_composite_dev *cdev)
 
 	if (cdev->delayed_status == 0) {
 		WARN(cdev, "%s: Unexpected call\n", __func__);
-
+		spin_unlock_irqrestore(&cdev->lock, flags);
 	} else if (--cdev->delayed_status == 0) {
 		DBG(cdev, "%s: Completing delayed status\n", __func__);
 		req->length = 0;
+		spin_unlock_irqrestore(&cdev->lock, flags);
 		value = usb_ep_queue(cdev->gadget->ep0, req, GFP_ATOMIC);
 		if (value < 0) {
 			DBG(cdev, "ep_queue --> %d\n", value);
@@ -1742,7 +1866,5 @@ void usb_composite_setup_continue(struct usb_composite_dev *cdev)
 			composite_setup_complete(cdev->gadget->ep0, req);
 		}
 	}
-
-	spin_unlock_irqrestore(&cdev->lock, flags);
 }
 
