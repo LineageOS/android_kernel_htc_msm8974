@@ -22,9 +22,11 @@
 
 #include "mdss_fb.h"
 #include "mdss_mdp.h"
-#include "mdss_debug.h"
 #include "mdss_mdp_trace.h"
 #include "mdss_debug.h"
+
+#include "mdss_dsi.h"
+#include "mdss_htc_util.h"
 
 static void mdss_mdp_xlog_mixer_reg(struct mdss_mdp_ctl *ctl);
 static inline u64 fudge_factor(u64 val, u32 numer, u32 denom)
@@ -615,6 +617,29 @@ static u32 mdss_mdp_get_vbp_factor_max(struct mdss_mdp_ctl *ctl)
 	return vbp_max;
 }
 
+static u32 mdss_mdp_extra_bw(struct mdss_mdp_ctl *ctl)
+{
+       u32 extra_bw = 0;
+       struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
+
+       if (!ctl->panel_data)
+               return 0;
+
+       ctrl_pdata = container_of(ctl->panel_data, struct mdss_dsi_ctrl_pdata,
+                                                               panel_data);
+
+       if (!ctrl_pdata)
+               return 0;
+
+       if (ctrl_pdata->frame_suffix_cmds.cmds == NULL)
+               return 0;
+
+       extra_bw = SZ_1M;
+       pr_debug("Request extra bandwidth\n");
+
+       return extra_bw;
+}
+
 static bool mdss_mdp_video_mode_intf_connected(struct mdss_mdp_ctl *ctl)
 {
 	int i;
@@ -653,6 +678,8 @@ static void __mdss_mdp_perf_calc_ctl_helper(struct mdss_mdp_ctl *ctl,
 		perf->bw_overlap += tmp.bw_overlap;
 		perf->prefill_bytes += tmp.prefill_bytes;
 		perf->mdp_clk_rate = tmp.mdp_clk_rate;
+
+		perf->bw_overlap += mdss_mdp_extra_bw(ctl);
 	}
 
 	if (right_cnt && ctl->mixer_right) {
@@ -1728,27 +1755,6 @@ int mdss_mdp_ctl_intf_event(struct mdss_mdp_ctl *ctl, int event, void *arg)
 	return rc;
 }
 
-/*
- * mdss_mdp_ctl_restore() - restore mdp ctl path
- * @ctl: mdp controller.
- *
- * This function is called whenever MDP comes out of a power collapse as
- * a result of a screen update when DSI ULPS mode is enabled. It restores
- * the MDP controller's software state to the hardware registers.
- */
-void mdss_mdp_ctl_restore(struct mdss_mdp_ctl *ctl)
-{
-	u32 temp;
-
-	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON, false);
-	temp = readl_relaxed(ctl->mdata->mdp_base +
-		MDSS_MDP_REG_DISP_INTF_SEL);
-	temp |= (ctl->intf_type << ((ctl->intf_num - MDSS_MDP_INTF0) * 8));
-	writel_relaxed(temp, ctl->mdata->mdp_base +
-		MDSS_MDP_REG_DISP_INTF_SEL);
-	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF, false);
-}
-
 static int mdss_mdp_ctl_start_sub(struct mdss_mdp_ctl *ctl, bool handoff)
 {
 	struct mdss_mdp_mixer *mixer;
@@ -1808,6 +1814,11 @@ int mdss_mdp_ctl_start(struct mdss_mdp_ctl *ctl, bool handoff)
 	struct mdss_mdp_ctl *sctl;
 	struct mdss_data_type *mdata = mdss_mdp_get_mdata();
 	int ret = 0;
+
+	if (!ctl) {
+		pr_err("ctl is invalid\n");
+		return -EINVAL;
+	}
 
 	if (ctl->power_on) {
 		pr_debug("%d: panel already on!\n", __LINE__);
@@ -2672,6 +2683,11 @@ int mdss_mdp_display_commit(struct mdss_mdp_ctl *ctl, void *arg)
 	ATRACE_END("postproc_programming");
 
 	ATRACE_BEGIN("flush_kickoff");
+
+	if ((ctl->mfd) && (ctl->mfd->index == 0)) {
+		htc_set_pp_pa(ctl);
+		htc_set_pp_pcc(ctl);
+	}
 	mdss_mdp_ctl_write(ctl, MDSS_MDP_REG_CTL_FLUSH, ctl->flush_bits);
 	if (sctl) {
 		mdss_mdp_ctl_write(sctl, MDSS_MDP_REG_CTL_FLUSH,
