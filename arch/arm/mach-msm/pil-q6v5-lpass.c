@@ -31,6 +31,10 @@
 #include <mach/ramdump.h>
 #include <mach/msm_smem.h>
 #include <mach/msm_bus_board.h>
+#if defined(CONFIG_HTC_FEATURES_SSR)
+#include <mach/devices_dtb.h>
+#include <mach/devices_cmdline.h>
+#endif
 
 #include "peripheral-loader.h"
 #include "pil-q6v5.h"
@@ -477,6 +481,26 @@ static int __devinit pil_lpass_driver_probe(struct platform_device *pdev)
 		ret = PTR_ERR(drv->subsys);
 		goto err_subsys;
 	}
+
+#if defined(CONFIG_HTC_FEATURES_SSR)
+	/*LPASS restart condition and ramdump rule would follow below
+	1. LPASS restart default enable
+	- Independent on flag [6]
+	2. LPASS restart default disable
+	- flag [6] 0  -> reboot
+	- flag [6] 20 -> enable restart, no ramdump
+	3. Always disable LPASS SSR if boot_mode != normal
+	*/
+#if defined(CONFIG_HTC_FEATURES_SSR_LPASS_ENABLE)
+	subsys_set_restart_level(drv->subsys, RESET_SUBSYS_COUPLED);
+#else
+	if (get_kernel_flag() & KERNEL_FLAG_ENABLE_SSR_LPASS)
+		subsys_set_restart_level(drv->subsys, RESET_SUBSYS_COUPLED);
+#endif
+
+	if (board_mfg_mode() != 0)
+		subsys_set_restart_level(drv->subsys, RESET_SOC);
+#endif
 
 	drv->wcnss_notif_hdle = subsys_notif_register_notifier("wcnss", &wnb);
 	if (IS_ERR(drv->wcnss_notif_hdle)) {

@@ -52,16 +52,16 @@
 static int msm_bam_dmux_debug_enable;
 module_param_named(debug_enable, msm_bam_dmux_debug_enable,
 		   int, S_IRUGO | S_IWUSR | S_IWGRP);
-static int POLLING_MIN_SLEEP = 2950;
+int POLLING_MIN_SLEEP = 2950;
 module_param_named(min_sleep, POLLING_MIN_SLEEP,
 		   int, S_IRUGO | S_IWUSR | S_IWGRP);
-static int POLLING_MAX_SLEEP = 3050;
+int POLLING_MAX_SLEEP = 3050;
 module_param_named(max_sleep, POLLING_MAX_SLEEP,
 		   int, S_IRUGO | S_IWUSR | S_IWGRP);
 static int POLLING_INACTIVITY = 1;
 module_param_named(inactivity, POLLING_INACTIVITY,
 		   int, S_IRUGO | S_IWUSR | S_IWGRP);
-static int bam_adaptive_timer_enabled;
+int bam_adaptive_timer_enabled;
 module_param_named(adaptive_timer_enabled,
 			bam_adaptive_timer_enabled,
 		   int, S_IRUGO | S_IWUSR | S_IWGRP);
@@ -229,7 +229,7 @@ static struct srcu_struct bam_dmux_srcu;
 /* A2 power collaspe */
 #define UL_TIMEOUT_DELAY 1000	/* in ms */
 #define ENABLE_DISCONNECT_ACK	0x1
-#define SHUTDOWN_TIMEOUT_MS	500
+#define SHUTDOWN_TIMEOUT_MS	1000
 #define UL_WAKEUP_TIMEOUT_MS	2000
 static void toggle_apps_ack(void);
 static void reconnect_to_bam(void);
@@ -1652,6 +1652,18 @@ static int ssrestart_check(void)
 
 	DMUX_LOG_KERR("%s: modem timeout: BAM DMUX disabled for SSR\n",
 								__func__);
+	pr_err("<DMUX> %c%c%c%c %c%c%c%c%d%c  %s: Record BAM state before SSR\n" ,
+		a2_pc_disabled ? 'D' : 'd',
+		in_global_reset ? 'R' : 'r',
+		bam_dmux_power_state ? 'P' : 'p',
+		bam_connection_is_active ? 'A' : 'a',
+		bam_dmux_uplink_vote ? 'V' : 'v',
+		bam_is_connected ?  'U' : 'u',
+		wait_for_ack ? 'W' : 'w',
+		ul_wakeup_ack_completion.done ? 'A' : 'a',
+		atomic_read(&ul_ondemand_vote),
+		disconnect_ack ? 'D' : 'd',
+		__func__);
 	in_global_reset = 1;
 	ret = subsystem_restart("modem");
 	if (ret == -ENODEV)
@@ -2564,6 +2576,13 @@ static int bam_dmux_probe(struct platform_device *pdev)
 
 	return 0;
 }
+
+void bam_change_adaptive_timer(int mode)
+{
+	bam_adaptive_timer_enabled = mode;
+	printk("\nchange bam_adaptive_timer_enabled=%d\n", bam_adaptive_timer_enabled);
+}
+EXPORT_SYMBOL(bam_change_adaptive_timer);
 
 static struct of_device_id msm_match_table[] = {
 	{.compatible = "qcom,bam_dmux"},
