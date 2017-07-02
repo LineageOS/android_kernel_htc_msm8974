@@ -478,6 +478,11 @@ void smd_diag(void)
 	}
 }
 
+int smd_smsm_erase_efs(void)
+{
+	unsigned modm = __raw_readl(SMSM_STATE_ADDR(SMSM_MODEM_STATE));
+	return (modm & SMSM_ERASE_EFS);
+}
 
 static void handle_modem_crash(void)
 {
