@@ -766,6 +766,7 @@ struct adm_cmd_connect_afe_port_v5 {
 #define AFE_PORT_ID_SECONDARY_PCM_RX        0x100C
 #define AFE_PORT_ID_SECONDARY_PCM_TX        0x100D
 #define AFE_PORT_ID_MULTICHAN_HDMI_RX       0x100E
+#define AFE_PORT_ID_SECONDARY_MI2S_RX_VIBRA	0x1010
 #define  AFE_PORT_ID_RT_PROXY_PORT_001_RX   0x2000
 #define  AFE_PORT_ID_RT_PROXY_PORT_001_TX   0x2001
 #define AFE_PORT_ID_INTERNAL_BT_SCO_RX      0x3000
@@ -3685,6 +3686,7 @@ struct asm_session_cmd_run_v2 {
 
 } __packed;
 
+#define ASM_SESSION_CMD_SUSPEND 0x00010DEC
 #define ASM_SESSION_CMD_PAUSE 0x00010BD3
 #define ASM_SESSION_CMD_SUSPEND 0x00010DEC
 #define ASM_SESSION_CMD_GET_SESSIONTIME_V3 0x00010D9D
@@ -7185,5 +7187,56 @@ struct afe_svc_cmd_set_clip_bank_selection {
 #define US_PROX_FORMAT_V4       0x0001273B
 #define US_RAW_SYNC_FORMAT      0x0001272F
 #define US_GES_SYNC_FORMAT      0x00012730
+
+//HTC_AUD ++
+#define HTC_COPP_TOPOLOGY				0x10000001
+#define HTC_POPP_TOPOLOGY				0x10000002
+
+struct asm_params {
+	struct apr_hdr	hdr;
+	struct asm_stream_cmd_set_pp_params_v2 param;
+	struct asm_stream_param_data_v2 data;
+} __packed;
+
+#define AFE_MODULE_GROUP_DEVICE	0x00010254
+#define AFE_PARAM_ID_GROUP_DEVICE_CFG	0x00010255
+#define AFE_PARAM_ID_GROUP_DEVICE_ENABLE 0x00010256
+#define AFE_GROUP_DEVICE_ID_SECONDARY_MI2S_RX	0x1102
+
+/*  Payload of the #AFE_PARAM_ID_GROUP_DEVICE_CFG
+ * parameter, which configures max of 8 AFE ports
+ * into a group.
+ * The fixed size of this structure is sixteen bytes.
+ */
+struct afe_group_device_group_cfg {
+	u32 minor_version;
+	u16 group_id;
+	u16 num_channels;
+	u16 port_id[8];
+} __packed;
+
+
+/*  Payload of the #AFE_PARAM_ID_GROUP_DEVICE_ENABLE
+ * parameter, which enables or
+ * disables any module.
+ * The fixed size of this structure is four bytes.
+ */
+
+struct afe_group_device_enable {
+	u16 group_id;
+	/* valid value is AFE_GROUP_DEVICE_ID_SECONDARY_MI2S_RX */
+	u16 enable;
+/* Enables (1) or disables (0) the module. */
+} __packed;
+
+struct afe_port_group_create {
+	struct apr_hdr hdr;
+	struct afe_svc_cmd_set_param param;
+	struct afe_port_param_data_v2 pdata;
+	union {
+		struct afe_group_device_group_cfg group_cfg;
+		struct afe_group_device_enable group_enable;
+	} __packed data;
+} __packed;
 
 #endif /*_APR_AUDIO_V2_H_ */
