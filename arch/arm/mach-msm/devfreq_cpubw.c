@@ -180,6 +180,8 @@ static int __init cpubw_probe(struct platform_device *pdev)
 		for (i = 0; i < len; i++)
 			p->freq_table[i] = data[i];
 		p->max_state = len;
+		if(len > 0)
+			p->initial_freq = p->freq_table[0];
 	}
 
 	bus_client = msm_bus_scale_register_client(&bw_data);

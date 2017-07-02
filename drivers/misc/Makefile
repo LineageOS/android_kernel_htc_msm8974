@@ -21,6 +21,7 @@ obj-$(CONFIG_SENSORS_BH1770)	+= bh1770glc.o
 obj-$(CONFIG_SENSORS_APDS990X)	+= apds990x.o
 obj-$(CONFIG_SGI_IOC4)		+= ioc4.o
 obj-$(CONFIG_ENCLOSURE_SERVICES) += enclosure.o
+obj-$(CONFIG_HTC_BUILD_EDIAG)	+= ediagpmem.o
 obj-$(CONFIG_KGDB_TESTS)	+= kgdbts.o
 obj-$(CONFIG_SGI_XP)		+= sgi-xp/
 obj-$(CONFIG_SGI_GRU)		+= sgi-gru/
@@ -40,6 +41,7 @@ obj-$(CONFIG_IWMC3200TOP)      += iwmc3200top/
 obj-$(CONFIG_HMC6352)		+= hmc6352.o
 obj-y				+= eeprom/
 obj-y				+= cb710/
+obj-y				+= mpu3050/
 obj-$(CONFIG_SPEAR13XX_PCIE_GADGET)	+= spear13xx_pcie_gadget.o
 obj-$(CONFIG_VMWARE_BALLOON)	+= vmw_balloon.o
 obj-$(CONFIG_ARM_CHARLCD)	+= arm-charlcd.o
@@ -52,7 +54,34 @@ obj-$(CONFIG_USB_SWITCH_FSA9480) += fsa9480.o
 obj-$(CONFIG_ALTERA_STAPL)	+=altera-stapl/
 obj-$(CONFIG_MAX8997_MUIC)	+= max8997-muic.o
 obj-$(CONFIG_WL127X_RFKILL)	+= wl127x-rfkill.o
-obj-$(CONFIG_SENSORS_AK8975)	+= akm8975.o
+obj-$(CONFIG_SENSORS_AK8963)		+= akm8963.o
+obj-$(CONFIG_SENSORS_AK8963_DOE_PLUS)	+= akm8963_doe_plus.o
+obj-$(CONFIG_SENSORS_AKM8975)		+= akm8975.o
+obj-$(CONFIG_SENSORS_AKM8975_PANA_GYRO)	+= akm8975_pana_gyro.o
+obj-$(CONFIG_SENSORS_PANASONIC_GYRO)	+= ewtzmu2.o
+obj-$(CONFIG_SENSORS_R3GD20)		+= r3gd20.o
+obj-$(CONFIG_SENSORS_LSM330_ACC)	+= lsm330_acc.o
+obj-$(CONFIG_SENSORS_LSM330_GYRO)	+= lsm330_gyr.o
+
+ifeq ($(CONFIG_INPUT_CAPELLA_CM3629),y)
+proximity-objs := cm3629.o
+obj-$(CONFIG_INPUT_CAPELLA_CM3629)	+= proximity.o
+endif
+
+ifeq ($(CONFIG_INPUT_CAPELLA_CM36686),y)
+proximity-objs := cm36686.o
+obj-$(CONFIG_INPUT_CAPELLA_CM36686)	+= proximity.o
+endif
+
+obj-$(CONFIG_INPUT_CAPELLA_CM32181)     += cm32181.o
+obj-$(CONFIG_SENSORS_BMA250)		+= bma250.o
+obj-$(CONFIG_BOSCH_BMA250)		+= bma250_bosch.o
+obj-$(CONFIG_SENSORS_ONLY_BMA255)	+= bma255_without_Ecompass.o
+obj-$(CONFIG_INPUT_YAS_MAGNETOMETER) 	+= yas53x_kernel.o
+obj-$(CONFIG_INPUT_CWSTM32)    		+= CwMcuSensor.o
+obj-$(CONFIG_LIGHTSENSOR_EPL88051) 	+= epl88051.o
+obj-$(CONFIG_INPUT_EMINENT_EPL88051KPW) += epl88051_KPW.o
+
 obj-$(CONFIG_TSIF) += msm_tsif.o
 msm_tsif-objs := tsif.o
 obj-$(CONFIG_TSIF_CHRDEV) += tsif_chrdev.o
@@ -70,4 +99,7 @@ obj-$(CONFIG_QSEECOM) += qseecom.o
 obj-$(CONFIG_QFP_FUSE) += qfp_fuse.o
 obj-$(CONFIG_TI_DRV2667) += ti_drv2667.o
 obj-$(CONFIG_QPNP_MISC) += qpnp-misc.o
+obj-$(CONFIG_VIB_TRIGGERS)	+= vib-triggers.o
+obj-y				+= time_helper.o
+obj-$(CONFIG_CABLE_DETECT_8XXX)	+= cable_detect_8xxx.o
 obj-$(CONFIG_UID_CPUTIME) 	+= uid_cputime.o

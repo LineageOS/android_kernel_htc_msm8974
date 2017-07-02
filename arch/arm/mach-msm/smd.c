@@ -56,6 +56,7 @@
 #include "smem_private.h"
 
 #define SMD_VERSION 0x00020000
+
 #define SMSM_SNAPSHOT_CNT 64
 #define SMSM_SNAPSHOT_SIZE ((SMSM_NUM_ENTRIES + 1) * 4 + sizeof(uint64_t))
 #define RSPIN_INIT_WAIT_MS 1000
@@ -196,23 +197,22 @@ void *smsm_log_ctx;
 		if (msm_smd_debug_mask & MSM_SMSM_POWER_INFO)	\
 			IPC_LOG_SMSM(KERN_INFO, x);		\
 	} while (0)
+
 #else
 #define SMD_DBG(x...) do { } while (0)
+
 #define SMSM_DBG(x...) do { } while (0)
+
 #define SMD_INFO(x...) do { } while (0)
+
 #define SMSM_INFO(x...) do { } while (0)
+
 #define SMD_POWER_INFO(x...) do { } while (0)
+
 #define SMSM_POWER_INFO(x...) do { } while (0)
+
 #endif
 
-/**
- * OVERFLOW_ADD_UNSIGNED() - check for unsigned overflow
- *
- * @type: type to check for overflow
- * @a: left value to use
- * @b: right value to use
- * @returns: true if a + b will result in overflow; false otherwise
- */
 #define OVERFLOW_ADD_UNSIGNED(type, a, b) \
 	(((type)~0 - (a)) < (b) ? true : false)
 
@@ -338,7 +338,7 @@ static inline void notify_modem_smsm(void)
 	static const struct interrupt_config_item *intr
 		= &private_intr_config[SMD_MODEM].smsm;
 
-	SMSM_POWER_INFO("SMSM Apps->%s", "MODEM");
+	SMSM_POWER_INFO("SMSM Apps->%s\n", "MODEM");
 
 	if (intr->out_base) {
 		++interrupt_stats[SMD_MODEM].smsm_out_config_count;
@@ -352,7 +352,7 @@ static inline void notify_dsp_smsm(void)
 	static const struct interrupt_config_item *intr
 		= &private_intr_config[SMD_Q6].smsm;
 
-	SMSM_POWER_INFO("SMSM Apps->%s", "ADSP");
+	SMSM_POWER_INFO("SMSM Apps->%s\n", "ADSP");
 
 	if (intr->out_base) {
 		++interrupt_stats[SMD_Q6].smsm_out_config_count;
@@ -366,7 +366,7 @@ static inline void notify_dsps_smsm(void)
 	static const struct interrupt_config_item *intr
 		= &private_intr_config[SMD_DSPS].smsm;
 
-	SMSM_POWER_INFO("SMSM Apps->%s", "DSPS");
+	SMSM_POWER_INFO("SMSM Apps->%s\n", "DSPS");
 
 	if (intr->out_base) {
 		++interrupt_stats[SMD_DSPS].smsm_out_config_count;
@@ -380,7 +380,7 @@ static inline void notify_wcnss_smsm(void)
 	static const struct interrupt_config_item *intr
 		= &private_intr_config[SMD_WCNSS].smsm;
 
-	SMSM_POWER_INFO("SMSM Apps->%s", "WCNSS");
+	SMSM_POWER_INFO("SMSM Apps->%s\n", "WCNSS");
 
 	if (intr->out_base) {
 		++interrupt_stats[SMD_WCNSS].smsm_out_config_count;
@@ -478,6 +478,11 @@ void smd_diag(void)
 	}
 }
 
+int smd_smsm_erase_efs(void)
+{
+	unsigned modm = __raw_readl(SMSM_STATE_ADDR(SMSM_MODEM_STATE));
+	return (modm & SMSM_ERASE_EFS);
+}
 
 static void handle_modem_crash(void)
 {
@@ -2851,7 +2856,7 @@ int smsm_change_state(uint32_t smsm_entry,
 	old_state = __raw_readl(SMSM_STATE_ADDR(smsm_entry));
 	new_state = (old_state & ~clear_mask) | set_mask;
 	__raw_writel(new_state, SMSM_STATE_ADDR(smsm_entry));
-	SMSM_POWER_INFO("%s %d:%08x->%08x", __func__, smsm_entry,
+	SMSM_POWER_INFO("%s %d:%08x->%08x\n", __func__, smsm_entry,
 			old_state, new_state);
 	notify_other_smsm(SMSM_APPS_STATE, (old_state ^ new_state));
 
@@ -3373,6 +3378,7 @@ int __init msm_smd_init(void)
 			__func__, rc);
 		return rc;
 	}
+
 	return 0;
 }
 

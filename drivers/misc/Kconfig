@@ -382,13 +382,163 @@ config HMC6352
 	  This driver provides support for the Honeywell HMC6352 compass,
 	  providing configuration and heading data via sysfs.
 
-config SENSORS_AK8975
-	tristate "AK8975 compass support"
+config SENSORS_AK8963
+	tristate "AK8963 compass support"
 	default n
 	depends on I2C
 	help
 	  If you say yes here you get support for Asahi Kasei's
-	  orientation sensor AK8975.
+	  orientation sensor AK8963.
+
+config SENSORS_AK8963_DOE_PLUS
+	tristate "AK8963 compass support with DOE Plus"
+	default n
+	depends on I2C
+	help
+	  If you say yes here you get support for Asahi Kasei's
+	  orientation sensor with DOE Plus.
+
+config SENSORS_AKM8975
+	tristate "AKM8973 Compass Driver"
+	depends on I2C
+	help
+	  AKM8975 Compass Driver implemented by HTC.
+
+config SENSORS_AKM8975_PANA_GYRO
+	tristate "AKM8973 Compass Driver for Pana Gyro"
+	depends on I2C
+	help
+	  AKM8975 Compass Driver implemented by HTC.
+
+config SENSORS_PANASONIC_GYRO
+	tristate "PANASONIC GYRO sensor support"
+	depends on I2C=y
+	help
+
+config SENSORS_R3GD20
+	tristate "ST R3GD20 3-axis gyroscope"
+	depends on I2C=y
+	default n
+	help
+	  This driver provides support for the R3Gd20 chip which is a
+	  3-axis gyroscope.
+
+	  This driver can also be built as modules. If so, the module for
+	  accelerometer will be called r3gd20.
+
+	  Say Y here if you have a device containing r3gd20 chip.
+
+config SENSORS_LSM330_ACC
+	tristate "ST LSM330 3-axis accelerometer"
+	depends on I2C=y
+	default n
+	help
+	  This driver provides support for the LSM330 chip which is a
+	  3-axis accelerometer.
+
+	  This driver can also be built as modules. If so, the module for
+	  accelerometer will be called lsm330.
+
+	  Say Y here if you have a device containing lsm330 chip.
+
+config SENSORS_LSM330_GYRO
+	tristate "ST LSM330 3-axis gyroscope"
+	depends on I2C=y
+	default n
+	help
+	  This driver provides support for the LSM330 chip which is a
+	  3-axis gyroscope.
+
+	  This driver can also be built as modules.  If so, the module for
+	  accelerometer will be called LSM330.
+
+	  Say Y here if you have a device containing LSM330 chip.
+
+config INPUT_CWSTM32
+	tristate "CyWee CWSTM32 Sensor HUB"
+	depends on I2C && INPUT
+	select INPUT_POLLDEV
+	help
+	  This driver provides support for CWSTM32 Sensor HUB.
+
+config SYNC_TOUCH_STATUS
+	depends on INPUT_CWSTM32
+	bool "Sync touch i2c switch status to sensor hub"
+	default n
+	help
+	  Sync touch i2c switch status to sensor hub
+
+config BOSCH_BMA250
+	tristate "BMA250 acceleration sensor support"
+	depends on I2C=y
+	help
+	  If you say yes here you get support for Bosch Sensortec's
+	  acceleration sensors BMA250.
+
+config BOSCH_BMA250_ENABLE_INT1
+	tristate "BMA250 acceleration sensor interrupt INT1 support"
+	depends on BOSCH_BMA250=y
+	help
+	  If you say yes here you get INT1 support for Bosch Sensortec's
+	  acceleration sensors BMA250.
+
+config BOSCH_BMA250_ENABLE_INT2
+	tristate "BMA250 acceleration sensor interrupt INT2 support"
+	depends on BOSCH_BMA250=y
+	help
+	  If you say yes here you get INT2 support for Bosch Sensortec's
+	  acceleration sensors BMA250.
+
+config SENSORS_BMA250
+	tristate "BMA250 acceleration sensor support"
+	depends on I2C=y
+	help
+	  BMA250 G-sensor Driver implemented by HTC.
+
+config SENSORS_ONLY_BMA255
+	tristate "BMA255 acceleration sensor support"
+	depends on I2C=y
+	help
+	  BMA255 ONLY G-sensor Driver implemented by HTC.
+
+config INPUT_YAS_MAGNETOMETER
+	tristate "YAS Geomagnetic Sensor"
+	depends on I2C
+
+config INPUT_CAPELLA_CM3629
+	tristate "CM3629 proximity and light sensor"
+	help
+	  Say Y here to enable the CM3629 Short Distance Proximity
+	  Sensor with Ambient Light Sensor.
+
+config INPUT_CAPELLA_CM36686
+	tristate "CM36686 proximity and light sensor"
+	help
+	  Say Y here to enable the CM36686 Short Distance Proximity
+	  Sensor with Ambient Light Sensor.
+
+config INPUT_EMINENT_EPL88051KPW
+	tristate "EPL88051KPW proximity and light sensor"
+	help
+	  Say Y here to enable the EPL88051KPW Short Distance Proximity
+	  Sensor with Ambient Light Sensor.
+
+config INPUT_CAPELLA_CM32181
+	tristate "CM32181 light sensor"
+	help
+	  Say Y here to enable the CM32181 Ambient Light Sensor.
+
+config CIR_ALWAYS_READY
+	bool "BMA250 CIR Always Ready"
+	default n
+	help
+	  Enable CIR Always Ready
+
+config LIGHTSENSOR_EPL88051
+	bool "enable EPL88051"
+	depends on I2C
+	help
+	  Say Y here to enable the EPL88051.
 
 config EP93XX_PWM
 	tristate "EP93xx PWM support"
@@ -595,6 +745,14 @@ config PMIC8XXX_VIBRATOR
 	  on the PM8XXX chips. The vibrator is controlled using the
 	  timed output class.
 
+config VIB_TRIGGERS
+	boolean "Vibrator trigger interface support"
+	default n
+	help
+	  This option enables trigger support for the vibrator function.
+	  These triggers allow kernel events to drive the vibrator. If
+	  unsure, say N.
+
 config PMIC8XXX_NFC
 	tristate "Qualcomm PM8XXX support for Near Field Communication"
 	depends on MFD_PM8XXX
@@ -665,6 +823,16 @@ config TI_DRV2667
 	  To compile this driver as a module, choose M here: the
 	  module will be called ti_drv2667.
 
+config CABLE_DETECT_8XXX
+	boolean "Cable detect driver"
+	default n
+	help
+	  Detect usb, ac and other accessories.
+
+config CABLE_DETECT_ACCESSORY
+	boolean "CABLE ACCESSORY DETECT"
+	default n
+
 config UID_CPUTIME
 	tristate "Per-UID cpu time statistics"
 	depends on PROFILING
@@ -678,5 +846,6 @@ source "drivers/misc/iwmc3200top/Kconfig"
 source "drivers/misc/ti-st/Kconfig"
 source "drivers/misc/lis3lv02d/Kconfig"
 source "drivers/misc/carma/Kconfig"
+source "drivers/misc/mpu3050/Kconfig"
 source "drivers/misc/altera-stapl/Kconfig"
 endmenu
