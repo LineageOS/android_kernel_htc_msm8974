@@ -408,6 +408,7 @@ static int drop_partitions(struct gendisk *disk, struct block_device *bdev)
 
 	if (bdev->bd_part_count)
 		return -EBUSY;
+
 	res = invalidate_partition(disk, 0);
 	if (res)
 		return res;

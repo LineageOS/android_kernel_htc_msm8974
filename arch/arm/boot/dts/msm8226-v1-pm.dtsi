@@ -328,6 +328,13 @@
 		qcom,sleep-stats-version = <2>;
 	};
 
+        qcom,rpm-stats@fc19ffa0{
+                compatible = "qcom,rpm-stats";
+                reg = <0xfc19ffa0 0x60>;
+                reg-names = "phys_addr_base";
+                qcom,sleep-stats-version = <3>;
+        };
+
 	qcom,rpm-rbcpr-stats@fc000000 {
 		compatible = "qcom,rpmrbcpr-stats";
 		reg = <0xfc000000 0x1a0000>;

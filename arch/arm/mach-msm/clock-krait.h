@@ -99,4 +99,17 @@ static inline struct kpss_core_clk *to_kpss_core_clk(struct clk *c)
 extern struct clk_ops clk_ops_kpss_cpu;
 extern struct clk_ops clk_ops_kpss_l2;
 
+struct drv_data {
+	const char *name;
+	struct kpss_core_clk **krait_clk;
+	int speed_bin;
+	int pvs_bin;
+	int pvs_rev;
+	struct device *dev;
+};
+
+void clock_krait_init(struct device * dev,
+				const struct kpss_core_clk **krait_clk, int krait_clk_size, int speed, int pvs, int rev);
+unsigned long clock_krait_get_rate(int cpu);
+
 #endif

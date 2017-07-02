@@ -22,6 +22,7 @@
 #include <mach/iommu.h>
 #include <mach/msm_iommu_priv.h>
 #include <trace/events/kmem.h>
+
 #include "msm_iommu_pagetable.h"
 
 #define NUM_FL_PTE      4096
@@ -173,6 +174,7 @@ static unsigned long *make_second_level(struct msm_iommu_pt *pt,
 		pr_debug("Could not allocate second level table\n");
 		goto fail;
 	}
+
 	memset(sl, 0, SZ_4K);
 	clean_pte(sl, sl + NUM_SL_PTE, pt->redirect);
 

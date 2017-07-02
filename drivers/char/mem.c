@@ -35,6 +35,8 @@
 # include <linux/efi.h>
 #endif
 
+#include <mach/devices_cmdline.h>
+
 static inline unsigned long size_inside_page(unsigned long start,
 					     unsigned long size)
 {
@@ -715,7 +717,7 @@ static loff_t memory_lseek(struct file *file, loff_t offset, int orig)
 {
 	loff_t ret;
 
-	mutex_lock(&file->f_path.dentry->d_inode->i_mutex);
+	mutex_lock(&file_inode(file)->i_mutex);
 	switch (orig) {
 	case SEEK_CUR:
 		offset += file->f_pos;
@@ -732,7 +734,7 @@ static loff_t memory_lseek(struct file *file, loff_t offset, int orig)
 	default:
 		ret = -EINVAL;
 	}
-	mutex_unlock(&file->f_path.dentry->d_inode->i_mutex);
+	mutex_unlock(&file_inode(file)->i_mutex);
 	return ret;
 }
 
@@ -822,6 +824,44 @@ static const struct file_operations oldmem_fops = {
 };
 #endif
 
+static ssize_t kmsg_writev(struct kiocb *iocb, const struct iovec *iv,
+			   unsigned long count, loff_t pos)
+{
+	char *line, *p;
+	int i;
+	ssize_t ret = -EFAULT;
+	size_t len = iov_length(iv, count);
+
+	line = kmalloc(len + 1, GFP_KERNEL);
+	if (line == NULL)
+		return -ENOMEM;
+
+	/*
+	 * copy all vectors into a single string, to ensure we do
+	 * not interleave our log line with other printk calls
+	 */
+	p = line;
+	for (i = 0; i < count; i++) {
+		if (copy_from_user(p, iv[i].iov_base, iv[i].iov_len))
+			goto out;
+		p += iv[i].iov_len;
+	}
+	p[0] = '\0';
+
+	ret = printk("%s", line);
+	/* printk can add a prefix */
+	if (ret > len)
+		ret = len;
+out:
+	kfree(line);
+	return ret;
+}
+
+static const struct file_operations kmsg_fops = {
+	.aio_write = kmsg_writev,
+	.llseek = noop_llseek,
+};
+
 static const struct memdev {
 	const char *name;
 	umode_t mode;
@@ -842,7 +882,7 @@ static const struct memdev {
 	 [7] = { "full", 0666, &full_fops, NULL },
 	 [8] = { "random", 0666, &random_fops, NULL },
 	 [9] = { "urandom", 0666, &urandom_fops, NULL },
-	[11] = { "kmsg", 0644, &kmsg_fops, NULL },
+	[11] = { "kmsg", 0, &kmsg_fops, NULL },
 #ifdef CONFIG_CRASH_DUMP
 	[12] = { "oldmem", 0, &oldmem_fops, NULL },
 #endif
@@ -906,7 +946,16 @@ static int __init chr_dev_init(void)
 		return PTR_ERR(mem_class);
 
 	mem_class->devnode = mem_devnode;
-	for (minor = 1; minor < ARRAY_SIZE(devlist); minor++) {
+
+    // only create /dev/mem and /dev/kmem under mini mode
+    if (board_mfg_mode() == MFG_MODE_MINI) {
+        minor = 1;
+    }
+    else {
+        // skip 1 (/dev/mem) and 2 (/dev/kmem)
+        minor = 3;
+    }
+	for (; minor < ARRAY_SIZE(devlist); minor++) {
 		if (!devlist[minor].name)
 			continue;
 		device_create(mem_class, NULL, MKDEV(MEM_MAJOR, minor),

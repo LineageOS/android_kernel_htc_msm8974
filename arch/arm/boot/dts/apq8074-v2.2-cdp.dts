@@ -13,6 +13,7 @@
 /dts-v1/;
 
 /include/ "apq8074-v2.2.dtsi"
+/include/ "msm8974-regulator.dtsi"
 /include/ "msm8974-cdp.dtsi"
 
 / {
@@ -31,4 +32,8 @@
 	interrupt-names = "hs_phy_irq", "pmic_id_irq";
 
 	qcom,misc-ref = <&pm8941_misc>;
+};
+
+&krait_pdn {
+	qcom,use-phase-switching;
 };

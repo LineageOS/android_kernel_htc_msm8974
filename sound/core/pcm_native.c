@@ -39,6 +39,8 @@
 #include <dma-coherence.h>
 #endif
 
+#include <sound/soc.h>
+
 /*
  *  Compatibility
  */
@@ -140,7 +142,7 @@ int snd_pcm_info_user(struct snd_pcm_substream *substream,
 
 #undef RULES_DEBUG
 
-#ifdef RULES_DEBUG
+#if 1 //htc audio
 #define HW_PARAM(v) [SNDRV_PCM_HW_PARAM_##v] = #v
 static const char * const snd_pcm_hw_param_names[] = {
 	HW_PARAM(ACCESS),
@@ -295,6 +297,7 @@ int snd_pcm_hw_refine(struct snd_pcm_substream *substream,
 				vstamps[r->var] = stamp;
 				again = 1;
 			}
+
 			if (changed < 0)
 				return changed;
 			stamp++;
@@ -340,6 +343,7 @@ static int snd_pcm_hw_refine_user(struct snd_pcm_substream *substream,
 	struct snd_pcm_hw_params *params;
 	int err;
 
+	pr_info("%s: ++\n",__func__);
 	params = memdup_user(_params, sizeof(*params));
 	if (IS_ERR(params))
 		return PTR_ERR(params);
@@ -349,6 +353,7 @@ static int snd_pcm_hw_refine_user(struct snd_pcm_substream *substream,
 		if (!err)
 			err = -EFAULT;
 	}
+	pr_info("%s: --\n",__func__);
 
 	kfree(params);
 	return err;
@@ -476,7 +481,7 @@ static int snd_pcm_hw_params_user(struct snd_pcm_substream *substream,
 {
 	struct snd_pcm_hw_params *params;
 	int err;
-
+	pr_info("%s ++\n",__func__);
 	params = memdup_user(_params, sizeof(*params));
 	if (IS_ERR(params))
 		return PTR_ERR(params);
@@ -486,7 +491,7 @@ static int snd_pcm_hw_params_user(struct snd_pcm_substream *substream,
 		if (!err)
 			err = -EFAULT;
 	}
-
+	pr_info("%s --\n",__func__);
 	kfree(params);
 	return err;
 }
@@ -2550,6 +2555,18 @@ static int snd_pcm_tstamp(struct snd_pcm_substream *substream, int __user *_arg)
 	return 0;
 }
 
+//htc audio ++
+static int snd_pcm_enable_effect(struct snd_pcm_substream *substream, int __user *_arg)
+{
+	/* if substream is NULL, return error. */
+	if (PCM_RUNTIME_CHECK(substream))
+		return -ENXIO;
+
+	pr_info("%s: is called\n", __func__);
+	return substream->ops->ioctl(substream, SNDRV_PCM_IOCTL1_ENABLE_EFFECT, _arg);
+}
+//htc audio --
+
 static int snd_pcm_common_ioctl1(struct file *file,
 				 struct snd_pcm_substream *substream,
 				 unsigned int cmd, void __user *arg)
@@ -2613,6 +2630,10 @@ static int snd_pcm_common_ioctl1(struct file *file,
 		snd_pcm_stream_unlock_irq(substream);
 		return res;
 	}
+//htc audio ++
+	case SNDRV_PCM_IOCTL_ENABLE_EFFECT:
+		return snd_pcm_enable_effect(substream, arg);
+//htc audio --
 	case SNDRV_COMPRESS_GET_CAPS:
 	case SNDRV_COMPRESS_GET_CODEC_CAPS:
 	case SNDRV_COMPRESS_SET_PARAMS:

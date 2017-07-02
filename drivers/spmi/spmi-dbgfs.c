@@ -36,6 +36,8 @@
 #include <linux/spmi.h>
 #include <linux/ctype.h>
 #include "spmi-dbgfs.h"
+#include <mach/devices_cmdline.h>
+
 
 #define ADDR_LEN	 6	/* 5 byte address + 1 space character */
 #define CHARS_PER_ITEM   3	/* Format is 'XX ' */
@@ -686,6 +688,7 @@ int spmi_dfs_add_controller(struct spmi_controller *ctrl)
 	}
 
 	list_add(&ctrl_data->node, &dbgfs_data.ctrl);
+
 	return 0;
 
 err_remove_fs:

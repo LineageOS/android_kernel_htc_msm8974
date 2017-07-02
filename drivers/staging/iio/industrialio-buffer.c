@@ -515,6 +515,8 @@ int iio_sw_buffer_preenable(struct iio_dev *indio_dev)
 	for_each_set_bit(i, buffer->scan_mask,
 			 indio_dev->masklength) {
 		ch = iio_find_channel_from_si(indio_dev, i);
+		if (ch == NULL)
+			return -1;
 		length = ch->scan_type.storagebits/8;
 		bytes = ALIGN(bytes, length);
 		bytes += length;
@@ -522,6 +524,8 @@ int iio_sw_buffer_preenable(struct iio_dev *indio_dev)
 	if (buffer->scan_timestamp) {
 		ch = iio_find_channel_from_si(indio_dev,
 					      buffer->scan_index_timestamp);
+		if (ch == NULL)
+			return -1;
 		length = ch->scan_type.storagebits/8;
 		bytes = ALIGN(bytes, length);
 		bytes += length;
@@ -672,6 +676,8 @@ int iio_update_demux(struct iio_dev *indio_dev)
 					       indio_dev->masklength,
 					       in_ind + 1);
 			ch = iio_find_channel_from_si(indio_dev, in_ind);
+			if (ch == NULL)
+				return -1;
 			length = ch->scan_type.storagebits/8;
 			/* Make sure we are aligned */
 			in_loc += length;
@@ -684,6 +690,8 @@ int iio_update_demux(struct iio_dev *indio_dev)
 			goto error_clear_mux_table;
 		}
 		ch = iio_find_channel_from_si(indio_dev, in_ind);
+		if (ch == NULL)
+			return -1;
 		length = ch->scan_type.storagebits/8;
 		if (out_loc % length)
 			out_loc += length - out_loc % length;
@@ -705,6 +713,8 @@ int iio_update_demux(struct iio_dev *indio_dev)
 		}
 		ch = iio_find_channel_from_si(indio_dev,
 			buffer->scan_index_timestamp);
+		if (ch == NULL)
+			return -1;
 		length = ch->scan_type.storagebits/8;
 		if (out_loc % length)
 			out_loc += length - out_loc % length;
