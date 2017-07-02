@@ -112,10 +112,6 @@ static int fb_event_callback(struct notifier_block *self,
 	pdata->mfd = evdata->info->par;
 	if (event == FB_EVENT_BLANK) {
 		int *blank = evdata->data;
-		struct dsi_status_data *pdata = container_of(self,
-				struct dsi_status_data, fb_notifier);
-		pdata->mfd = evdata->info->par;
-
 		switch (*blank) {
 		case FB_BLANK_UNBLANK:
 			schedule_delayed_work(&pdata->check_status,

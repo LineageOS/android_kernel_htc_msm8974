@@ -791,6 +791,7 @@ struct dwc3 {
 	/* Indicate if software connect was issued by the usb_gadget_driver */
 	bool			softconnect;
 	void (*notify_event) (struct dwc3 *, unsigned);
+	struct delayed_work chg_stop;
 	int			tx_fifo_size;
 	bool			tx_fifo_reduced;
 	bool			err_evt_seen;

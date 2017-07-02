@@ -303,7 +303,6 @@ static int mdss_mdp_video_stop(struct mdss_mdp_ctl *ctl)
 {
 	struct mdss_mdp_video_ctx *ctx;
 	struct mdss_mdp_vsync_handler *tmp, *handle;
-	struct mdss_mdp_ctl *sctl;
 	int rc;
 	u32 frame_rate = 0;
 
@@ -343,12 +342,6 @@ static int mdss_mdp_video_stop(struct mdss_mdp_ctl *ctl)
 
 		mdss_mdp_irq_disable(MDSS_MDP_IRQ_INTF_UNDER_RUN,
 			ctl->intf_num);
-		sctl = mdss_mdp_get_split_ctl(ctl);
-		if (sctl)
-			mdss_mdp_irq_disable(MDSS_MDP_IRQ_INTF_UNDER_RUN,
-				sctl->intf_num);
-
-		mdss_bus_bandwidth_ctrl(false);
 	}
 
 	list_for_each_entry_safe(handle, tmp, &ctx->vsync_handlers, list)
@@ -457,7 +450,7 @@ static int mdss_mdp_video_wait4comp(struct mdss_mdp_ctl *ctl, void *arg)
 		if (rc == 0) {
 			pr_warn("vsync wait timeout %d, fallback to poll mode\n",
 					ctl->num);
-			ctx->polling_en++;
+			ctx->polling_en = true;
 			rc = mdss_mdp_video_pollwait(ctl);
 		} else {
 			rc = 0;
@@ -474,24 +467,11 @@ static int mdss_mdp_video_wait4comp(struct mdss_mdp_ctl *ctl, void *arg)
 	return rc;
 }
 
-static void recover_underrun_work(struct work_struct *work)
-{
-	struct mdss_mdp_ctl *ctl =
-		container_of(work, typeof(*ctl), recover_work);
-
-	if (!ctl || !ctl->add_vsync_handler) {
-		pr_err("ctl or vsync handler is NULL\n");
-		return;
-	}
-
-	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON, false);
-	ctl->add_vsync_handler(ctl, &ctl->recover_underrun_handler);
-	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF, false);
-}
-
 static void mdss_mdp_video_underrun_intr_done(void *arg)
 {
 	struct mdss_mdp_ctl *ctl = arg;
+	static unsigned long prev_jiffy = 0; 
+
 	if (unlikely(!ctl))
 		return;
 
@@ -499,11 +479,11 @@ static void mdss_mdp_video_underrun_intr_done(void *arg)
 	MDSS_XLOG(ctl->num, ctl->underrun_cnt);
 	MDSS_XLOG_TOUT_HANDLER("mdp", "dsi0", "dsi1", "edp", "hdmi", "panic");
 	trace_mdp_video_underrun_done(ctl->num, ctl->underrun_cnt);
-	pr_debug("display underrun detected for ctl=%d count=%d\n", ctl->num,
+	if (time_after(jiffies, prev_jiffy + 5 * HZ) || !prev_jiffy) {
+		pr_info("display underrun detected for ctl=%d count=%d\n", ctl->num,
 			ctl->underrun_cnt);
-
-	if (ctl->opmode & MDSS_MDP_CTL_OP_PACK_3D_ENABLE)
-		schedule_work(&ctl->recover_work);
+		prev_jiffy = jiffies;
+	}
 }
 
 static int mdss_mdp_video_vfp_fps_update(struct mdss_mdp_ctl *ctl, int new_fps)
@@ -688,7 +668,6 @@ static int mdss_mdp_video_config_fps(struct mdss_mdp_ctl *ctl,
 static int mdss_mdp_video_display(struct mdss_mdp_ctl *ctl, void *arg)
 {
 	struct mdss_mdp_video_ctx *ctx;
-	struct mdss_mdp_ctl *sctl;
 	struct mdss_panel_data *pdata = ctl->panel_data;
 	int rc;
 
@@ -725,10 +704,10 @@ static int mdss_mdp_video_display(struct mdss_mdp_ctl *ctl, void *arg)
 		if ((pdata->panel_info.cont_splash_enabled &&
 			!ctl->mfd->splash_info.splash_logo_enabled)
 			|| (ctl->mfd->splash_info.splash_logo_enabled
-			&& ctl->mfd->splash_info.splash_thread
 			&& !is_mdss_iommu_attached())) {
 			rc = wait_for_completion_timeout(&ctx->vsync_comp,
 					usecs_to_jiffies(VSYNC_TIMEOUT_US));
+			WARN(rc == 0, "timeout (%d) waiting for vsync\n", rc);
 		}
 
 		rc = mdss_iommu_ctrl(1);
@@ -740,13 +719,6 @@ static int mdss_mdp_video_display(struct mdss_mdp_ctl *ctl, void *arg)
 		mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON, false);
 
 		mdss_mdp_irq_enable(MDSS_MDP_IRQ_INTF_UNDER_RUN, ctl->intf_num);
-		sctl = mdss_mdp_get_split_ctl(ctl);
-		if (sctl)
-			mdss_mdp_irq_enable(MDSS_MDP_IRQ_INTF_UNDER_RUN,
-				sctl->intf_num);
-
-		mdss_bus_bandwidth_ctrl(true);
-
 		mdp_video_write(ctx, MDSS_MDP_REG_INTF_TIMING_ENGINE_EN, 1);
 		wmb();
 
@@ -847,7 +819,6 @@ int mdss_mdp_video_start(struct mdss_mdp_ctl *ctl)
 	spin_lock_init(&ctx->vsync_lock);
 	mutex_init(&ctx->vsync_mtx);
 	atomic_set(&ctx->vsync_ref, 0);
-	INIT_WORK(&ctl->recover_work, recover_underrun_work);
 
 	mdss_mdp_set_intr_callback(MDSS_MDP_IRQ_INTF_VSYNC, ctl->intf_num,
 				   mdss_mdp_video_vsync_intr_done, ctl);
