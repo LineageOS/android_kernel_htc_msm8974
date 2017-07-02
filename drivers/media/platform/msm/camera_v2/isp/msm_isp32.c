@@ -146,6 +146,7 @@ static void msm_vfe32_release_hardware(struct vfe_device *vfe_dev)
 
 static void msm_vfe32_init_hardware_reg(struct vfe_device *vfe_dev)
 {
+	uint32_t wm_base, i = 0;
 	/* CGC_OVERRIDE */
 	msm_camera_io_w(0x07FFFFFF, vfe_dev->vfe_base + 0xC);
 	/* BUS_CFG */
@@ -159,6 +160,12 @@ static void msm_vfe32_init_hardware_reg(struct vfe_device *vfe_dev)
 	msm_camera_io_w( 0x10000000,vfe_dev->vfe_base + VFE32_RDI_BASE(2));
 	msm_camera_io_w(0x0, vfe_dev->vfe_base + VFE32_XBAR_BASE(0));
 	msm_camera_io_w(0x0, vfe_dev->vfe_base + VFE32_XBAR_BASE(4));
+	for (i = 0; i <= 6; i++) {
+		wm_base = VFE32_WM_BASE(i);
+		msm_camera_io_w(0x0, vfe_dev->vfe_base + wm_base);
+		wm_base = VFE32_WM_BASE(i);
+		msm_camera_io_w(0x0, vfe_dev->vfe_base + wm_base);
+	}
 
 }
 
@@ -178,15 +185,15 @@ static void msm_vfe32_process_camif_irq(struct vfe_device *vfe_dev,
 	uint32_t irq_status0, uint32_t irq_status1,
 	struct msm_isp_timestamp *ts)
 {
-	uint32_t cnt;
 	if (!(irq_status0 & 0x1F))
 		return;
 
 	if (irq_status0 & BIT(0)) {
 		ISP_DBG("%s: SOF IRQ\n", __func__);
-		cnt = vfe_dev->axi_data.src_info[VFE_PIX_0].raw_stream_count;
-		if (cnt > 0) {
-			msm_isp_sof_notify(vfe_dev, VFE_RAW_0, ts);
+		if (vfe_dev->axi_data.src_info[VFE_PIX_0].raw_stream_count > 0
+			&& vfe_dev->axi_data.src_info[VFE_PIX_0].
+			pix_stream_count == 0) {
+			msm_isp_sof_notify(vfe_dev, VFE_PIX_0, ts);
 			if (vfe_dev->axi_data.stream_update)
 				msm_isp_axi_stream_update(vfe_dev);
 			msm_isp_update_framedrop_reg(vfe_dev);
@@ -665,7 +672,6 @@ static void msm_vfe32_update_camif_state(
 		val &= 0xFFFFFF3F;
 		val = val | bus_en << 7 | vfe_en << 6;
 		msm_camera_io_w(val, vfe_dev->vfe_base + 0x1E4);
-		msm_camera_io_w_mb(0x4, vfe_dev->vfe_base + 0x1E0);
 		msm_camera_io_w_mb(0x1, vfe_dev->vfe_base + 0x1E0);
 		vfe_dev->axi_data.src_info[VFE_PIX_0].active = 1;
 	} else if (update_state == DISABLE_CAMIF) {
@@ -673,6 +679,9 @@ static void msm_vfe32_update_camif_state(
 		vfe_dev->axi_data.src_info[VFE_PIX_0].active = 0;
 	} else if (update_state == DISABLE_CAMIF_IMMEDIATELY) {
 		msm_camera_io_w_mb(0x6, vfe_dev->vfe_base + 0x1E0);
+		vfe_dev->axi_data.src_info[VFE_PIX_0].active = 0;
+	} else if (update_state == DISABLE_CAMIF_IMMEDIATELY_VFE_RECOVER) {
+		msm_camera_io_w_mb(0x2, vfe_dev->vfe_base + 0x1E0);
 		vfe_dev->axi_data.src_info[VFE_PIX_0].active = 0;
 	}
 }
@@ -902,11 +911,9 @@ static long msm_vfe32_axi_halt(struct vfe_device *vfe_dev,
 	uint32_t blocking)
 {
 	uint32_t halt_mask;
-	uint32_t axi_busy_flag = false;
+	uint32_t axi_busy_flag = true;
+
 	msm_camera_io_w_mb(0x1, vfe_dev->vfe_base + 0x1D8);
-	if (blocking) {
-		axi_busy_flag = true;
-	}
 	while (axi_busy_flag) {
 		if (msm_camera_io_r(
 			vfe_dev->vfe_base + 0x1DC) & 0x1)
@@ -1077,33 +1084,6 @@ static uint32_t msm_vfe32_stats_get_wm_mask(uint32_t irq_status0,
 	return (irq_status0 >> 13) & 0x7F;
 }
 
-static void msm_vfe32_get_overflow_mask(uint32_t *overflow_mask)
-{
-	*overflow_mask = 0x002FFF7E;
-}
-
-static void msm_vfe32_get_irq_mask(struct vfe_device *vfe_dev,
-	uint32_t *irq0_mask, uint32_t *irq1_mask)
-{
-	*irq0_mask = msm_camera_io_r(vfe_dev->vfe_base + 0x1C);
-	*irq1_mask = msm_camera_io_r(vfe_dev->vfe_base + 0x20);
-}
-
-static void msm_vfe32_restore_irq_mask(struct vfe_device *vfe_dev)
-{
-	msm_camera_io_w(vfe_dev->error_info.overflow_recover_irq_mask0,
-		vfe_dev->vfe_base + 0x1C);
-	msm_camera_io_w(vfe_dev->error_info.overflow_recover_irq_mask1,
-		vfe_dev->vfe_base + 0x20);
-}
-
-static void msm_vfe32_get_halt_restart_mask(uint32_t *irq0_mask,
-	uint32_t *irq1_mask)
-{
-	*irq0_mask = 0x0;
-	*irq1_mask = 0x01800000;
-}
-
 static uint32_t msm_vfe32_stats_get_comp_mask(uint32_t irq_status0,
 	uint32_t irq_status1)
 {
@@ -1257,11 +1237,6 @@ struct msm_vfe_hardware_info vfe32_hw_info = {
 			.release_hw = msm_vfe32_release_hardware,
 			.get_platform_data = msm_vfe32_get_platform_data,
 			.get_error_mask = msm_vfe32_get_error_mask,
-			.get_overflow_mask = msm_vfe32_get_overflow_mask,
-			.get_irq_mask = msm_vfe32_get_irq_mask,
-			.restore_irq_mask = msm_vfe32_restore_irq_mask,
-			.get_halt_restart_mask =
-				msm_vfe32_get_halt_restart_mask,
 			.process_error_status = msm_vfe32_process_error_status,
 		},
 		.stats_ops = {
