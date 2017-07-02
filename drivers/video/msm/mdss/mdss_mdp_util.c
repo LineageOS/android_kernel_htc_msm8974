@@ -496,7 +496,7 @@ int mdss_mdp_put_img(struct mdss_mdp_img_data *data)
 	} else if (data->srcp_file) {
 		pr_debug("pmem buf=0x%x\n", data->addr);
 		data->srcp_file = NULL;
-	} else if (!IS_ERR_OR_NULL(data->srcp_ihdl)) {
+	} else if (!IS_ERR_OR_NULL(data->srcp_ihdl) && iclient) {
 		pr_debug("ion hdl=%p buf=0x%x\n", data->srcp_ihdl, data->addr);
 		if (!iclient) {
 			pr_err("invalid ion client\n");
