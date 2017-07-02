@@ -26,6 +26,7 @@ void msm_camera_io_w_mb(u32 data, void __iomem *addr);
 u32 msm_camera_io_r(void __iomem *addr);
 u32 msm_camera_io_r_mb(void __iomem *addr);
 void msm_camera_io_dump(void __iomem *addr, int size);
+void msm_camera_io_dump_2(void __iomem *addr, int size);
 void msm_camera_io_memcpy(void __iomem *dest_addr,
 		void __iomem *src_addr, u32 len);
 void msm_camera_io_memcpy_mb(void __iomem *dest_addr,

@@ -3422,6 +3422,7 @@ static void adreno_power_stats(struct kgsl_device *device,
 	struct adreno_busy_data busy_data;
 
 	memset(stats, 0, sizeof(*stats));
+	memset(&busy_data, 0, sizeof(busy_data));
 
 	/*
 	 * If we're not currently active, there shouldn't have been

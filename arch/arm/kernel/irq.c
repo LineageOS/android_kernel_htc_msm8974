@@ -34,6 +34,8 @@
 #include <linux/list.h>
 #include <linux/kallsyms.h>
 #include <linux/proc_fs.h>
+#include <linux/export.h>
+#include <linux/slab.h>
 
 #include <asm/exception.h>
 #include <asm/mach/arch.h>

@@ -272,6 +272,18 @@ inline int adreno_ringbuffer_load_pfp_ucode(struct kgsl_device *device,
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	int i;
 
+	if (!adreno_dev)
+		return -EINVAL;
+
+	if (adreno_dev->pfp_fw == NULL) {
+		int ret = adreno_ringbuffer_read_pfp_ucode(device);
+		if (ret)
+			return ret;
+	}
+
+	KGSL_DRV_INFO(device, "loading pfp ucode version: %d\n",
+			adreno_dev->pfp_fw_version);
+
 	adreno_writereg(adreno_dev, ADRENO_REG_CP_PFP_UCODE_ADDR, addr);
 	for (i = start; i < end; i++)
 		adreno_writereg(adreno_dev, ADRENO_REG_CP_PFP_UCODE_DATA,

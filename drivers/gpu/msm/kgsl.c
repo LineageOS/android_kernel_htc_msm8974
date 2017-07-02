@@ -41,6 +41,7 @@
 #include "kgsl_trace.h"
 #include "kgsl_sync.h"
 #include "adreno.h"
+#include "kgsl_htc.h"
 
 #undef MODULE_PARAM_PREFIX
 #define MODULE_PARAM_PREFIX "kgsl."
@@ -576,6 +577,7 @@ int kgsl_context_init(struct kgsl_device_private *dev_priv,
 fail_free_id:
 	write_lock(&device->context_lock);
 	idr_remove(&dev_priv->device->context_idr, id);
+	kgsl_dump_contextpid_locked(&dev_priv->device->context_idr);
 	write_unlock(&device->context_lock);
 fail:
 	return ret;
@@ -2801,6 +2803,7 @@ static int memdesc_sg_virt(struct kgsl_memdesc *memdesc,
 
 	memdesc->sglen = sglen;
 	memdesc->sglen_alloc = sglen;
+	memdesc->sg_create = jiffies;
 
 	sg_init_table(memdesc->sg, sglen);
 
@@ -3378,6 +3381,7 @@ _gpumem_alloc(struct kgsl_device_private *dev_priv,
 	struct kgsl_process_private *private = dev_priv->process_priv;
 	struct kgsl_mem_entry *entry;
 	int align;
+	struct kgsl_memdesc *memdesc = NULL;
 
 	/*
 	 * Mask off unknown flags from userspace. This way the caller can
@@ -3402,12 +3406,15 @@ _gpumem_alloc(struct kgsl_device_private *dev_priv,
 	}
 
 	entry = kgsl_mem_entry_create();
+	memdesc = &entry->memdesc;
+
 	if (entry == NULL)
 		return -ENOMEM;
 
 	if (kgsl_mmu_get_mmutype() == KGSL_MMU_TYPE_IOMMU)
 		entry->memdesc.priv |= KGSL_MEMDESC_GUARD_PAGE;
 
+	memdesc->private = private;
 	result = kgsl_allocate_user(&entry->memdesc, private->pagetable, size,
 				    flags);
 	if (result != 0)
@@ -4405,6 +4412,9 @@ int kgsl_device_platform_probe(struct kgsl_device *device)
 	/* Initialize common sysfs entries */
 	kgsl_pwrctrl_init_sysfs(device);
 
+	
+	kgsl_device_htc_init(device);
+
 	return 0;
 
 error_close_mmu:
@@ -4633,6 +4643,8 @@ static int __init kgsl_core_init(void)
 	kgsl_memfree_init();
 
 	kgsl_events_init();
+
+	kgsl_driver_htc_init(&kgsl_driver.priv);
 
 	return 0;
 

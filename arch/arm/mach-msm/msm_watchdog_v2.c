@@ -93,15 +93,33 @@ static void dump_cpu_alive_mask(struct msm_watchdog_data *wdog_dd)
 	printk(KERN_INFO "cpu alive mask from last pet %s\n", alive_mask_buf);
 }
 
+static int msm_watchdog_do_suspend(void __iomem *base)
+{
+	__raw_writel(1, base + WDT0_RST);
+	__raw_writel(0, base + WDT0_EN);
+	mb();
+
+	return 0;
+}
+
 static int msm_watchdog_suspend(struct device *dev)
 {
 	struct msm_watchdog_data *wdog_dd =
 			(struct msm_watchdog_data *)dev_get_drvdata(dev);
 	if (!enable)
 		return 0;
-	__raw_writel(1, wdog_dd->base + WDT0_RST);
-	__raw_writel(0, wdog_dd->base + WDT0_EN);
+
+	msm_watchdog_do_suspend(wdog_dd->base);
+
+	return 0;
+}
+
+static int msm_watchdog_do_resume(void __iomem *base)
+{
+	__raw_writel(1, base + WDT0_EN);
+	__raw_writel(1, base + WDT0_RST);
 	mb();
+
 	return 0;
 }
 
@@ -111,9 +129,9 @@ static int msm_watchdog_resume(struct device *dev)
 			(struct msm_watchdog_data *)dev_get_drvdata(dev);
 	if (!enable)
 		return 0;
-	__raw_writel(1, wdog_dd->base + WDT0_EN);
-	__raw_writel(1, wdog_dd->base + WDT0_RST);
-	mb();
+
+	msm_watchdog_do_resume(wdog_dd->base);
+
 	return 0;
 }
 
@@ -476,6 +494,10 @@ static int __devinit msm_wdog_dt_to_pdata(struct platform_device *pdev,
 	int ret;
 
 	wdog_resource = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (unlikely(!wdog_resource)) {
+		dev_err(&pdev->dev, "%s wdog_resource is null\n", __func__);
+		return -ENXIO;
+	}
 	pdata->size = resource_size(wdog_resource);
 	pdata->phys_base = wdog_resource->start;
 	if (unlikely(!(devm_request_mem_region(&pdev->dev, pdata->phys_base,
