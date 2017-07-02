@@ -253,8 +253,8 @@ struct msm_hs_port {
 };
 
 static struct of_device_id msm_hs_match_table[] = {
-	{ .compatible = "qcom,msm-hsuart-v14"},
-	{}
+	{ .compatible = "qcom,msm-hsuart-v14",
+	},
 };
 
 
@@ -2933,7 +2933,8 @@ static int __devinit msm_hs_probe(struct platform_device *pdev)
 
 	uport->irq = core_irqres;
 	msm_uport->bam_irq = bam_irqres;
-	pdata->wakeup_irq = wakeup_irqres;
+	if (pdata != NULL)
+		pdata->wakeup_irq = wakeup_irqres;
 
 	msm_uport->bus_scale_table = msm_bus_cl_get_pdata(pdev);
 	if (!msm_uport->bus_scale_table) {
