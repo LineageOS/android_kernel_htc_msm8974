@@ -1160,6 +1160,10 @@ static int do_umount(struct mount *mnt, int flags)
 	br_write_unlock(vfsmount_lock);
 	up_write(&namespace_sem);
 	release_mounts(&umount_list);
+
+	printk(KERN_INFO "pid:%d(%s)(parent:%d/%s)  (%s) umounted filesystem.\n",
+			current->pid, current->comm, current->parent->pid,
+			current->parent->comm, sb->s_id);
 	return retval;
 }
 
@@ -1207,6 +1211,40 @@ out:
 	return retval;
 }
 
+int umount2(char *name, int flags)
+{
+	struct path path;
+	struct mount *mnt;
+	int retval;
+	int lookup_flags = 0;
+
+	if (flags & ~(MNT_FORCE | MNT_DETACH | MNT_EXPIRE | UMOUNT_NOFOLLOW))
+		return -EINVAL;
+
+	if (!(flags & UMOUNT_NOFOLLOW))
+		lookup_flags |= LOOKUP_FOLLOW;
+
+	retval = user_path_at(AT_FDCWD, name, lookup_flags, &path);
+	if (retval)
+		goto out;
+	mnt = real_mount(path.mnt);
+	retval = -EINVAL;
+	if (path.dentry != path.mnt->mnt_root)
+		goto dput_and_out;
+	if (!check_mnt(mnt))
+		goto dput_and_out;
+#if 0
+	retval = -EPERM;
+	if (!capable(CAP_SYS_ADMIN))
+		goto dput_and_out;
+#endif
+	retval = do_umount(mnt, flags);
+dput_and_out:
+	dput(path.dentry);
+	mntput_no_expire(mnt);
+out:
+	return retval;
+}
 #ifdef __ARCH_WANT_SYS_OLDUMOUNT
 
 /*
@@ -1889,6 +1927,11 @@ static int do_new_mount(struct path *path, const char *fstype, int flags,
 	err = do_add_mount(real_mount(mnt), path, mnt_flags);
 	if (err)
 		mntput(mnt);
+
+	if (!err && !strcmp(fstype, "ext4") &&
+	    !strcmp(path->dentry->d_name.name, "data"))
+		mnt->mnt_sb->fsync_flags |= FLAG_ASYNC_FSYNC;
+
 	return err;
 }
 
