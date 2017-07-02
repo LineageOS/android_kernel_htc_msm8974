@@ -12,6 +12,13 @@ config FB_MSM_MDSS_HDMI_PANEL
 	The MDSS HDMI Panel provides support for transmitting TMDS signals of
 	MDSS frame buffer data to connected hdmi compliant TVs, monitors etc.
 
+config HTC_MHL_DETECTION
+	depends on FB_MSM_MDSS_HDMI_PANEL
+	bool 'Using HTC MHL detection '
+	default n
+	---help---
+	  Using HTC MHL detection instead of silicon image advised.
+
 config FB_MSM_MDSS_HDMI_MHL_SII8334
 	depends on FB_MSM_MDSS_HDMI_PANEL
 	bool 'MHL SII8334 support '
@@ -35,3 +42,35 @@ config FB_MSM_MDSS_MDP3
 	---help---
 	The MDP3 provides support for an older version display controller
 	included in latest display sub-system, known as MDSS.
+
+config FB_MSM_MDSS_HDMI_MHL_SII8240_SII8558
+	depends on FB_MSM_MDSS_HDMI_PANEL
+	bool 'MHL SII8240/SII8558 support '
+	default n
+	---help---
+	  Support the HDMI to MHL conversion.
+	  MHL (Mobile High-Definition Link) technology
+	  uses USB connector to output HDMI content
+
+config INTERNAL_CHARGING_SUPPORT
+	depends on FB_MSM_MDSS_HDMI_PANEL
+	boolean "INTERNAL CHARGING SUPPORT"
+	default n
+
+config MHL_DONGLE_WORKAROUND
+	depends on FB_MSM_MDSS_HDMI_PANEL
+	boolean 'Dongle MHL function workaround'
+	default n
+	---help---
+	  Support the MHL function in some dongle.
+	  Some dongle will abort cbus command when it's reading devcap.
+	  Workaound for this kind of issue.
+
+config MHL_MONITOR_WORKAROUND
+	depends on INTERNAL_CHARGING_SUPPORT
+	boolean 'Monitor MHL function workaround'
+	default n
+	---help---
+	  Support the MHL function in some monitor.
+	  Some monitor can't full support HDMI spec.
+	  Workaound for this kind of issue
