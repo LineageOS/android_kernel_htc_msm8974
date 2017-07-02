@@ -84,7 +84,6 @@ struct disp_info_notify {
 	int value;
 	int is_suspend;
 	int ref_count;
-	bool init_done;
 };
 
 struct msm_sync_pt_data {
@@ -135,7 +134,7 @@ struct msm_mdp_interface {
 	struct msm_sync_pt_data *(*get_sync_fnc)(struct msm_fb_data_type *mfd,
 				const struct mdp_buf_sync *buf_sync);
 	void (*check_dsi_status)(struct work_struct *work, uint32_t interval);
-	int (*configure_panel)(struct msm_fb_data_type *mfd, int mode);
+	void (*display_on)(struct msm_fb_data_type *mfd);
 	void *private1;
 };
 
@@ -180,6 +179,7 @@ struct msm_fb_data_type {
 
 	u32 dst_format;
 	int panel_power_on;
+	int request_display_on;
 	struct disp_info_type_suspend suspend;
 
 	struct ion_handle *ihdl;
@@ -200,6 +200,7 @@ struct msm_fb_data_type {
 	u32 bl_level_scaled;
 	u32 bl_level_prev_scaled;
 	struct mutex bl_lock;
+	struct mutex lock;
 
 	struct platform_device *pdev;
 
@@ -230,12 +231,14 @@ struct msm_fb_data_type {
 	struct msm_fb_backup_type msm_fb_backup;
 	struct completion power_set_comp;
 	u32 is_power_setting;
+	u32 is_active;
 
 	u32 dcm_state;
 	struct list_head proc_list;
 	u32 wait_for_kickoff;
 	struct ion_client *fb_ion_client;
 	struct ion_handle *fb_ion_handle;
+	int pan_pid;
 };
 
 static inline void mdss_fb_update_notify_update(struct msm_fb_data_type *mfd)
@@ -266,5 +269,6 @@ struct sync_fence *mdss_fb_sync_get_fence(struct sw_sync_timeline *timeline,
 				const char *fence_name, int val);
 int mdss_fb_register_mdp_instance(struct msm_mdp_interface *mdp);
 int mdss_fb_dcm(struct msm_fb_data_type *mfd, int req_state);
+#define DEFAULT_BRIGHTNESS 143
 int mdss_fb_suspres_panel(struct device *dev, void *data);
 #endif /* MDSS_FB_H */
