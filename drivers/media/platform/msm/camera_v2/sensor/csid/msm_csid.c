@@ -152,12 +152,13 @@ static irqreturn_t msm_csid_irq(int irq_num, void *data)
 	uint32_t irq;
 	struct csid_device *csid_dev = data;
 	void __iomem *csidbase;
-	csidbase = csid_dev->base;
 
 	if (!csid_dev) {
 		pr_err("%s:%d csid_dev NULL\n", __func__, __LINE__);
 		return IRQ_HANDLED;
 	}
+	csidbase = csid_dev->base;
+
 	irq = msm_camera_io_r(csid_dev->base + CSID_IRQ_STATUS_ADDR);
 	CDBG("%s CSID%d_IRQ_STATUS_ADDR = 0x%x\n",
 		 __func__, csid_dev->pdev->id, irq);
