@@ -74,6 +74,15 @@ struct q_chip_data {
 	struct list_head list;
 };
 
+#ifdef CONFIG_HTC_POWER_DEBUG
+struct pm_irq_wake_state {
+	uint8_t wake_enable[16][256];
+	uint16_t count_wakeable;
+};
+
+struct pm_irq_wake_state pmic_wake_state;
+#endif
+
 static LIST_HEAD(qpnpint_chips);
 static DEFINE_MUTEX(qpnpint_chips_mutex);
 
@@ -363,6 +372,30 @@ static int qpnpint_irq_read_line(struct irq_data *d)
 
 static int qpnpint_irq_set_wake(struct irq_data *d, unsigned int on)
 {
+#ifdef CONFIG_HTC_POWER_DEBUG
+        struct qpnp_irq_spec q_spec;
+        int rc;
+
+        pr_debug("hwirq %lu irq: %d\n", d->hwirq, d->irq);
+
+        rc = qpnpint_decode_hwirq(d->hwirq, &q_spec);
+        if (rc) {
+                pr_err("decode failed on hwirq %lu\n", d->hwirq);
+                return 0;
+        }
+
+        if (on) {
+                if (!qpnpint_check_irq_wake(&q_spec)) {
+                        pmic_wake_state.wake_enable[q_spec.slave][q_spec.per] |= (u8)(1 << q_spec.irq);
+                        pmic_wake_state.count_wakeable++;
+                }
+        } else {
+                if (qpnpint_check_irq_wake(&q_spec)) {
+                        pmic_wake_state.wake_enable[q_spec.slave][q_spec.per] &= ~(u8)(1 << q_spec.irq);
+                        pmic_wake_state.count_wakeable--;
+                }
+        }
+#endif
 	return 0;
 }
 
@@ -677,6 +710,23 @@ int __init qpnpint_of_init(struct device_node *node, struct device_node *parent)
 	INIT_RADIX_TREE(&chip_d->per_tree, GFP_ATOMIC);
 	list_add(&chip_d->list, &qpnpint_chips);
 
+#ifdef CONFIG_HTC_POWER_DEBUG
+        memset((void*)&pmic_wake_state, 0, sizeof(struct pm_irq_wake_state));
+#endif
 	return 0;
 }
 EXPORT_SYMBOL(qpnpint_of_init);
+
+#ifdef CONFIG_HTC_POWER_DEBUG
+int qpnpint_check_irq_wake(struct qpnp_irq_spec *spec)
+{
+        pr_debug("spec slave = %u per = %u irq = %u\n",
+			spec->slave, spec->per, spec->irq);
+
+        if ((pmic_wake_state.wake_enable[spec->slave][spec->per] >> spec->irq) & 0x1)
+		return 1;
+        else
+                return 0;
+}
+EXPORT_SYMBOL(qpnpint_check_irq_wake);
+#endif

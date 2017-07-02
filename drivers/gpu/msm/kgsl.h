@@ -25,6 +25,8 @@
 
 #include <mach/kgsl.h>
 
+#include "kgsl_htc.h"
+
 #define KGSL_NAME "kgsl"
 
 /* The number of memstore arrays limits the number of contexts allowed.
@@ -81,6 +83,17 @@ static inline void KGSL_STATS_ADD(uint32_t size, atomic_t *stat,
 		atomic_set(max, ret);
 }
 
+enum {
+	KGSL_MEM_ENTRY_KERNEL = 0,
+	KGSL_MEM_ENTRY_PMEM,
+	KGSL_MEM_ENTRY_ASHMEM,
+	KGSL_MEM_ENTRY_USER,
+	KGSL_MEM_ENTRY_ION,
+	KGSL_MEM_ENTRY_PAGE_ALLOC,
+	KGSL_MEM_ENTRY_PRE_ALLOC,
+	KGSL_MEM_ENTRY_MAX,
+};
+
 #define KGSL_MAX_NUMIBS 100000
 
 struct kgsl_device;
@@ -122,6 +135,8 @@ struct kgsl_driver {
 		atomic_t mapped_max;
 	} stats;
 	unsigned int full_cache_threshold;
+
+	struct kgsl_driver_htc_priv priv;
 };
 
 extern struct kgsl_driver kgsl_driver;
@@ -162,17 +177,12 @@ struct kgsl_memdesc {
 	unsigned int sglen; /* Active entries in the sglist */
 	unsigned int sglen_alloc;  /* Allocated entries in the sglist */
 	struct kgsl_memdesc_ops *ops;
-	unsigned int flags; /* Flags set from userspace */
+	unsigned int flags; 
+	struct kgsl_process_private *private;
+
+	unsigned long sg_create;
+	struct scatterlist *sg_backup;
 };
-
-/* List of different memory entry types */
-
-#define KGSL_MEM_ENTRY_KERNEL 0
-#define KGSL_MEM_ENTRY_PMEM   1
-#define KGSL_MEM_ENTRY_ASHMEM 2
-#define KGSL_MEM_ENTRY_USER   3
-#define KGSL_MEM_ENTRY_ION    4
-#define KGSL_MEM_ENTRY_MAX    5
 
 struct kgsl_mem_entry {
 	struct kref refcount;

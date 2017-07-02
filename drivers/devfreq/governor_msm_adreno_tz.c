@@ -92,6 +92,8 @@ static int tz_get_target_freq(struct devfreq *devfreq, unsigned long *freq,
 	int norm_cycles;
 	int gpu_percent;
 
+	memset(&b, 0, sizeof(b));
+
 	if (priv->bus.num)
 		stats.private_data = &b;
 	else

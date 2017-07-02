@@ -48,6 +48,13 @@
 #include <asm/system.h>
 
 #include <mach/socinfo.h>
+#ifdef CONFIG_HTC_POWER_DEBUG
+#include <mach/irqs.h>
+#endif
+
+#if defined(CONFIG_HTC_DEBUG_WATCHDOG) || defined(CONFIG_HTC_DEBUG_RTB)
+#include <mach/htc_debug_tools.h>
+#endif
 #include <mach/msm_rtb.h>
 
 union gic_base {
@@ -259,6 +266,11 @@ static void gic_show_resume_irq(struct gic_chip_data *gic)
 	     i = find_next_bit(pending, gic->max_irq, i+1)) {
 		pr_warning("%s: %d triggered", __func__,
 					i + gic->irq_offset);
+#ifdef CONFIG_HTC_POWER_DEBUG
+                if (EE0_KRAIT_HLOS_SPMI_PERIPH_IRQ != i + gic->irq_offset)
+                        if (TLMM_MSM_SUMMARY_IRQ != i + gic->irq_offset)
+                                pr_info("[WAKEUP] Resume caused by gic-%d\n", i + gic->irq_offset);
+#endif
 	}
 }
 
@@ -441,12 +453,38 @@ asmlinkage void __exception_irq_entry gic_handle_irq(struct pt_regs *regs)
 		irqnr = irqstat & ~0x1c00;
 
 		if (likely(irqnr > 15 && irqnr < 1021)) {
+#if defined(CONFIG_HTC_DEBUG_WATCHDOG)
+			/* only check on timer interrupt */
+			if (irqnr == 19 && smp_processor_id() == 0) {
+				unsigned long long timestamp = sched_clock();
+#if defined(CONFIG_HTC_DEBUG_RTB)
+				unsigned long long timestamp_ms = timestamp;
+				do_div(timestamp_ms, NSEC_PER_MSEC);
+				uncached_logk_pc(LOGK_IRQ,
+					(void *)((unsigned long)timestamp_ms),
+					(void *)irqnr);
+#endif
+				htc_debug_watchdog_check_pet(timestamp);
+			}
+#if defined(CONFIG_HTC_DEBUG_RTB)
+			else {
+				uncached_logk_pc(LOGK_IRQ,
+					(void *)htc_debug_get_sched_clock_ms(),
+					(void *)irqnr);
+			}
+#endif
+#endif /* CONFIG_HTC_DEBUG_WATCHDOG */
 			irqnr = irq_find_mapping(gic->domain, irqnr);
 			handle_IRQ(irqnr, regs);
 			uncached_logk(LOGK_IRQ, (void *)(uintptr_t)irqnr);
 			continue;
 		}
 		if (irqnr < 16) {
+#if defined(CONFIG_HTC_DEBUG_RTB)
+			uncached_logk_pc(LOGK_IRQ,
+				(void *)htc_debug_get_sched_clock_ms(),
+				(void *)irqnr);
+#endif
 			if (gic->need_access_lock)
 				raw_spin_lock(&irq_controller_lock);
 			writel_relaxed_no_log(irqstat, cpu_base + GIC_CPU_EOI);

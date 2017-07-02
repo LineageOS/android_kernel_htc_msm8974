@@ -32,6 +32,12 @@
 #include <mach/gpiomux.h>
 #include <mach/mpm.h>
 #include "gpio-msm-common.h"
+#ifdef CONFIG_HTC_POWER_DEBUG
+#include <linux/debugfs.h>
+#include <linux/seq_file.h>
+#include <linux/qpnp/pin.h>
+#include "../../arch/arm/mach-msm/pm.h"
+#endif
 
 #ifdef CONFIG_GPIO_MSM_V3
 enum msm_tlmm_register {
@@ -377,6 +383,9 @@ void msm_gpio_show_resume_irq(void)
 			irq = msm_gpio_to_irq(&msm_gpio.gpio_chip, i);
 			pr_warning("%s: %d triggered\n",
 				__func__, irq);
+#ifdef CONFIG_HTC_POWER_DEBUG
+                        pr_info("[WAKEUP] Resume caused by msmgpio-%d\n", i);
+#endif
 		}
 	}
 	spin_unlock_irqrestore(&tlmm_lock, irq_flags);
@@ -492,6 +501,171 @@ static inline void msm_gpio_set_irq_handler(struct device *dev)
 	}
 }
 
+#ifdef CONFIG_HTC_POWER_DEBUG
+int msm_dump_gpios(struct seq_file *m, int curr_len, char *gpio_buffer)
+{
+        unsigned int i, len;
+        struct msm_gpio_dump_info data;
+        char list_gpio[100];
+        char *title_msg = "------------ MSM GPIO -------------";
+
+        if (m) {
+                seq_printf(m, "%s\n", title_msg);
+        } else {
+                pr_info("%s\n", title_msg);
+                curr_len += sprintf(gpio_buffer + curr_len,
+                "%s\n", title_msg);
+        }
+
+        for (i = msm_gpio.gpio_chip.base; i < msm_gpio.gpio_chip.ngpio; i++) {
+                memset(list_gpio, 0 , sizeof(list_gpio));
+                len = 0;
+                __msm_gpio_get_dump_info(i, &data);
+
+                len += sprintf(list_gpio + len, "GPIO[%3d]: ", i);
+
+                len += sprintf(list_gpio + len, "[FS]0x%x, ", data.func_sel);
+
+                if (data.dir)
+                        len += sprintf(list_gpio + len, "[DIR]OUT, [VAL]%s ", data.value ? "HIGH" : " LOW");
+                else
+                        len += sprintf(list_gpio + len, "[DIR] IN, [VAL]%s ", data.value ? "HIGH" : " LOW");
+
+                switch (data.pull) {
+                case 0x0:
+                        len += sprintf(list_gpio + len, "[PULL]NO, ");
+                        break;
+                case 0x1:
+                        len += sprintf(list_gpio + len, "[PULL]PD, ");
+                        break;
+                case 0x2:
+                        len += sprintf(list_gpio + len, "[PULL]KP, ");
+                        break;
+                case 0x3:
+                        len += sprintf(list_gpio + len, "[PULL]PU, ");
+                        break;
+                default:
+                        break;
+                }
+
+                len += sprintf(list_gpio + len, "[DRV]%2dmA, ", 2*(data.drv+1));
+
+                if (!data.dir) {
+                        len += sprintf(list_gpio + len, "[INT]%s, ", data.int_en ? "YES" : " NO");
+                        if (data.int_en) {
+                                switch (data.int_owner) {
+                                case 0x0:
+                                        len += sprintf(list_gpio + len, " WC_PROC, ");
+                                        break;
+                                case 0x1:
+                                        len += sprintf(list_gpio + len, "SPS_PROC, ");
+                                        break;
+                                case 0x2:
+                                        len += sprintf(list_gpio + len, " LPA_DSP, ");
+                                        break;
+                                case 0x3:
+                                        len += sprintf(list_gpio + len, "RPM_PROC, ");
+                                        break;
+                                case 0x4:
+                                        len += sprintf(list_gpio + len, " KP_PROC, ");
+                                        break;
+                                case 0x5:
+                                        len += sprintf(list_gpio + len, "MSS_PROC, ");
+                                        break;
+                                case 0x6:
+                                        len += sprintf(list_gpio + len, " TZ_PROC, ");
+                                        break;
+                                case 0x7:
+                                        len += sprintf(list_gpio + len, "    NONE, ");
+                                        break;
+                                default:
+                                        break;
+                                }
+                        }
+                }
+
+                list_gpio[99] = '\0';
+                if (m) {
+                        seq_printf(m, "%s\n", list_gpio);
+                } else {
+                        pr_info("%s\n", list_gpio);
+                        curr_len += sprintf(gpio_buffer +
+                        curr_len, "%s\n", list_gpio);
+                }
+        }
+
+        return curr_len;
+}
+
+#ifdef CONFIG_DEBUG_FS
+#define DEBUG_MAX_FNAME    8
+static int list_gpios_show(struct seq_file *m, void *unused)
+{
+        msm_dump_gpios(m, 0, NULL);
+        qpnp_pin_dump(m, 0, NULL);
+        return 0;
+}
+
+static int list_sleep_gpios_show(struct seq_file *m, void *unused)
+{
+        print_gpio_buffer(m);
+        return 0;
+}
+
+static int list_gpios_open(struct inode *inode, struct file *file)
+{
+        return single_open(file, list_gpios_show, inode->i_private);
+}
+
+static int list_sleep_gpios_open(struct inode *inode, struct file *file)
+{
+        return single_open(file, list_sleep_gpios_show, inode->i_private);
+}
+
+static int list_sleep_gpios_release(struct inode *inode, struct file *file)
+{
+        free_gpio_buffer();
+        return single_release(inode, file);
+}
+
+static const struct file_operations list_gpios_fops = {
+        .open           = list_gpios_open,
+        .read           = seq_read,
+        .llseek         = seq_lseek,
+        .release        = seq_release,
+};
+
+static const struct file_operations list_sleep_gpios_fops = {
+        .open           = list_sleep_gpios_open,
+        .read           = seq_read,
+        .llseek         = seq_lseek,
+        .release        = list_sleep_gpios_release,
+};
+
+static struct dentry *debugfs_base;
+int __init gpio_status_debug_init(void)
+{
+        int err = 0;
+
+        debugfs_base = debugfs_create_dir("htc_gpio", NULL);
+        if (!debugfs_base)
+                return -ENOMEM;
+
+        if (!debugfs_create_file("list_gpios", S_IRUGO, debugfs_base,
+                                &msm_gpio.gpio_chip, &list_gpios_fops))
+                return -ENOMEM;
+
+        if (!debugfs_create_file("list_sleep_gpios", S_IRUGO, debugfs_base,
+                                &msm_gpio.gpio_chip, &list_sleep_gpios_fops))
+                return -ENOMEM;
+
+        return err;
+}
+#else
+static void gpio_status_debug_init(void) {}
+#endif
+#endif
+
 static int __devinit msm_gpio_probe(struct platform_device *pdev)
 {
 	int ret, ngpio = 0;
@@ -599,6 +773,9 @@ module_exit(msm_gpio_exit);
 
 static int __init msm_gpio_init(void)
 {
+#ifdef CONFIG_HTC_POWER_DEBUG
+	gpio_status_debug_init();
+#endif
 	return platform_driver_register(&msm_gpio_driver);
 }
 postcore_initcall(msm_gpio_init);

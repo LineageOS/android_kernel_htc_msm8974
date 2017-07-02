@@ -983,7 +983,10 @@ static int msm_venc_queue_setup(struct vb2_queue *q,
 					extra_idx < VIDEO_MAX_PLANES) {
 				buff_req = get_buff_req_buffer(inst,
 						HAL_BUFFER_EXTRADATA_OUTPUT);
-				sizes[i] = buff_req->buffer_size;
+				
+				
+                                if(buff_req)
+					sizes[i] = buff_req->buffer_size;
 			}
 		}
 
@@ -1103,20 +1106,21 @@ static inline int start_streaming(struct msm_vidc_inst *inst)
 			"Failed to move inst: %p to start done state\n", inst);
 		goto fail_start;
 	}
-
-	mutex_lock(&inst->pendingq.lock);
-	list_for_each_safe(ptr, next, &inst->pendingq.list) {
-		temp = list_entry(ptr, struct vb2_buf_entry, list);
-		rc = msm_comm_qbuf(temp->vb);
-		if (rc) {
-			dprintk(VIDC_ERR,
+	mutex_lock(&inst->sync_lock);
+	if (!list_empty(&inst->pendingq)) {
+		list_for_each_safe(ptr, next, &inst->pendingq) {
+			temp = list_entry(ptr, struct vb2_buf_entry, list);
+			rc = msm_comm_qbuf(temp->vb);
+			if (rc) {
+				dprintk(VIDC_ERR,
 					"Failed to qbuf to hardware\n");
-			break;
+				break;
+			}
+			list_del(&temp->list);
+			kfree(temp);
 		}
-		list_del(&temp->list);
-		kfree(temp);
 	}
-	mutex_unlock(&inst->pendingq.lock);
+	mutex_unlock(&inst->sync_lock);
 	return rc;
 fail_start:
 	return rc;
@@ -2703,7 +2707,7 @@ int msm_venc_s_fmt(struct msm_vidc_inst *inst, struct v4l2_format *f)
 			rc = msm_comm_try_state(inst, MSM_VIDC_OPEN_DONE);
 			if (rc) {
 				dprintk(VIDC_ERR, "Failed to open instance\n");
-                                msm_comm_session_clean(inst);
+				msm_comm_session_clean(inst);
 				goto exit;
 			}
 			frame_sz.width = inst->prop.width[CAPTURE_PORT];

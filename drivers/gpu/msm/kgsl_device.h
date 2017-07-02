@@ -364,10 +364,14 @@ struct kgsl_device {
 
 	int reset_counter; /* Track how many GPU core resets have occured */
 	int cff_dump_enable;
+
 	struct workqueue_struct *events_wq;
 
 	struct kgsl_event_group global_events;
 	struct kgsl_event_group iommu_events;
+
+	
+	int gpu_fault_no_panic;
 };
 
 
@@ -493,9 +497,22 @@ struct kgsl_device *kgsl_get_device(int dev_idx);
 static inline void kgsl_process_add_stats(struct kgsl_process_private *priv,
 	unsigned int type, size_t size)
 {
+	if (type >= KGSL_MEM_ENTRY_MAX)
+		return;
+
+	mutex_lock(&priv->process_private_mutex);
 	priv->stats[type].cur += size;
 	if (priv->stats[type].max < priv->stats[type].cur)
 		priv->stats[type].max = priv->stats[type].cur;
+	mutex_unlock(&priv->process_private_mutex);
+}
+
+static inline void kgsl_process_sub_stats(struct kgsl_process_private *priv,
+	unsigned int type, size_t size)
+{
+	mutex_lock(&priv->process_private_mutex);
+	priv->stats[type].cur -= size;
+	mutex_unlock(&priv->process_private_mutex);
 }
 
 static inline void kgsl_regread(struct kgsl_device *device,

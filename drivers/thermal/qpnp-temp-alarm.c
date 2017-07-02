@@ -84,7 +84,7 @@ struct qpnp_tm_chip {
 	struct thermal_zone_device	*tz_dev;
 	const char			*tm_name;
 	enum qpnp_tm_adc_type		adc_type;
-	unsigned long			temperature;
+	long			temperature;
 	enum thermal_device_mode	mode;
 	unsigned int			thresh;
 	unsigned int			stage;
@@ -228,7 +228,7 @@ static int qpnp_tm_update_temp_no_adc(struct qpnp_tm_chip *chip)
 }
 
 static int qpnp_tz_get_temp_no_adc(struct thermal_zone_device *thermal,
-				     unsigned long *temperature)
+				     long *temperature)
 {
 	struct qpnp_tm_chip *chip = thermal->devdata;
 	int rc;
@@ -246,7 +246,7 @@ static int qpnp_tz_get_temp_no_adc(struct thermal_zone_device *thermal,
 }
 
 static int qpnp_tz_get_temp_qpnp_adc(struct thermal_zone_device *thermal,
-				      unsigned long *temperature)
+				      long *temperature)
 {
 	struct qpnp_tm_chip *chip = thermal->devdata;
 	int rc;
@@ -323,7 +323,7 @@ static int qpnp_tz_get_trip_type(struct thermal_zone_device *thermal,
 }
 
 static int qpnp_tz_get_trip_temp(struct thermal_zone_device *thermal,
-				   int trip, unsigned long *temperature)
+				   int trip, long *temperature)
 {
 	struct qpnp_tm_chip *chip = thermal->devdata;
 	int thresh_temperature;
@@ -352,7 +352,7 @@ static int qpnp_tz_get_trip_temp(struct thermal_zone_device *thermal,
 }
 
 static int qpnp_tz_get_crit_temp(struct thermal_zone_device *thermal,
-				   unsigned long *temperature)
+				   long *temperature)
 {
 	struct qpnp_tm_chip *chip = thermal->devdata;
 

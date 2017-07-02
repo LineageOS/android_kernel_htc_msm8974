@@ -6731,10 +6731,18 @@ static int nl80211_vendor_cmd(struct sk_buff *skb, struct genl_info *info)
 {
 	struct cfg80211_registered_device *rdev = info->user_ptr[0];
 	struct net_device *dev = info->user_ptr[1];
-	struct wireless_dev *wdev = dev->ieee80211_ptr;
+	struct wireless_dev *wdev = NULL;
 	int i, err;
 	u32 vid, subcmd;
 
+    /* HTC_WIFI_START */
+    // ** For Fix dev is Null pointer kernel panic
+    if (dev == NULL){
+        printk("nl80211_vendor_cmd: dev is NULL, return -EINVAL\n");
+        return -EINVAL;
+    }
+    /* HTC_WIFI_END */
+    wdev = dev->ieee80211_ptr;
 	if (!rdev->wiphy.vendor_commands)
 		return -EOPNOTSUPP;
 

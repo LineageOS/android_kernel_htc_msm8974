@@ -41,6 +41,9 @@
 #include <mach/msm_bus.h>
 #include <mach/mpm.h>
 #include <linux/iopoll.h>
+#include <linux/android_alarm.h>
+#include <linux/proc_fs.h>
+#include <mach/board.h>
 
 #include "sdhci-pltfm.h"
 
@@ -159,14 +162,19 @@ enum sdc_mpm_pin_state {
 
 /* 8KB descriptors */
 #define SDHCI_MSM_MAX_SEGMENTS  (1 << 13)
-#define SDHCI_MSM_MMC_CLK_GATE_DELAY	200 /* msecs */
+#define SDHCI_MSM_MMC_CLK_GATE_DELAY	200 
+#define SDHCI_MSM_MMC_CLK_GATE_DELAY_EMMC	20 
 
 #define CORE_FREQ_100MHZ	(100 * 1000 * 1000)
 
 #define INVALID_TUNING_PHASE	-1
+atomic_t emmc_reboot = ATOMIC_INIT(0);
 
 #define sdhci_is_valid_mpm_wakeup_int(_h) ((_h)->pdata->mpm_sdiowakeup_int >= 0)
 #define sdhci_is_valid_gpio_wakeup_int(_h) ((_h)->pdata->sdiowakeup_irq >= 0)
+
+#define NUM_TUNING_PHASES		16
+#define MAX_DRV_TYPES_SUPPORTED_HS200	3
 
 static const u32 tuning_block_64[] = {
 	0x00FF0FFF, 0xCCC3CCFF, 0xFFCC3CC3, 0xEFFEFFFE,
@@ -252,6 +260,8 @@ struct sdhci_msm_pad_drv {
 
 struct sdhci_msm_pad_drv_data {
 	struct sdhci_msm_pad_drv *on;
+	struct sdhci_msm_pad_drv *on_uhs;
+	struct sdhci_msm_pad_drv *on_sdr104;
 	struct sdhci_msm_pad_drv *off;
 	u8 size;
 };
@@ -295,8 +305,11 @@ struct sdhci_msm_pltfm_data {
 	struct sdhci_msm_bus_voting_data *voting_data;
 	u32 *sup_clk_table;
 	unsigned char sup_clk_cnt;
+	int slot_type;
+	int disable_sdcard_uhs;
 	int mpm_sdiowakeup_int;
 	int sdiowakeup_irq;
+	int expand_debounce;
 };
 
 struct sdhci_msm_bus_vote {
@@ -327,7 +340,10 @@ struct sdhci_msm_host {
 	struct completion pwr_irq_completion;
 	struct sdhci_msm_bus_vote msm_bus_vote;
 	struct device_attribute	polling;
-	u32 clk_rate; /* Keeps track of current clock rate that is set */
+	u32 clk_rate; 
+
+	struct proc_dir_entry	*speed_class;
+	struct proc_dir_entry	*sd_tray_state;
 	bool tuning_done;
 	bool calibration_done;
 	u8 saved_tuning_phase;
@@ -347,7 +363,60 @@ enum vdd_io_level {
 	VDD_IO_SET_LEVEL,
 };
 
-/* MSM platform specific tuning */
+static char *mmc_type_str(unsigned int slot_type)
+{
+	switch (slot_type) {
+		case MMC_TYPE_MMC:		return "MMC";
+		case MMC_TYPE_SD:		return "SD";
+		case MMC_TYPE_SDIO:		return "SDIO";
+		case MMC_TYPE_SDIO_WIFI:	return "SDIO(WIFI)";
+		case MMC_TYPE_SDIO_WIMAX:	return "SDIO(WiMAX)";
+		case MMC_TYPE_SDIO_SVLTE:	return "SDIO(SVLTE)";
+		case MMC_TYPE_NA:
+		default:			return "Unknown type";
+	}
+}
+
+static int is_mmc_platform(struct sdhci_msm_pltfm_data *pdata)
+{
+	if (pdata && pdata->slot_type == MMC_TYPE_MMC)
+		return 1;
+
+	return 0;
+}
+
+static int is_sd_platform(struct sdhci_msm_pltfm_data *pdata)
+{
+	if (pdata && pdata->slot_type == MMC_TYPE_SD)
+		return 1;
+
+	return 0;
+}
+
+int mmc_is_sd_host(struct mmc_host *mmc)
+{
+	struct sdhci_host *host = mmc_priv(mmc);
+	struct sdhci_pltfm_host *pltfm_host;
+	struct sdhci_msm_host *msm_host;
+
+	pltfm_host = sdhci_priv(host);
+	msm_host = pltfm_host->priv;
+
+	return is_sd_platform(msm_host->pdata);
+}
+
+int mmc_is_mmc_host(struct mmc_host *mmc)
+{
+	struct sdhci_host *host = mmc_priv(mmc);
+	struct sdhci_pltfm_host *pltfm_host;
+	struct sdhci_msm_host *msm_host;
+
+	pltfm_host = sdhci_priv(host);
+	msm_host = pltfm_host->priv;
+
+	return is_mmc_platform(msm_host->pdata);
+
+}
 static inline int msm_dll_poll_ck_out_en(struct sdhci_host *host,
 						u8 poll)
 {
@@ -789,11 +858,40 @@ out:
 	return ret;
 }
 
+static void sdhci_msm_set_mmc_drv_type(struct sdhci_host *host, u32 opcode,
+		u8 drv_type)
+{
+	struct mmc_command cmd = {0};
+	struct mmc_request mrq = {NULL};
+	struct mmc_host *mmc = host->mmc;
+	u8 val = ((drv_type << 4) | 2);
+
+	cmd.opcode = MMC_SWITCH;
+	cmd.arg = (MMC_SWITCH_MODE_WRITE_BYTE << 24) |
+		(EXT_CSD_HS_TIMING << 16) |
+		(val << 8) |
+		EXT_CSD_CMD_SET_NORMAL;
+	cmd.flags = MMC_CMD_AC | MMC_RSP_R1B;
+	
+	cmd.cmd_timeout_ms = 1000 * 1000;
+
+	memset(cmd.resp, 0, sizeof(cmd.resp));
+	cmd.retries = 3;
+
+	mrq.cmd = &cmd;
+	cmd.data = NULL;
+
+	mmc_wait_for_req(mmc, &mrq);
+	pr_debug("%s: %s: set card drive type to %d\n",
+			mmc_hostname(mmc), __func__,
+			drv_type);
+}
+
 int sdhci_msm_execute_tuning(struct sdhci_host *host, u32 opcode)
 {
 	unsigned long flags;
 	int tuning_seq_cnt = 3;
-	u8 phase, *data_buf, tuned_phases[16], tuned_phase_cnt = 0;
+	u8 phase, *data_buf, tuned_phases[NUM_TUNING_PHASES], tuned_phase_cnt;
 	const u32 *tuning_block_pattern = tuning_block_64;
 	int size = sizeof(tuning_block_64); /* Tuning pattern size in bytes */
 	int rc;
@@ -801,6 +899,9 @@ int sdhci_msm_execute_tuning(struct sdhci_host *host, u32 opcode)
 	struct mmc_ios	ios = host->mmc->ios;
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
 	struct sdhci_msm_host *msm_host = pltfm_host->priv;
+	u8 drv_type = 0;
+	bool drv_type_changed = false;
+	struct mmc_card *card = host->mmc->card;
 
 	/*
 	 * Tuning is required for SDR104, HS200 and HS400 cards and
@@ -842,7 +943,9 @@ int sdhci_msm_execute_tuning(struct sdhci_host *host, u32 opcode)
 	}
 
 retry:
-	/* first of all reset the tuning block */
+	tuned_phase_cnt = 0;
+
+	
 	rc = msm_init_cm_dll(host);
 	if (rc)
 		goto kfree;
@@ -876,22 +979,39 @@ retry:
 		memset(data_buf, 0, size);
 		mmc_wait_for_req(mmc, &mrq);
 
-		/*
-		 * wait for 146 MCLK cycles for the card to send out the data
-		 * and thus move to TRANS state. As the MCLK would be minimum
-		 * 200MHz when tuning is performed, we need maximum 0.73us
-		 * delay. To be on safer side 1ms delay is given.
-		 */
-		if (cmd.error)
-			usleep_range(1000, 1200);
 		if (!cmd.error && !data.error &&
 			!memcmp(data_buf, tuning_block_pattern, size)) {
 			/* tuning is successful at this tuning point */
 			tuned_phases[tuned_phase_cnt++] = phase;
-			pr_debug("%s: %s: found good phase = %d\n",
+			pr_debug("%s: %s: found *** good *** phase = %d\n",
+				mmc_hostname(mmc), __func__, phase);
+		} else {
+			pr_debug("%s: %s: found ## bad ## phase = %d\n",
 				mmc_hostname(mmc), __func__, phase);
 		}
 	} while (++phase < 16);
+
+	if ((tuned_phase_cnt == NUM_TUNING_PHASES) &&
+			card && mmc_card_mmc(card)) {
+		pr_debug("%s: tuned phases count: %d\n", mmc_hostname(mmc),
+				tuned_phase_cnt);
+
+		
+		while (++drv_type <= MAX_DRV_TYPES_SUPPORTED_HS200) {
+			if (card->ext_csd.raw_drive_strength &
+					(1 << drv_type)) {
+				sdhci_msm_set_mmc_drv_type(host, opcode,
+						drv_type);
+				if (!drv_type_changed)
+					drv_type_changed = true;
+				goto retry;
+			}
+		}
+	}
+
+	
+	if (drv_type_changed)
+		sdhci_msm_set_mmc_drv_type(host, opcode, 0);
 
 	if (tuned_phase_cnt) {
 		rc = msm_find_most_appropriate_phase(host, tuned_phases,
@@ -996,6 +1116,36 @@ static int sdhci_msm_setup_pad(struct sdhci_msm_pltfm_data *pdata, bool enable)
 	return 0;
 }
 
+static int sdhci_msm_setup_hifreq_pad(struct sdhci_msm_pltfm_data *pdata,
+				struct sdhci_host *host)
+{
+	struct sdhci_msm_pad_data *curr;
+	struct mmc_ios curr_ios = host->mmc->ios;
+	int i;
+
+	curr = pdata->pin_data->pad_data;
+	if (curr_ios.timing == MMC_TIMING_UHS_SDR104) {
+		for (i = 0; i < curr->drv->size; i++) {
+			if (!curr->drv->on_sdr104[i].no || !curr->drv->on_sdr104[i].val)
+				break;
+			msm_tlmm_set_hdrive(curr->drv->on_sdr104[i].no,
+				curr->drv->on_sdr104[i].val);
+		}
+	}
+	else if (curr_ios.timing == MMC_TIMING_UHS_SDR12 ||
+		curr_ios.timing == MMC_TIMING_UHS_SDR25 ||
+		curr_ios.timing == MMC_TIMING_UHS_SDR50 ||
+		curr_ios.timing == MMC_TIMING_UHS_DDR50) {
+		for (i = 0; i < curr->drv->size; i++) {
+			if (!curr->drv->on_uhs[i].no || !curr->drv->on_uhs[i].val)
+				break;
+			msm_tlmm_set_hdrive(curr->drv->on_uhs[i].no,
+				curr->drv->on_uhs[i].val);
+		}
+	}
+	return 0;
+}
+
 static int sdhci_msm_setup_pins(struct sdhci_msm_pltfm_data *pdata, bool enable)
 {
 	int ret = 0;
@@ -1009,6 +1159,18 @@ static int sdhci_msm_setup_pins(struct sdhci_msm_pltfm_data *pdata, bool enable)
 
 	if (!ret)
 		pdata->pin_data->cfg_sts = enable;
+	return ret;
+}
+
+static int sdhci_msm_setup_hifreq_pins(struct sdhci_msm_pltfm_data *pdata,
+				struct sdhci_host *host)
+{
+	int ret = 0;
+
+	if (!pdata->pin_data)
+		return 0;
+	if (!pdata->pin_data->is_gpio)
+		ret = sdhci_msm_setup_hifreq_pad(pdata, host);
 
 	return ret;
 }
@@ -1230,8 +1392,8 @@ static int sdhci_msm_dt_get_pad_drv_info(struct device *dev, int id,
 	}
 	drv_data->size = 3; /* array size for clk, cmd, data */
 
-	/* Allocate on, off configs for clk, cmd, data */
-	drv = devm_kzalloc(dev, 2 * drv_data->size *\
+	
+	drv = devm_kzalloc(dev, 3 * drv_data->size *\
 			sizeof(struct sdhci_msm_pad_drv), GFP_KERNEL);
 	if (!drv) {
 		dev_err(dev, "No memory msm_mmc_pad_drv\n");
@@ -1239,7 +1401,9 @@ static int sdhci_msm_dt_get_pad_drv_info(struct device *dev, int id,
 		goto out;
 	}
 	drv_data->on = drv;
-	drv_data->off = drv + drv_data->size;
+	drv_data->on_uhs = drv + drv_data->size;
+	drv_data->on_sdr104 = drv + drv_data->size * 2;
+	drv_data->off = drv + drv_data->size * 3;
 
 	ret = sdhci_msm_dt_get_array(dev, "qcom,pad-drv-on",
 			&tmp, &len, drv_data->size);
@@ -1251,6 +1415,34 @@ static int sdhci_msm_dt_get_pad_drv_info(struct device *dev, int id,
 		drv_data->on[i].val = tmp[i];
 		dev_dbg(dev, "%s: val[%d]=0x%x\n", __func__,
 				i, drv_data->on[i].val);
+	}
+
+	ret = sdhci_msm_dt_get_array(dev, "qcom,pad-drv-on-uhs",
+			&tmp, &len, drv_data->size);
+	if (!ret) {
+		for (i = 0; i < len; i++) {
+			drv_data->on_uhs[i].no = base + i;
+			drv_data->on_uhs[i].val = tmp[i];
+			dev_dbg(dev, "%s: val[%d]=0x%x\n", __func__,
+					i, drv_data->on_uhs[i].val);
+		}
+	} else {
+		memset(drv_data->on_uhs, 0, drv_data->size * sizeof(struct sdhci_msm_pad_drv));
+		dev_dbg(dev, "%s: can`t find UHS-I setting\n", __func__);
+	}
+
+	ret = sdhci_msm_dt_get_array(dev, "qcom,pad-drv-on-sdr104",
+			&tmp, &len, drv_data->size);
+	if (!ret) {
+		for (i = 0; i < len; i++) {
+			drv_data->on_sdr104[i].no = base + i;
+			drv_data->on_sdr104[i].val = tmp[i];
+			dev_dbg(dev, "%s: val[%d]=0x%x\n", __func__,
+					i, drv_data->on_sdr104[i].val);
+		}
+	} else {
+		memset(drv_data->on_sdr104, 0, drv_data->size * sizeof(struct sdhci_msm_pad_drv));
+		dev_dbg(dev, "%s: can`t find sdr104 setting\n", __func__);
 	}
 
 	ret = sdhci_msm_dt_get_array(dev, "qcom,pad-drv-off",
@@ -1376,6 +1568,9 @@ static struct sdhci_msm_pltfm_data *sdhci_msm_populate_pdata(struct device *dev)
 	if (gpio_is_valid(pdata->status_gpio) & !(flags & OF_GPIO_ACTIVE_LOW))
 		pdata->caps2 |= MMC_CAP2_CD_ACTIVE_HIGH;
 
+	if (of_property_read_u32(np, "htc,slot-type", &pdata->slot_type))
+		pdata->slot_type = MMC_TYPE_NA;
+
 	of_property_read_u32(np, "qcom,bus-width", &bus_width);
 	if (bus_width == 8)
 		pdata->mmc_bus_width = MMC_CAP_8_BIT_DATA;
@@ -1401,7 +1596,6 @@ static struct sdhci_msm_pltfm_data *sdhci_msm_populate_pdata(struct device *dev)
 	}
 	pdata->sup_clk_table = clk_table;
 	pdata->sup_clk_cnt = clk_table_len;
-
 	pdata->vreg_data = devm_kzalloc(dev, sizeof(struct
 						    sdhci_msm_slot_reg_data),
 					GFP_KERNEL);
@@ -1437,6 +1631,7 @@ static struct sdhci_msm_pltfm_data *sdhci_msm_populate_pdata(struct device *dev)
 		if (!name)
 			continue;
 
+		dev_notice(dev, "bus-speed-mode: %s\n", name);
 		if (!strncmp(name, "HS400_1p8v", sizeof("HS400_1p8v")))
 			pdata->caps2 |= MMC_CAP2_HS400_1_8V;
 		else if (!strncmp(name, "HS400_1p2v", sizeof("HS400_1p2v")))
@@ -1456,11 +1651,29 @@ static struct sdhci_msm_pltfm_data *sdhci_msm_populate_pdata(struct device *dev)
 	if (of_get_property(np, "qcom,nonremovable", NULL))
 		pdata->nonremovable = true;
 
+	if (of_get_property(np, "htc,bkops_support", NULL))
+		pdata->caps2 |= MMC_CAP2_INIT_BKOPS;
+
+	if (of_get_property(np, "htc,packed_cmd_support", NULL)) {
+		dev_info(dev, " parsed htc,packed_cmd_support\n");
+		pdata->caps2 |= MMC_CAP2_PACKED_WR;
+		pdata->caps2 |= MMC_CAP2_PACKED_WR_CONTROL;
+	}
+
+	if (of_get_property(np, "htc,pon_support", NULL))
+		pdata->caps2 |= MMC_CAP2_POWEROFF_NOTIFY;
+
+	if (of_get_property(np, "htc,disable_sdcard_uhs", NULL))
+		pdata->disable_sdcard_uhs = 1;
+
 	if (!of_property_read_u32(np, "qcom,dat1-mpm-int",
 				  &mpm_int))
 		pdata->mpm_sdiowakeup_int = mpm_int;
 	else
 		pdata->mpm_sdiowakeup_int = -1;
+
+	if (of_property_read_u32(np, "htc,expand-debounce", &pdata->expand_debounce))
+		pdata->expand_debounce = 0;
 
 	return pdata;
 out:
@@ -1847,6 +2060,11 @@ static int sdhci_msm_setup_vreg(struct sdhci_msm_pltfm_data *pdata,
 
 	vreg_table[0] = curr_slot->vdd_data;
 	vreg_table[1] = curr_slot->vdd_io_data;
+
+	if(is_sd_platform(pdata) && (enable ^ vreg_table[0]->is_enabled)) {
+		pr_info("%s : %s slot power\n", mmc_type_str(pdata->slot_type),
+			enable ? "Enabling" : "Disabling");
+	}
 
 	for (i = 0; i < ARRAY_SIZE(vreg_table); i++) {
 		if (vreg_table[i]) {
@@ -2523,6 +2741,10 @@ static void sdhci_msm_set_clock(struct sdhci_host *host, unsigned int clock)
 	mb();
 
 	if (sup_clock != msm_host->clk_rate) {
+		if (is_sd_platform(msm_host->pdata) &&
+			curr_ios.signal_voltage == MMC_SIGNAL_VOLTAGE_180)
+			sdhci_msm_setup_hifreq_pins(msm_host->pdata, host);
+
 		pr_debug("%s: %s: setting clk rate to %u\n",
 				mmc_hostname(host->mmc), __func__, sup_clock);
 		rc = clk_set_rate(msm_host->clk, sup_clock);
@@ -2658,6 +2880,41 @@ static void sdhci_msm_disable_data_xfer(struct sdhci_host *host)
 	udelay(CORE_AHB_DESC_DELAY_US);
 }
 
+bool ac_status = false;
+static void ac_cable_status_notifier_func(enum usb_connect_type online)
+{
+	if (online == CONNECT_TYPE_AC)
+		ac_status = true;
+	else
+		ac_status = false;
+}
+
+struct t_cable_status_notifier ac_cable_status_notifier = {
+	.name = "htc_battery",
+	.func = ac_cable_status_notifier_func,
+};
+
+static int sdhci_proc_speed_class(char *page, char **start, off_t off,
+               int count, int *eof, void *data)
+{
+       struct mmc_host *host = (struct mmc_host*) data;
+       if (!host || !host->card)
+               return 0;
+       return sprintf(page, "%d", host->card->speed_class);
+}
+
+static int sdhci_proc_tray_state(char *page, char **start, off_t off,
+               int count, int *eof, void *data)
+{
+       struct mmc_host *host = (struct mmc_host*) data;
+
+       return sprintf(page, "%d", mmc_cd_get_status(host));
+}
+static int sdhci_msm_get_cd(struct sdhci_host *host)
+{
+       return mmc_cd_get_status(host->mmc);
+}
+
 static struct sdhci_ops sdhci_msm_ops = {
 	.set_uhs_signaling = sdhci_msm_set_uhs_signaling,
 	.check_power_status = sdhci_msm_check_power_status,
@@ -2668,6 +2925,7 @@ static struct sdhci_ops sdhci_msm_ops = {
 	.get_min_clock = sdhci_msm_get_min_clock,
 	.get_max_clock = sdhci_msm_get_max_clock,
 	.disable_data_xfer = sdhci_msm_disable_data_xfer,
+	.get_cd = sdhci_msm_get_cd,
 	.enable_controller_clock = sdhci_msm_enable_controller_clock,
 };
 
@@ -2754,6 +3012,11 @@ static int __devinit sdhci_msm_probe(struct platform_device *pdev)
 		if (!msm_host->pdata) {
 			dev_err(&pdev->dev, "DT parsing error\n");
 			goto pltfm_free;
+		} else {
+			if (msm_host->pdata->disable_sdcard_uhs)
+				host->disable_sdcard_uhs = 1;
+
+			host->mmc->expand_debounce = msm_host->pdata->expand_debounce;
 		}
 	} else {
 		dev_err(&pdev->dev, "No device tree node\n");
@@ -2905,10 +3168,12 @@ static int __devinit sdhci_msm_probe(struct platform_device *pdev)
 	host->quirks |= SDHCI_QUIRK_SINGLE_POWER_WRITE;
 	host->quirks |= SDHCI_QUIRK_CAP_CLOCK_BASE_BROKEN;
 	host->quirks2 |= SDHCI_QUIRK2_ALWAYS_USE_BASE_CLOCK;
+	host->quirks2 |= SDHCI_QUIRK2_IGNORE_CMDCRC_FOR_TUNING;
 	host->quirks2 |= SDHCI_QUIRK2_USE_MAX_DISCARD_SIZE;
 	host->quirks2 |= SDHCI_QUIRK2_IGNORE_DATATOUT_FOR_R1BCMD;
 	host->quirks2 |= SDHCI_QUIRK2_BROKEN_PRESET_VALUE;
-	host->quirks2 |= SDHCI_QUIRK2_USE_RESERVED_MAX_TIMEOUT;
+	if (!is_mmc_platform(msm_host->pdata))
+		host->quirks2 |= SDHCI_QUIRK2_USE_RESERVED_MAX_TIMEOUT;
 
 	if (host->quirks2 & SDHCI_QUIRK2_ALWAYS_USE_BASE_CLOCK)
 		host->quirks2 |= SDHCI_QUIRK2_DIVIDE_TOUT_BY_4;
@@ -2952,8 +3217,11 @@ static int __devinit sdhci_msm_probe(struct platform_device *pdev)
 	/* Enable pwr irq interrupts */
 	writel_relaxed(INT_MASK, (msm_host->core_mem + CORE_PWRCTL_MASK));
 
-	/* Set clock gating delay to be used when CONFIG_MMC_CLKGATE is set */
-	msm_host->mmc->clkgate_delay = SDHCI_MSM_MMC_CLK_GATE_DELAY;
+	
+	if (is_mmc_platform(msm_host->pdata))
+		msm_host->mmc->clkgate_delay = SDHCI_MSM_MMC_CLK_GATE_DELAY_EMMC;
+	else
+		msm_host->mmc->clkgate_delay = SDHCI_MSM_MMC_CLK_GATE_DELAY;
 
 	/* Set host capabilities */
 	msm_host->mmc->caps |= msm_host->pdata->mmc_bus_width;
@@ -2976,14 +3244,12 @@ static int __devinit sdhci_msm_probe(struct platform_device *pdev)
 
 	msm_host->mmc->caps2 |= msm_host->pdata->caps2;
 	msm_host->mmc->caps2 |= MMC_CAP2_CORE_RUNTIME_PM;
-	msm_host->mmc->caps2 |= MMC_CAP2_PACKED_WR;
-	msm_host->mmc->caps2 |= MMC_CAP2_PACKED_WR_CONTROL;
 	msm_host->mmc->caps2 |= (MMC_CAP2_BOOTPART_NOACC |
 				MMC_CAP2_DETECT_ON_ERR);
-	msm_host->mmc->caps2 |= MMC_CAP2_SANITIZE;
+	
 	msm_host->mmc->caps2 |= MMC_CAP2_CACHE_CTRL;
-	msm_host->mmc->caps2 |= MMC_CAP2_POWEROFF_NOTIFY;
-	msm_host->mmc->caps2 |= MMC_CAP2_CLK_SCALE;
+	
+	
 	msm_host->mmc->caps2 |= MMC_CAP2_STOP_REQUEST;
 	msm_host->mmc->caps2 |= MMC_CAP2_ASYNC_SDIO_IRQ_4BIT_MODE;
 	msm_host->mmc->caps2 |= MMC_CAP2_CORE_PM;
@@ -3040,6 +3306,9 @@ static int __devinit sdhci_msm_probe(struct platform_device *pdev)
 		goto free_cd_gpio;
 	}
 
+	pr_info("%s: Platform slot type: %s\n", mmc_hostname(host->mmc),
+		mmc_type_str(msm_host->pdata->slot_type));
+
 	msm_host->msm_bus_vote.max_bus_bw.show = show_sdhci_max_bus_bw;
 	msm_host->msm_bus_vote.max_bus_bw.store = store_sdhci_max_bus_bw;
 	sysfs_attr_init(&msm_host->msm_bus_vote.max_bus_bw.attr);
@@ -3067,6 +3336,23 @@ static int __devinit sdhci_msm_probe(struct platform_device *pdev)
 	else if (mmc_use_core_runtime_pm(host->mmc))
 		pm_runtime_enable(&pdev->dev);
 
+	if(is_sd_platform(msm_host->pdata)) {
+			msm_host->speed_class = create_proc_entry("sd_speed_class", 0444, NULL);
+			if (msm_host->speed_class) {
+				   msm_host->speed_class->read_proc = sdhci_proc_speed_class;
+				   msm_host->speed_class->data = (void *) host->mmc;
+			} else
+				   pr_warning("%s: Failed to create sd_speed_class entry\n",
+						   mmc_hostname(host->mmc));
+			msm_host->speed_class = create_proc_entry("sd_tray_state", 0444, NULL);
+			if (msm_host->speed_class) {
+				   msm_host->speed_class->read_proc = sdhci_proc_tray_state;
+				   msm_host->speed_class->data = (void *) host->mmc;
+			} else
+				   pr_warning("%s: Failed to create sd_tray_state entry\n",
+						   mmc_hostname(host->mmc));
+	}
+
 	if (msm_host->pdata->mpm_sdiowakeup_int != -1) {
 		ret = sdhci_msm_cfg_mpm_pin_wakeup(host, SDC_DAT1_ENABLE);
 		if (ret) {
@@ -3078,7 +3364,11 @@ static int __devinit sdhci_msm_probe(struct platform_device *pdev)
 	}
 
 	device_enable_async_suspend(&pdev->dev);
-	/* Successful initialization */
+
+	
+	if (is_mmc_platform(msm_host->pdata))
+		cable_detect_register_notifier(&ac_cable_status_notifier);
+
 	goto out;
 
 remove_max_bus_bw_file:
@@ -3119,6 +3409,24 @@ out:
 	return ret;
 }
 
+static void sdhci_msm_shutdown(struct platform_device *pdev)
+{
+	struct sdhci_host *host = platform_get_drvdata(pdev);
+	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
+	struct sdhci_msm_host *msm_host = pltfm_host->priv;
+	struct mmc_host *mmc = host->mmc;
+
+	if (!mmc || !host || !msm_host)
+		return;
+
+	if (is_mmc_platform(msm_host->pdata)) {
+		pr_info("%s: %s enter\n", mmc_hostname(mmc), __func__);
+		printk(KERN_INFO "%s: Lock eMMC\n", __func__);
+		atomic_set(&emmc_reboot, 1);
+		pr_info("%s: %s leave\n", mmc_hostname(mmc), __func__);
+	}
+}
+
 static int __devexit sdhci_msm_remove(struct platform_device *pdev)
 {
 	struct sdhci_host *host = platform_get_drvdata(pdev);
@@ -3154,6 +3462,8 @@ static int __devexit sdhci_msm_remove(struct platform_device *pdev)
 		sdhci_msm_bus_cancel_work_and_set_vote(host, 0);
 		sdhci_msm_bus_unregister(msm_host);
 	}
+	if(msm_host->speed_class)
+		remove_proc_entry("sd_speed_class", NULL);
 	return 0;
 }
 
@@ -3269,7 +3579,8 @@ static int sdhci_msm_suspend(struct device *dev)
 	struct sdhci_msm_host *msm_host = pltfm_host->priv;
 	int ret = 0;
 
-	if (gpio_is_valid(msm_host->pdata->status_gpio))
+	if (gpio_is_valid(msm_host->pdata->status_gpio)
+		&& !is_sd_platform(msm_host->pdata))
 		mmc_cd_gpio_free(msm_host->mmc);
 
 	if (pm_runtime_suspended(dev)) {
@@ -3290,7 +3601,8 @@ static int sdhci_msm_resume(struct device *dev)
 	struct sdhci_msm_host *msm_host = pltfm_host->priv;
 	int ret = 0;
 
-	if (gpio_is_valid(msm_host->pdata->status_gpio)) {
+	if (gpio_is_valid(msm_host->pdata->status_gpio)
+		&& !is_sd_platform(msm_host->pdata)) {
 		ret = mmc_cd_gpio_request(msm_host->mmc,
 				msm_host->pdata->status_gpio);
 		if (ret)
@@ -3352,6 +3664,7 @@ MODULE_DEVICE_TABLE(of, sdhci_msm_dt_match);
 static struct platform_driver sdhci_msm_driver = {
 	.probe		= sdhci_msm_probe,
 	.remove		= __devexit_p(sdhci_msm_remove),
+	.shutdown	= sdhci_msm_shutdown,
 	.driver		= {
 		.name	= "sdhci_msm",
 		.owner	= THIS_MODULE,

@@ -71,6 +71,9 @@ int qpnpint_unregister_controller(struct device_node *node);
  */
 int qpnpint_handle_irq(struct spmi_controller *spmi_ctrl,
 		       struct qpnp_irq_spec *spec);
+#ifdef CONFIG_HTC_POWER_DEBUG
+int qpnpint_check_irq_wake(struct qpnp_irq_spec *spec);
+#endif
 
 /**
  * qpnpint_show_irq - Prints the Linux interrupt number
@@ -119,6 +122,14 @@ static inline int qpnpint_handle_irq(struct spmi_controller *spmi_ctrl,
 {
 	return -ENXIO;
 }
+
+#ifdef CONFIG_HTC_POWER_DEBUG
+static inline int qpnpint_check_irq_wake(struct qpnp_irq_spec *spec)
+{
+          return -ENXIO;
+}
+#endif
+
 int qpnpint_show_irq(struct spmi_controller *spmi_ctrl,
 		       struct qpnp_irq_spec *spec)
 {
@@ -129,5 +140,6 @@ static inline bool qpnpint_show_resume_irq(void)
 {
 	return false;
 }
+
 #endif /* CONFIG_MSM_QPNP_INT */
 #endif /* QPNPINT_H */

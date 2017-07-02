@@ -2113,10 +2113,6 @@ static int cgroup_attach_proc(struct cgroup *cgrp, struct task_struct *leader)
 			ss->attach(cgrp, &tset);
 	}
 
-	/*
-	 * step 5: success! and cleanup
-	 */
-	synchronize_rcu();
 	cgroup_wakeup_rmdir_waiter(cgrp);
 	retval = 0;
 out_put_css_set_refs:
@@ -2274,7 +2270,8 @@ static int cgroup_release_agent_write(struct cgroup *cgrp, struct cftype *cft,
 	if (!cgroup_lock_live_group(cgrp))
 		return -ENODEV;
 	mutex_lock(&cgroup_root_mutex);
-	strcpy(cgrp->root->release_agent_path, buffer);
+	memset(cgrp->root->release_agent_path, '\0', sizeof(cgrp->root->release_agent_path));
+        strncpy(cgrp->root->release_agent_path, buffer, sizeof(cgrp->root->release_agent_path)-1);
 	mutex_unlock(&cgroup_root_mutex);
 	cgroup_unlock();
 	return 0;
@@ -2549,7 +2546,7 @@ static struct dentry *cgroup_lookup(struct inode *dir, struct dentry *dentry, st
  */
 static inline struct cftype *__file_cft(struct file *file)
 {
-	if (file->f_dentry->d_inode->i_fop != &cgroup_file_operations)
+	if (file_inode(file)->i_fop != &cgroup_file_operations)
 		return ERR_PTR(-EINVAL);
 	return __d_cft(file->f_dentry);
 }
@@ -2651,7 +2648,7 @@ int cgroup_add_file(struct cgroup *cgrp,
 
 	char name[MAX_CGROUP_TYPE_NAMELEN + MAX_CFTYPE_NAME + 2] = { 0 };
 	if (subsys && !test_bit(ROOT_NOPREFIX, &cgrp->root->flags)) {
-		strcpy(name, subsys->name);
+                strncpy(name, subsys->name, sizeof(name)-1);
 		strcat(name, ".");
 	}
 	strcat(name, cft->name);
@@ -3551,9 +3548,9 @@ static int cgroup_write_event_control(struct cgroup *cgrp, struct cftype *cft,
 		goto fail;
 	}
 
-	/* the process need read permission on control file */
-	/* AV: shouldn't we check that it's been opened for read instead? */
-	ret = inode_permission(cfile->f_path.dentry->d_inode, MAY_READ);
+	
+	
+	ret = inode_permission(file_inode(cfile), MAY_READ);
 	if (ret < 0)
 		goto fail;
 
@@ -5129,8 +5126,8 @@ struct cgroup_subsys_state *cgroup_css_from_dir(struct file *f, int id)
 	struct inode *inode;
 	struct cgroup_subsys_state *css;
 
-	inode = f->f_dentry->d_inode;
-	/* check in cgroup filesystem dir */
+	inode = file_inode(f);
+	
 	if (inode->i_op != &cgroup_dir_inode_operations)
 		return ERR_PTR(-EBADF);
 
