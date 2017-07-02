@@ -63,6 +63,7 @@ static void __free_fdtable(struct fdtable *fdt)
 {
 	free_fdmem(fdt->fd);
 	free_fdmem(fdt->open_fds);
+	free_fdmem(fdt->user);
 	kfree(fdt);
 }
 
@@ -100,9 +101,11 @@ void free_fdtable_rcu(struct rcu_head *rcu)
 				container_of(fdt, struct files_struct, fdtab));
 		return;
 	}
-	if (!is_vmalloc_addr(fdt->fd) && !is_vmalloc_addr(fdt->open_fds)) {
+	if (!is_vmalloc_addr(fdt->fd) && !is_vmalloc_addr(fdt->open_fds)
+			&& !is_vmalloc_addr(fdt->user)) {
 		kfree(fdt->fd);
 		kfree(fdt->open_fds);
+		kfree(fdt->user);
 		kfree(fdt);
 	} else {
 		fddef = &get_cpu_var(fdtable_defer_list);
@@ -137,6 +140,10 @@ static void copy_fdtable(struct fdtable *nfdt, struct fdtable *ofdt)
 	memset((char *)(nfdt->open_fds) + cpy, 0, set);
 	memcpy(nfdt->close_on_exec, ofdt->close_on_exec, cpy);
 	memset((char *)(nfdt->close_on_exec) + cpy, 0, set);
+	memcpy(nfdt->user, ofdt->user,
+		ofdt->max_fds * sizeof(*nfdt->user));
+	memset(nfdt->user + ofdt->max_fds, 0,
+		(nfdt->max_fds - ofdt->max_fds) * sizeof(*nfdt->user));
 }
 
 static struct fdtable * alloc_fdtable(unsigned int nr)
@@ -182,9 +189,15 @@ static struct fdtable * alloc_fdtable(unsigned int nr)
 	data += nr / BITS_PER_BYTE;
 	fdt->close_on_exec = data;
 	fdt->next = NULL;
+	data = alloc_fdmem(sizeof(*fdt->user) * nr);
+	if (!data)
+		goto out_open;
+	fdt->user = (struct fdt_user*) data;
 
 	return fdt;
 
+out_open:
+	free_fdmem(fdt->open_fds);
 out_arr:
 	free_fdmem(fdt->fd);
 out_fdt:
@@ -311,6 +324,7 @@ struct files_struct *dup_fd(struct files_struct *oldf, int *errorp)
 	new_fdt->open_fds = newf->open_fds_init;
 	new_fdt->fd = &newf->fd_array[0];
 	new_fdt->next = NULL;
+	new_fdt->user = &newf->user_array[0];
 
 	spin_lock(&oldf->file_lock);
 	old_fdt = files_fdtable(oldf);
@@ -353,6 +367,8 @@ struct files_struct *dup_fd(struct files_struct *oldf, int *errorp)
 
 	memcpy(new_fdt->open_fds, old_fdt->open_fds, open_files / 8);
 	memcpy(new_fdt->close_on_exec, old_fdt->close_on_exec, open_files / 8);
+	memset(new_fdt->user, 0,
+		open_files * sizeof(*old_fdt->user));
 
 	for (i = open_files; i != 0; i--) {
 		struct file *f = *old_fds++;
@@ -383,6 +399,8 @@ struct files_struct *dup_fd(struct files_struct *oldf, int *errorp)
 
 		memset(&new_fdt->open_fds[start], 0, left);
 		memset(&new_fdt->close_on_exec[start], 0, left);
+		memset(&new_fdt->user[open_files], 0,
+			(new_fdt->max_fds - open_files) * sizeof(*new_fdt->user));
 	}
 
 	rcu_assign_pointer(newf->fdt, new_fdt);
@@ -420,6 +438,7 @@ struct files_struct init_files = {
 		.fd		= &init_files.fd_array[0],
 		.close_on_exec	= init_files.close_on_exec_init,
 		.open_fds	= init_files.open_fds_init,
+		.user		= &init_files.user_array[0],
 	},
 	.file_lock	= __SPIN_LOCK_UNLOCKED(init_task.file_lock),
 };
@@ -463,6 +482,7 @@ repeat:
 		__set_close_on_exec(fd, fdt);
 	else
 		__clear_close_on_exec(fd, fdt);
+	memset(&fdt->user[fd], 0, sizeof(*fdt->user));
 	error = fd;
 #if 1
 	/* Sanity check */
