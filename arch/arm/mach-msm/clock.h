@@ -60,6 +60,7 @@ extern struct clock_init_data msmkrypton_clock_init_data;
 
 int msm_clock_init(struct clock_init_data *data);
 int find_vdd_level(struct clk *clk, unsigned long rate);
+void keep_dig_voltage_low_in_idle(bool on);
 
 #ifdef CONFIG_DEBUG_FS
 int clock_debug_register(struct clk_lookup *t, size_t s);
