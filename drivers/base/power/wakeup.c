@@ -387,6 +387,11 @@ static void wakeup_source_activate(struct wakeup_source *ws)
 	/* Increment the counter of events in progress. */
 	cec = atomic_inc_return(&combined_event_count);
 
+#ifdef CONFIG_HTC_POWER_DEBUG
+        if(events_check_enabled)
+                pr_info("[PM] active wakeup source: %s\n", ws->name);
+#endif
+
 	trace_wakeup_source_activate(ws->name, cec);
 }
 
@@ -669,6 +674,11 @@ bool pm_wakeup_pending(void)
 		split_counters(&cnt, &inpr);
 		ret = (cnt != saved_count || inpr > 0);
 		events_check_enabled = !ret;
+#ifdef CONFIG_HTC_POWER_DEBUG
+                if(!events_check_enabled)
+                        pr_info("[PM] wakeup pending: %d wakeup sources registered, %d wakeup sources in progress.\n",
+                                cnt - saved_count, inpr);
+#endif
 	}
 	spin_unlock_irqrestore(&events_lock, flags);
 	return ret;
@@ -815,10 +825,33 @@ static int print_wakeup_source_stats(struct seq_file *m,
 	return ret;
 }
 
-/**
- * wakeup_sources_stats_show - Print wakeup sources statistics information.
- * @m: seq_file to print the statistics into.
- */
+#ifdef CONFIG_HTC_POWER_DEBUG
+void htc_print_wakeup_source(struct wakeup_source *ws)
+{
+        if (ws->active) {
+                if (ws->timer_expires) {
+                        long timeout = ws->timer_expires - jiffies;
+                        if (timeout > 0)
+                                printk(" '%s', time left %ld ticks; ", ws->name, timeout);
+                } else
+                        printk(" '%s' ", ws->name);
+        }
+}
+
+void htc_print_active_wakeup_sources(void)
+{
+        struct wakeup_source *ws;
+        unsigned long flags;
+
+        printk("wakeup sources: ");
+        spin_lock_irqsave(&events_lock, flags);
+        list_for_each_entry_rcu(ws, &wakeup_sources, entry)
+                htc_print_wakeup_source(ws);
+        spin_unlock_irqrestore(&events_lock, flags);
+        printk("\n");
+}
+#endif
+
 static int wakeup_sources_stats_show(struct seq_file *m, void *unused)
 {
 	struct wakeup_source *ws;

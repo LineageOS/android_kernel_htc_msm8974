@@ -407,6 +407,7 @@ int migrate_huge_page_move_mapping(struct address_space *mapping,
  */
 void migrate_page_copy(struct page *newpage, struct page *page)
 {
+
 	if (PageHuge(page))
 		copy_huge_page(newpage, page);
 	else

@@ -37,6 +37,13 @@
 #include <linux/freezer.h>
 #include <linux/oom.h>
 
+#ifdef CONFIG_KSM_HTC_POLICY
+#if defined(CONFIG_FB)
+#include <linux/notifier.h>
+#include <linux/fb.h>
+#endif
+#endif
+
 #include <asm/tlbflush.h>
 #include "internal.h"
 
@@ -79,6 +86,14 @@
  *    it is secured in the stable tree.  (When we scan a new page, we first
  *    compare it against the stable tree, and then against the unstable tree.)
  */
+#ifdef CONFIG_KSM_HTC_POLICY
+enum KSM_RUN_STATE {
+	KRS_RUN,
+	KRS_SUSPEND,
+	KRS_RESUME,
+};
+static int ksm_sleep = 0;
+#endif
 
 /**
  * struct mm_slot - ksm information per mm that is being scanned
@@ -189,12 +204,45 @@ static unsigned int ksm_thread_pages_to_scan = 100;
 /* Milliseconds ksmd should sleep between batches */
 static unsigned int ksm_thread_sleep_millisecs = 20;
 
+#ifdef CONFIG_KSM_HTC_POLICY
+/* Enable htc scan strategy. */
+static unsigned int ksm_enable_smart_scan = 1;
+
+/* When ksm threasd is stopped by htc scan strategy, how many newly-added bytes could wake up thread. */
+static unsigned int ksm_resume_threshold_kb = (64 * 1024);
+
+/* The number of retry for suspend check, it need to pass suspend check X time continuously to suspend ksm thread. */
+static int ksm_suspend_retry_count = 3;
+static int ksm_current_suspend_retry_count = 3;
+
+/* If newly-merged page number is lower than threshould, stop ksm thread. */
+static unsigned int ksm_suspend_threshold_count = 5;
+
+/* Accumulated bytes for resuming ksm thread. */
+static unsigned long ksm_accumulated_bytes = 0;
+
+/* Debug variables for smart scan. */
+static enum KSM_RUN_STATE ksm_run_state = KRS_RUN;
+static unsigned int ksm_suspend_count = 0;
+static unsigned int ksm_resume_count = 0;
+static unsigned int ksm_scanning_count = 0;
+static unsigned long ksm_newly_added_bytes = 0;
+
+static char *resume_black_list[] = {
+	"sh",
+	"cat",
+	"logcat",
+	"ls",
+	"adbd"
+};
+#endif
 /* Boolean to indicate whether to use deferred timer or not */
 static bool use_deferred_timer;
 
 #define KSM_RUN_STOP	0
 #define KSM_RUN_MERGE	1
 #define KSM_RUN_UNMERGE	2
+
 static unsigned int ksm_run = KSM_RUN_STOP;
 
 static DECLARE_WAIT_QUEUE_HEAD(ksm_thread_wait);
@@ -1407,6 +1455,11 @@ next_mm:
 		goto next_mm;
 
 	ksm_scan.seqnr++;
+
+#ifdef CONFIG_KSM_HTC_POLICY
+	/* No need getting mutex, because we have it in the parent function. */
+	ksm_run_state = KRS_RUN;
+#endif
 	return NULL;
 }
 
@@ -1467,8 +1520,128 @@ out:
 
 static int ksmd_should_run(void)
 {
-	return (ksm_run & KSM_RUN_MERGE) && !list_empty(&ksm_mm_head.mm_list);
+	int ret = (ksm_run & KSM_RUN_MERGE) && !list_empty(&ksm_mm_head.mm_list);
+#ifdef CONFIG_KSM_HTC_POLICY
+	ret = (ksm_enable_smart_scan) ? (ret && !ksm_sleep && ((ksm_run_state == KRS_RUN) || (ksm_run_state == KRS_RESUME))) : (ret);
+#endif
+	return ret;
 }
+
+#ifdef CONFIG_KSM_HTC_POLICY
+static void ksm_suspend_check(void)
+{
+	static unsigned long last_pages_sharing = 0;
+
+	if (!(ksm_run & KSM_RUN_MERGE))
+		return;
+
+	if (!ksm_enable_smart_scan)
+		return;
+
+	if (ksm_run_state != KRS_RUN)
+		return;
+
+	if (ksm_scan.seqnr == 0)
+		return;
+
+	if ((ksm_pages_sharing - last_pages_sharing) < ksm_suspend_threshold_count) {
+		if (ksm_current_suspend_retry_count <= 0) {
+			/* No need getting mutex, because we have it in the parent function. */
+			ksm_run_state = KRS_SUSPEND;
+
+			printk(KERN_INFO "ksm: suspend ksm thread [%lu/%lu].\n", last_pages_sharing, ksm_pages_sharing);
+
+			ksm_current_suspend_retry_count = ksm_suspend_retry_count;
+
+			ksm_suspend_count++;
+		} else
+			ksm_current_suspend_retry_count--;
+	} else
+		ksm_current_suspend_retry_count = ksm_suspend_retry_count;
+
+	last_pages_sharing = ksm_pages_sharing;
+}
+
+static void ksm_resume_check(unsigned long added_bytes)
+{
+	int i;
+
+	if (!(ksm_run & KSM_RUN_MERGE))
+		return;
+
+	if (!ksm_enable_smart_scan)
+		return;
+
+	if (ksm_run_state != KRS_SUSPEND)
+		return;
+
+	for (i=0; i<sizeof(resume_black_list)/sizeof(resume_black_list[0]); i++) {
+		if (!strcmp(current->comm, resume_black_list[i]))
+			return;
+	}
+
+	ksm_accumulated_bytes += added_bytes;
+
+	if (ksm_accumulated_bytes > (ksm_resume_threshold_kb * 1024)) {
+		mutex_lock(&ksm_thread_mutex);
+		ksm_run_state = KRS_RESUME;
+		mutex_unlock(&ksm_thread_mutex);
+
+		printk(KERN_INFO "ksm: resume ksm thread with %lu Kbytes.\n", ksm_accumulated_bytes/1024);
+
+		wake_up_interruptible(&ksm_thread_wait);
+		ksm_accumulated_bytes = 0;
+
+		ksm_resume_count++;
+	}
+}
+
+#if defined(CONFIG_FB)
+
+static void ksm_early_suspend(void)
+{
+	printk(KERN_INFO "ksm: early suspend, current status %d\n", ksm_run_state);
+	ksm_sleep = 1;
+}
+
+static void ksm_late_resume(void)
+{
+	printk(KERN_INFO "ksm: late resume, current status %d.\n", ksm_run_state);
+	ksm_sleep = 0;
+	wake_up_interruptible(&ksm_thread_wait);
+}
+
+static int fb_notifier_callback(struct notifier_block *self,
+				 unsigned long event, void *data)
+{
+	struct fb_event *evdata = data;
+	int *blank;
+	if (evdata && evdata->data && event == FB_EVENT_BLANK) {
+		blank = evdata->data;
+		switch (*blank) {
+		case FB_BLANK_UNBLANK:
+			ksm_late_resume();
+			break;
+		case FB_BLANK_POWERDOWN:
+		case FB_BLANK_HSYNC_SUSPEND:
+		case FB_BLANK_VSYNC_SUSPEND:
+		case FB_BLANK_NORMAL:
+			ksm_early_suspend();
+			break;
+		}
+	}
+
+	return 0;
+
+}
+
+static struct notifier_block ksm_fb_notif =
+{
+	.notifier_call = fb_notifier_callback,
+};
+
+#endif
+#endif
 
 static int ksm_scan_thread(void *nothing)
 {
@@ -1477,8 +1650,21 @@ static int ksm_scan_thread(void *nothing)
 
 	while (!kthread_should_stop()) {
 		mutex_lock(&ksm_thread_mutex);
-		if (ksmd_should_run())
+		if (ksmd_should_run()) {
+#ifdef CONFIG_KSM_HTC_POLICY
+			/* While in resuming, there might be lots of pages for scanning.
+			 * Resuming will be forced scanning all pages, speed it up! */
+			if (ksm_run_state == KRS_RESUME)
+				ksm_do_scan(ksm_thread_pages_to_scan * 2);
+			else
+				ksm_do_scan(ksm_thread_pages_to_scan);
+
+			ksm_suspend_check();
+			ksm_scanning_count++;
+#else
 			ksm_do_scan(ksm_thread_pages_to_scan);
+#endif
+		}
 		mutex_unlock(&ksm_thread_mutex);
 
 		try_to_freeze();
@@ -1497,6 +1683,7 @@ static int ksm_scan_thread(void *nothing)
 	}
 	return 0;
 }
+
 
 int ksm_madvise(struct vm_area_struct *vma, unsigned long start,
 		unsigned long end, int advice, unsigned long *vm_flags)
@@ -1522,6 +1709,11 @@ int ksm_madvise(struct vm_area_struct *vma, unsigned long start,
 		}
 
 		*vm_flags |= VM_MERGEABLE;
+#ifdef CONFIG_KSM_HTC_POLICY
+		ksm_newly_added_bytes += (end - start);
+
+		ksm_resume_check(end - start);
+#endif
 		break;
 
 	case MADV_UNMERGEABLE:
@@ -1872,6 +2064,182 @@ static int ksm_memory_callback(struct notifier_block *self,
 	static struct kobj_attribute _name##_attr = \
 		__ATTR(_name, 0644, _name##_show, _name##_store)
 
+#ifdef CONFIG_KSM_HTC_POLICY
+static ssize_t newly_added_bytes_show(struct kobject *kobj,
+				 struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%lu\n", ksm_newly_added_bytes);
+}
+KSM_ATTR_RO(newly_added_bytes);
+
+static ssize_t run_state_show(struct kobject *kobj,
+				 struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", ksm_run_state);
+}
+KSM_ATTR_RO(run_state);
+
+static ssize_t enable_smart_scan_show(struct kobject *kobj,
+				    struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%u\n", ksm_enable_smart_scan);
+}
+
+static ssize_t enable_smart_scan_store(struct kobject *kobj,
+				     struct kobj_attribute *attr,
+				     const char *buf, size_t count)
+{
+	unsigned long en;
+	int err;
+
+	err = strict_strtoul(buf, 10, &en);
+	if (err || en > UINT_MAX)
+		return -EINVAL;
+
+	if (ksm_enable_smart_scan == en)
+		return count;
+
+	mutex_lock(&ksm_thread_mutex);
+	ksm_enable_smart_scan = (en) ? 1 : 0;
+	mutex_unlock(&ksm_thread_mutex);
+
+	/*
+	 * No need getting mutex because all state related statements won't be reached
+	 * when smart scan is disabled.
+	 */
+	if (!ksm_enable_smart_scan) {
+		/* For non-KRS_RUN state, we should fallback to KRS_RUN and do some clean work. */
+		switch (ksm_run_state) {
+			case KRS_SUSPEND:
+				ksm_resume_count++;
+				break;
+
+			case KRS_RESUME:
+				break;
+
+			default:
+				break;
+		}
+
+		if (ksm_sleep || ksm_run_state == KRS_SUSPEND)
+			wake_up_interruptible(&ksm_thread_wait);
+
+		ksm_run_state = KRS_RUN;
+	}
+
+	return count;
+}
+KSM_ATTR(enable_smart_scan);
+
+static ssize_t resume_threshold_kb_show(struct kobject *kobj,
+				    struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%u\n", ksm_resume_threshold_kb);
+}
+
+static ssize_t resume_threshold_kb_store(struct kobject *kobj,
+				     struct kobj_attribute *attr,
+				     const char *buf, size_t count)
+{
+	unsigned long kb;
+	int err;
+
+	err = strict_strtoul(buf, 10, &kb);
+	if (err || kb > UINT_MAX)
+		return -EINVAL;
+
+	printk (KERN_INFO "ksm: set resume threshold to %lu KB.\n", kb);
+	ksm_resume_threshold_kb = kb;
+
+	return count;
+}
+KSM_ATTR(resume_threshold_kb);
+
+static ssize_t current_suspend_retry_count_show(struct kobject *kobj,
+				 struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", ksm_current_suspend_retry_count);
+}
+KSM_ATTR_RO(current_suspend_retry_count);
+
+static ssize_t suspend_retry_count_show(struct kobject *kobj,
+				    struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%u\n", ksm_suspend_retry_count);
+}
+
+static ssize_t suspend_retry_count_store(struct kobject *kobj,
+				     struct kobj_attribute *attr,
+				     const char *buf, size_t count)
+{
+	unsigned long num;
+	int err;
+
+	err = strict_strtoul(buf, 10, &num);
+	if (err || num > UINT_MAX)
+		return -EINVAL;
+
+	printk (KERN_INFO "ksm: set suspend threshold to %lu pages.\n", num);
+	ksm_suspend_retry_count = num;
+	ksm_current_suspend_retry_count = num;
+
+	return count;
+}
+KSM_ATTR(suspend_retry_count);
+
+static ssize_t suspend_threshold_count_show(struct kobject *kobj,
+				    struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%u\n", ksm_suspend_threshold_count);
+}
+
+static ssize_t suspend_threshold_count_store(struct kobject *kobj,
+				     struct kobj_attribute *attr,
+				     const char *buf, size_t count)
+{
+	unsigned long num;
+	int err;
+
+	err = strict_strtoul(buf, 10, &num);
+	if (err || num > UINT_MAX)
+		return -EINVAL;
+
+	printk (KERN_INFO "ksm: set suspend threshold to %lu pages.\n", num);
+	ksm_suspend_threshold_count = num;
+
+	return count;
+}
+KSM_ATTR(suspend_threshold_count);
+
+static ssize_t accumulated_bytes_show(struct kobject *kobj,
+				 struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%lu\n", ksm_accumulated_bytes);
+}
+KSM_ATTR_RO(accumulated_bytes);
+
+static ssize_t suspend_count_show(struct kobject *kobj,
+				 struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%u\n", ksm_suspend_count);
+}
+KSM_ATTR_RO(suspend_count);
+
+static ssize_t resume_count_show(struct kobject *kobj,
+				 struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%u\n", ksm_resume_count);
+}
+KSM_ATTR_RO(resume_count);
+
+static ssize_t scanning_count_show(struct kobject *kobj,
+				 struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%u\n", ksm_scanning_count);
+}
+KSM_ATTR_RO(scanning_count);
+#endif
+
 static ssize_t sleep_millisecs_show(struct kobject *kobj,
 				    struct kobj_attribute *attr, char *buf)
 {
@@ -2034,6 +2402,19 @@ static ssize_t full_scans_show(struct kobject *kobj,
 KSM_ATTR_RO(full_scans);
 
 static struct attribute *ksm_attrs[] = {
+#ifdef CONFIG_KSM_HTC_POLICY
+	&newly_added_bytes_attr.attr,
+	&run_state_attr.attr,
+	&enable_smart_scan_attr.attr,
+	&resume_threshold_kb_attr.attr,
+	&current_suspend_retry_count_attr.attr,
+	&suspend_retry_count_attr.attr,
+	&suspend_threshold_count_attr.attr,
+	&accumulated_bytes_attr.attr,
+	&suspend_count_attr.attr,
+	&resume_count_attr.attr,
+	&scanning_count_attr.attr,
+#endif
 	&sleep_millisecs_attr.attr,
 	&pages_to_scan_attr.attr,
 	&run_attr.attr,
@@ -2087,6 +2468,13 @@ static int __init ksm_init(void)
 	 */
 	hotplug_memory_notifier(ksm_memory_callback, 100);
 #endif
+
+#ifdef CONFIG_KSM_HTC_POLICY
+#if defined(CONFIG_FB)
+	fb_register_client(&ksm_fb_notif);
+#endif
+#endif
+
 	return 0;
 
 out_free:

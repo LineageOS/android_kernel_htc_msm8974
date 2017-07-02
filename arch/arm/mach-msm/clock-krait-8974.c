@@ -31,6 +31,10 @@
 #include "clock-krait.h"
 #include "clock.h"
 
+#ifdef CONFIG_HTC_POWER_DEBUG
+#include <linux/debugfs.h>
+#endif
+
 /* Clock inputs coming into Krait subsystem */
 DEFINE_FIXED_DIV_CLK(hfpll_src_clk, 1, NULL);
 DEFINE_FIXED_DIV_CLK(acpu_aux_clk, 2, NULL);
@@ -72,6 +76,7 @@ static struct hfpll_clk hfpll0_clk = {
 		.fmax = hfpll_fmax,
 		.num_fmax = ARRAY_SIZE(hfpll_fmax),
 		CLK_INIT(hfpll0_clk.c),
+		.flags = CLKFLAG_VOTE_VDD_DELAY,
 	},
 };
 
@@ -88,6 +93,7 @@ static struct hfpll_clk hfpll1_clk = {
 		.fmax = hfpll_fmax,
 		.num_fmax = ARRAY_SIZE(hfpll_fmax),
 		CLK_INIT(hfpll1_clk.c),
+		.flags = CLKFLAG_VOTE_VDD_DELAY,
 	},
 };
 
@@ -104,6 +110,7 @@ static struct hfpll_clk hfpll2_clk = {
 		.fmax = hfpll_fmax,
 		.num_fmax = ARRAY_SIZE(hfpll_fmax),
 		CLK_INIT(hfpll2_clk.c),
+		.flags = CLKFLAG_VOTE_VDD_DELAY,
 	},
 };
 
@@ -120,6 +127,7 @@ static struct hfpll_clk hfpll3_clk = {
 		.fmax = hfpll_fmax,
 		.num_fmax = ARRAY_SIZE(hfpll_fmax),
 		CLK_INIT(hfpll3_clk.c),
+		.flags = CLKFLAG_VOTE_VDD_DELAY,
 	},
 };
 
@@ -136,6 +144,7 @@ static struct hfpll_clk hfpll_l2_clk = {
 		.fmax = hfpll_fmax,
 		.num_fmax = ARRAY_SIZE(hfpll_fmax),
 		CLK_INIT(hfpll_l2_clk.c),
+		.flags = CLKFLAG_VOTE_VDD_DELAY,
 	},
 };
 
@@ -320,6 +329,7 @@ static struct kpss_core_clk krait0_clk = {
 		.ops = &clk_ops_kpss_cpu,
 		.vdd_class = &vdd_krait0,
 		CLK_INIT(krait0_clk.c),
+		.flags = CLKFLAG_CPU_CLK | CLKFLAG_VOTE_VDD_DELAY,
 	},
 };
 
@@ -332,6 +342,7 @@ static struct kpss_core_clk krait1_clk = {
 		.ops = &clk_ops_kpss_cpu,
 		.vdd_class = &vdd_krait1,
 		CLK_INIT(krait1_clk.c),
+		.flags = CLKFLAG_CPU_CLK | CLKFLAG_VOTE_VDD_DELAY,
 	},
 };
 
@@ -344,6 +355,7 @@ static struct kpss_core_clk krait2_clk = {
 		.ops = &clk_ops_kpss_cpu,
 		.vdd_class = &vdd_krait2,
 		CLK_INIT(krait2_clk.c),
+		.flags = CLKFLAG_CPU_CLK | CLKFLAG_VOTE_VDD_DELAY,
 	},
 };
 
@@ -356,6 +368,7 @@ static struct kpss_core_clk krait3_clk = {
 		.ops = &clk_ops_kpss_cpu,
 		.vdd_class = &vdd_krait3,
 		CLK_INIT(krait3_clk.c),
+		.flags = CLKFLAG_CPU_CLK | CLKFLAG_VOTE_VDD_DELAY,
 	},
 };
 
@@ -367,6 +380,7 @@ static struct kpss_core_clk l2_clk = {
 		.ops = &clk_ops_kpss_l2,
 		.vdd_class = &vdd_l2,
 		CLK_INIT(l2_clk.c),
+		.flags = CLKFLAG_L2_CLK | CLKFLAG_VOTE_VDD_DELAY,
 	},
 };
 
@@ -411,6 +425,14 @@ static struct clk *cpu_clk[] = {
 	&krait1_clk.c,
 	&krait2_clk.c,
 	&krait3_clk.c,
+};
+
+static struct kpss_core_clk *krait_clk[] = {
+	&krait0_clk,
+	&krait1_clk,
+	&krait2_clk,
+	&krait3_clk,
+	&l2_clk,
 };
 
 static void get_krait_bin_format_b(struct platform_device *pdev,
@@ -475,6 +497,52 @@ static void get_krait_bin_format_b(struct platform_device *pdev,
 
 	devm_iounmap(&pdev->dev, base);
 }
+
+#ifdef CONFIG_HTC_POWER_DEBUG
+int htc_pvs = 0;
+int htc_speed = 0;
+int htc_pvs_ver = 0;
+static void htc_get_pvs_info(int speed, int pvs, int pvs_ver)
+{
+	htc_pvs = pvs;
+	htc_speed = speed;
+	htc_pvs_ver = pvs_ver;
+}
+
+static int pvs_info_show(struct seq_file *m, void *unused)
+{
+	seq_printf(m, "pvs%d-speed%d-bin-v%d\n", htc_pvs, htc_speed, htc_pvs_ver);
+	return 0;
+}
+
+static int pvs_info_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, pvs_info_show, inode->i_private);
+}
+
+static const struct file_operations pvs_info_fops = {
+        .open = pvs_info_open,
+        .read = seq_read,
+        .llseek = seq_lseek,
+        .release = seq_release,
+};
+
+static int htc_pvs_debugfs_init(void)
+{
+	static struct dentry *debugfs_pvs_base;
+
+	debugfs_pvs_base = debugfs_create_dir("htc_pvs", NULL);
+
+	if (!debugfs_pvs_base)
+		return -ENOMEM;
+
+	if (!debugfs_create_file("pvs_info", S_IRUGO, debugfs_pvs_base,
+                                NULL, &pvs_info_fops))
+		return -ENOMEM;
+
+	return 0;
+}
+#endif
 
 static int parse_tbl(struct device *dev, char *prop, int num_cols,
 		u32 **col1, u32 **col2, u32 **col3)
@@ -685,9 +753,13 @@ static int clock_krait_8974_driver_probe(struct platform_device *pdev)
 	}
 
 	get_krait_bin_format_b(pdev, &speed, &pvs, &pvs_ver);
-	snprintf(table_name, ARRAY_SIZE(table_name),
+	snprintf(table_name, sizeof(table_name) - 1,
 			"qcom,speed%d-pvs%d-bin-v%d", speed, pvs, pvs_ver);
 
+#ifdef CONFIG_HTC_POWER_DEBUG
+	htc_pvs_debugfs_init();
+	htc_get_pvs_info(speed, pvs, pvs_ver);
+#endif
 	rows = parse_tbl(dev, table_name, 3,
 			(u32 **) &freq, (u32 **) &uv, (u32 **) &ua);
 	if (rows < 0) {
@@ -783,6 +855,8 @@ static int clock_krait_8974_driver_probe(struct platform_device *pdev)
 		clk_set_rate(c, clk_round_rate(c, cur_rate));
 		pr_info("CPU%d @ %lu KHz\n", cpu, clk_get_rate(c) / 1000);
 	}
+
+	clock_krait_init(dev, (const struct kpss_core_clk **)krait_clk, sizeof(krait_clk), speed, pvs, pvs_ver);
 
 	return 0;
 }

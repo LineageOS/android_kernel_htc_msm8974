@@ -214,6 +214,12 @@ static int sco_connect(struct sock *sk, __s8 is_wbs)
 
 	hcon = hci_connect(hdev, type, pkt_type, dst,
 					BT_SECURITY_LOW, HCI_AT_NO_BONDING);
+	
+	if (!hcon) {
+		err = -ENOMEM;
+		goto done;
+	}
+	
 	if (IS_ERR(hcon)) {
 		err = PTR_ERR(hcon);
 		goto done;
