@@ -704,11 +704,12 @@ int ocmem_disable_dump(enum ocmem_client id, unsigned long offset,
 
 int ocmem_restore_sec_program(int sec_id)
 {
+	static unsigned long prev_fail = 0;
 	int rc, scm_ret = 0;
 	struct msm_scm_sec_cfg {
 		unsigned int id;
 		unsigned int spare;
-	} cfg;
+	} cfg = {0};
 
 	cfg.id = sec_id;
 
@@ -717,6 +718,10 @@ int ocmem_restore_sec_program(int sec_id)
 
 	if (rc || scm_ret) {
 		pr_err("ocmem: Failed to enable secure programming\n");
+		if (prev_fail && time_before(jiffies, prev_fail + HZ)) {
+			panic("TZ/scm_call fatal");
+		}
+		prev_fail = jiffies;
 		return rc ? rc : -EINVAL;
 	}
 
@@ -1154,7 +1159,7 @@ static const struct file_operations power_show_fops = {
 	.open = ocmem_power_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
-	.release = seq_release,
+	.release = single_release,
 };
 
 int ocmem_core_init(struct platform_device *pdev)
