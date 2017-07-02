@@ -1179,7 +1179,8 @@ static int msm_pcm_prepare(struct snd_pcm_substream *substream)
 		ret = msm_pcm_capture_prepare(substream);
 
 	if (prtd->playback_instance && prtd->capture_instance
-	    && (prtd->state != VOIP_STARTED)) {
+	    && (prtd->state != VOIP_STARTED)
+	    && (prtd->play_samp_rate == prtd->cap_samp_rate)) {
 		ret = voip_config_vocoder(substream);
 		if (ret < 0) {
 			pr_err("%s(): fail at configuring vocoder for voip, ret=%d\n",

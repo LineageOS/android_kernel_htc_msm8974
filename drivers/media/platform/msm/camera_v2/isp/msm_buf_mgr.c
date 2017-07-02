@@ -287,6 +287,14 @@ static int msm_isp_buf_unprepare(struct msm_isp_buf_mgr *buf_mgr,
 
 	for (i = 0; i < bufq->num_bufs; i++) {
 		buf_info = msm_isp_get_buf_ptr(buf_mgr, buf_handle, i);
+
+		/* HTC_START , add to fix Klocwork issue */
+		if (buf_info == NULL) {
+			pr_err("%s: buf_info is NULL\n", __func__);
+			return rc;
+		}
+		/* HTC_END */
+
 		if (buf_info->state == MSM_ISP_BUFFER_STATE_UNUSED ||
 				buf_info->state ==
 					MSM_ISP_BUFFER_STATE_INITIALIZED)
@@ -520,8 +528,13 @@ static int msm_isp_buf_done(struct msm_isp_buf_mgr *buf_mgr,
 			}
 		}
 		buf_info->state = MSM_ISP_BUFFER_STATE_DISPATCHED;
-		spin_unlock_irqrestore(&bufq->bufq_lock, flags);
+		// HTC start move to below, try to protect timestamp.
+		//spin_unlock_irqrestore(&bufq->bufq_lock, flags);
+		// HTC end
 		if ((BUF_SRC(bufq->stream_id))) {
+			// HTC start
+			spin_unlock_irqrestore(&bufq->bufq_lock, flags);
+			// HTC end
 			rc = msm_isp_put_buf(buf_mgr, buf_info->bufq_handle,
 						buf_info->buf_idx);
 			if (rc < 0) {
@@ -532,6 +545,9 @@ static int msm_isp_buf_done(struct msm_isp_buf_mgr *buf_mgr,
 			buf_info->vb2_buf->v4l2_buf.timestamp = *tv;
 			buf_info->vb2_buf->v4l2_buf.sequence  = frame_id;
 			buf_info->vb2_buf->v4l2_buf.reserved = output_format;
+			// HTC start
+			spin_unlock_irqrestore(&bufq->bufq_lock, flags);
+			// HTC end
 			buf_mgr->vb2_ops->buf_done(buf_info->vb2_buf,
 				bufq->session_id, bufq->stream_id);
 		}
@@ -554,6 +570,7 @@ static int msm_isp_flush_buf(struct msm_isp_buf_mgr *buf_mgr,
 		return rc;
 	}
 
+	pr_err("%s: CAMD bufqh:%d flush_type:%d\n", __func__, bufq_handle, flush_type);
 	for (i = 0; i < bufq->num_bufs; i++) {
 		buf_info = msm_isp_get_buf_ptr(buf_mgr, bufq_handle, i);
 		if (!buf_info) {
@@ -632,10 +649,23 @@ static int msm_isp_buf_enqueue(struct msm_isp_buf_mgr *buf_mgr,
 	if (buf_state == MSM_ISP_BUFFER_STATE_DIVERTED) {
 		buf_info = msm_isp_get_buf_ptr(buf_mgr,
 						info->handle, info->buf_idx);
+
+		/* HTC_START , add to fix Klocwork issue */
+		if (buf_info == NULL) {
+			pr_err("%s: buf_info is NULL\n", __func__);
+			return rc;
+		}
+		/* HTC_END */
+
 		if (info->dirty_buf) {
 			rc = msm_isp_put_buf(buf_mgr,
 				info->handle, info->buf_idx);
 		} else {
+			bufq = msm_isp_get_bufq(buf_mgr, info->handle);
+			if (!bufq) {
+				pr_err("%s: Invalid bufq\n", __func__);
+				return rc;
+			}
 			if (BUF_SRC(bufq->stream_id))
 				pr_err("%s: Invalid native buffer state\n",
 					__func__);
