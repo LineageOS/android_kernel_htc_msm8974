@@ -399,7 +399,7 @@ static int __devinit persistent_ram_buffer_init(const char *name,
 }
 
 static  __devinit
-struct persistent_ram_zone *__persistent_ram_init(struct device *dev, bool ecc)
+struct persistent_ram_zone *__persistent_ram_init(const char *name, bool ecc)
 {
 	struct persistent_ram *ram;
 	struct persistent_ram_zone *prz;
@@ -413,7 +413,7 @@ struct persistent_ram_zone *__persistent_ram_init(struct device *dev, bool ecc)
 
 	INIT_LIST_HEAD(&prz->node);
 
-	ret = persistent_ram_buffer_init(dev_name(dev), prz, &ram);
+	ret = persistent_ram_buffer_init(name, prz, &ram);
 	if (ret) {
 		pr_err("persistent_ram: failed to initialize buffer\n");
 		goto err;
@@ -454,7 +454,13 @@ err:
 struct persistent_ram_zone * __devinit
 persistent_ram_init_ringbuffer(struct device *dev, bool ecc)
 {
-	return __persistent_ram_init(dev, ecc);
+	return persistent_ram_init_ringbuffer_by_name(dev_name(dev), ecc);
+}
+
+struct persistent_ram_zone * __devinit
+persistent_ram_init_ringbuffer_by_name(const char *name, bool ecc)
+{
+	return __persistent_ram_init(name, ecc);
 }
 
 int __init persistent_ram_early_init(struct persistent_ram *ram)
