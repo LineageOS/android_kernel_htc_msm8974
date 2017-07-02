@@ -1207,7 +1207,7 @@ static struct sock_tag *get_sock_stat(const struct sock *sk)
 static int ipx_proto(const struct sk_buff *skb,
 		     struct xt_action_param *par)
 {
-	int thoff = 0, tproto;
+	int thoff, tproto;
 
 	switch (par->family) {
 	case NFPROTO_IPV6:
@@ -1788,8 +1788,6 @@ static bool qtaguid_mt(const struct sk_buff *skb, struct xt_action_param *par)
 	}
 
 	sk = skb->sk;
-	if (sk && sk->sk_state == TCP_TIME_WAIT)
-		sk = NULL;
 	if (sk == NULL) {
 		/*
 		 * A missing sk->sk_socket happens when packets are in-flight
@@ -1976,8 +1974,21 @@ static int qtaguid_ctrl_proc_read(char *page, char **num_items_returned,
 			 uid,
 			 sock_tag_entry->pid
 			);
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+		if(likely(sock_tag_entry->socket->file)) {
+			f_count = atomic_long_read(
+				&sock_tag_entry->socket->file->f_count);
+		}else{
+			pr_warn("qtaguid: socket->file is NULL so use sk_socket->file.\n");
+			f_count = atomic_long_read(
+				&sock_tag_entry->sk->sk_socket->file->f_count);
+		}
+#else
 		f_count = atomic_long_read(
 			&sock_tag_entry->socket->file->f_count);
+#endif
+
 		len = snprintf(outp, char_count,
 			       "sock=%p tag=0x%llx (uid=%u) pid=%u "
 			       "f_count=%lu\n",
@@ -2315,9 +2326,7 @@ static int ctrl_cmd_tag(const char *input)
 	if (argc < 4) {
 		uid = current_fsuid();
 	} else if (!can_impersonate_uid(uid)) {
-		pr_info("qtaguid: ctrl_tag(%s): "
-			"insufficient priv from pid=%u tgid=%u uid=%u\n",
-			input, current->pid, current->tgid, current_fsuid());
+        
 		res = -EPERM;
 		goto err_put;
 	}
@@ -2339,13 +2348,19 @@ static int ctrl_cmd_tag(const char *input)
 			 "st@%p ...->f_count=%ld\n",
 			 input, el_socket->sk, sock_tag_entry,
 			 atomic_long_read(&el_socket->file->f_count));
-		/*
-		 * This is a re-tagging, so release the sock_fd that was
-		 * locked at the time of the 1st tagging.
-		 * There is still the ref from this call's sockfd_lookup() so
-		 * it can be done within the spinlock.
-		 */
+
+		
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+		if(likely(sock_tag_entry->socket->file))
+			sockfd_put(sock_tag_entry->socket);
+		else{
+			pr_warn("qtaguid:%s: socket->file is freed, so put el_socket.\n", __func__);
+			sockfd_put(el_socket);
+		}
+#else
 		sockfd_put(sock_tag_entry->socket);
+#endif
+		
 		prev_tag_ref_entry = lookup_tag_ref(sock_tag_entry->tag,
 						    &uid_tag_data_entry);
 		BUG_ON(IS_ERR_OR_NULL(prev_tag_ref_entry));
@@ -2483,11 +2498,20 @@ static int ctrl_cmd_untag(const char *input)
 	 */
 	tag_ref_entry->num_sock_tags--;
 	spin_unlock_bh(&sock_tag_list_lock);
-	/*
-	 * Release the sock_fd that was grabbed at tag time,
-	 * and once more for the sockfd_lookup() here.
-	 */
-	sockfd_put(sock_tag_entry->socket);
+
+	
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if(likely(sock_tag_entry->socket->file))
+		sockfd_put(sock_tag_entry->socket);
+	else{
+		pr_warn("qtaguid:%s: socket->file is freed, so put el_socket.\n", __func__);
+		sockfd_put(el_socket);
+	}
+#else
+		sockfd_put(sock_tag_entry->socket);
+#endif
+	
+
 	CT_DEBUG("qtaguid: ctrl_untag(%s): done. st@%p ...->f_count=%ld\n",
 		 input, sock_tag_entry,
 		 atomic_long_read(&el_socket->file->f_count) - 1);

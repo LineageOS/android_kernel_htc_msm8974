@@ -1349,7 +1349,7 @@ static u32 xhci_get_endpoint_type(struct usb_device *udev,
 		struct usb_host_endpoint *ep)
 {
 	int in;
-	u32 type;
+	u32 type = 0;
 
 	in = usb_endpoint_dir_in(&ep->desc);
 	if (usb_endpoint_xfer_control(&ep->desc)) {

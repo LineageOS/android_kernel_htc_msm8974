@@ -379,6 +379,12 @@ static int sock_alloc_file(struct socket *sock, struct file **f, int flags)
 
 	file = alloc_file(&path, FMODE_READ | FMODE_WRITE,
 		  &socket_file_ops);
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+		if (IS_ERR(file) || (!file))
+			printk(KERN_ERR "[NET] file is NULL in %s!\n", __func__);
+#endif
+
 	if (unlikely(!file)) {
 		/* drop dentry, keep inode */
 		ihold(path.dentry->d_inode);
@@ -518,9 +524,15 @@ const struct file_operations bad_sock_fops = {
  *	callback, and the inode is then released if the socket is bound to
  *	an inode not a file.
  */
+int add_or_remove_port(struct sock *sk, int add_or_remove);	/* SSD_RIL: Garbage_Filter_TCP */
 
 void sock_release(struct socket *sock)
 {
+	/* ++SSD_RIL: Garbage_Filter_TCP */
+	if (sock->sk != NULL)
+		add_or_remove_port(sock->sk, 0);
+	/* --SSD_RIL: Garbage_Filter_TCP */
+
 	if (sock->ops) {
 		struct module *owner = sock->ops->owner;
 
@@ -1502,6 +1514,10 @@ SYSCALL_DEFINE2(listen, int, fd, int, backlog)
 			err = sock->ops->listen(sock, backlog);
 
 		fput_light(sock->file, fput_needed);
+		/* ++SSD_RIL: Garbage_Filter_TCP */
+		if (sock->sk != NULL)
+			add_or_remove_port(sock->sk, 1);
+		/* --SSD_RIL: Garbage_Filter_TCP */
 		if (!err)
 			sockev_notify(SOCKEV_LISTEN, sock);
 	}

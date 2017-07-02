@@ -17,6 +17,8 @@
 #include <linux/backing-dev.h>
 #include "internal.h"
 
+#include <trace/events/mmcio.h>
+
 #define VALID_FLAGS (SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE| \
 			SYNC_FILE_RANGE_WAIT_AFTER)
 
@@ -97,11 +99,13 @@ static void sync_filesystems(int wait)
  */
 SYSCALL_DEFINE0(sync)
 {
+	trace_sys_sync(0);
 	wakeup_flusher_threads(0, WB_REASON_SYNC);
 	sync_filesystems(0);
 	sync_filesystems(1);
 	if (unlikely(laptop_mode))
 		laptop_sync_completion();
+	trace_sys_sync_done(0);
 	return 0;
 }
 
@@ -151,6 +155,15 @@ SYSCALL_DEFINE1(syncfs, int, fd)
 	return ret;
 }
 
+extern int cancel_fsync;
+static int async_fsync(struct file *file)
+{
+	struct inode *inode = file->f_mapping->host;
+	struct super_block *sb = inode->i_sb;
+
+	return (sb->fsync_flags & FLAG_ASYNC_FSYNC) && cancel_fsync;
+}
+
 /**
  * vfs_fsync_range - helper to sync a range of data & metadata to disk
  * @file:		file to sync
@@ -164,9 +177,17 @@ SYSCALL_DEFINE1(syncfs, int, fd)
  */
 int vfs_fsync_range(struct file *file, loff_t start, loff_t end, int datasync)
 {
+	int err;
 	if (!file->f_op || !file->f_op->fsync)
 		return -EINVAL;
-	return file->f_op->fsync(file, start, end, datasync);
+
+	if (async_fsync(file))
+		return 0;
+
+	trace_vfs_fsync(file);
+	err = file->f_op->fsync(file, start, end, datasync);
+	trace_vfs_fsync_done(file);
+	return err;
 }
 EXPORT_SYMBOL(vfs_fsync_range);
 
@@ -188,12 +209,26 @@ static int do_fsync(unsigned int fd, int datasync)
 {
 	struct file *file;
 	int ret = -EBADF;
+	ktime_t fsync_t, fsync_diff;
+	char pathname[256], *path;
 
 	file = fget(fd);
 	if (file) {
+		path = d_path(&(file->f_path), pathname, sizeof(pathname));
+		if (IS_ERR(path))
+			path = "(unknown)";
+		fsync_t = ktime_get();
 		ret = vfs_fsync(file, datasync);
 		fput(file);
+
+		fsync_diff = ktime_sub(ktime_get(), fsync_t);
+		if (ktime_to_ms(fsync_diff) >= 5000) {
+			pr_info("VFS: %s pid:%d(%s)(parent:%d/%s) takes %lld ms to fsync %s.\n", __func__,
+				current->pid, current->comm, current->parent->pid, current->parent->comm,
+				ktime_to_ms(fsync_diff), path);
+		}
 	}
+
 	return ret;
 }
 
@@ -321,7 +356,7 @@ SYSCALL_DEFINE(sync_file_range)(int fd, loff_t offset, loff_t nbytes,
 	if (!file)
 		goto out;
 
-	i_mode = file->f_path.dentry->d_inode->i_mode;
+	i_mode = file_inode(file)->i_mode;
 	ret = -ESPIPE;
 	if (!S_ISREG(i_mode) && !S_ISBLK(i_mode) && !S_ISDIR(i_mode) &&
 			!S_ISLNK(i_mode))

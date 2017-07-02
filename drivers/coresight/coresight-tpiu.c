@@ -434,7 +434,7 @@ static ssize_t tpiu_store_out_mode(struct device *dev,
 
 	if (strlen(buf) >= 10)
 		return -EINVAL;
-	if (sscanf(buf, "%s", str) != 1)
+	if (sscanf(buf, "%10s", str) != 1)
 		return -EINVAL;
 
 	mutex_lock(&drvdata->mutex);
@@ -502,7 +502,7 @@ static ssize_t tpiu_store_set(struct device *dev, struct device_attribute *attr,
 
 	if (strlen(buf) >= 10)
 		return -EINVAL;
-	if (sscanf(buf, "%s", str) != 1)
+	if (sscanf(buf, "%10s", str) != 1)
 		return -EINVAL;
 
 	mutex_lock(&drvdata->mutex);

@@ -39,6 +39,7 @@
 #define CREATE_TRACE_POINTS
 #include <mach/trace_rpm_smd.h>
 #include "rpm-notifier.h"
+#include "smd_private.h"
 /* Debug Definitions */
 
 enum {
@@ -73,7 +74,7 @@ struct msm_rpm_driver_data {
 #define MAX_ERR_BUFFER_SIZE 128
 #define INIT_ERROR 1
 
-static __refdata ATOMIC_NOTIFIER_HEAD(msm_rpm_sleep_notifier);
+static ATOMIC_NOTIFIER_HEAD(msm_rpm_sleep_notifier);
 static bool standalone;
 
 int msm_rpm_register_notifier(struct notifier_block *nb)
@@ -314,7 +315,7 @@ static void tr_update(struct slp_buf *s, char *buf)
 int msm_rpm_smd_buffer_request(char *buf, uint32_t size, gfp_t flag)
 {
 	struct slp_buf *slp;
-	static __refdata DEFINE_SPINLOCK(slp_buffer_lock);
+	static DEFINE_SPINLOCK(slp_buffer_lock);
 	unsigned long flags;
 
 	if (size > MAX_SLEEP_BUFFER)
@@ -452,7 +453,7 @@ struct msm_rpm_wait_data {
 	int errno;
 	struct completion ack;
 };
-__refdata DEFINE_SPINLOCK(msm_rpm_list_lock);
+DEFINE_SPINLOCK(msm_rpm_list_lock);
 
 struct msm_rpm_ack_msg {
 	uint32_t req;
@@ -1153,9 +1154,36 @@ int msm_rpm_send_request_noirq(struct msm_rpm_request *handle)
 }
 EXPORT_SYMBOL(msm_rpm_send_request_noirq);
 
+void msm_rpm_dump_half_channel_data(smd_channel_t *ch_info, volatile void __iomem *half_channel, unsigned char *data)
+{
+	pr_info("[RPM] state=0x%08x, head=0x%08x, tail=0x%08x\n",
+			ch_info->half_ch->get_state(half_channel),
+			ch_info->half_ch->get_head(half_channel),
+			ch_info->half_ch->get_tail(half_channel)
+			);
+
+	pr_info("[RPM] fSTATE=0x%08x, fHEAD=0x%08x, fTAIL=0x%08x\n",
+			ch_info->half_ch->get_fSTATE(half_channel),
+			ch_info->half_ch->get_fHEAD(half_channel),
+			ch_info->half_ch->get_fTAIL(half_channel)
+			);
+}
+
+void msm_rpm_dump_channel_data(smd_channel_t *ch_info)
+{
+	pr_info("[RPM] SMD Channel `%s'\n", ch_info->name);
+
+	pr_info("[RPM] Send:\n");
+	msm_rpm_dump_half_channel_data(ch_info, ch_info->send, ch_info->send_data);
+
+	pr_info("[RPM] Recv:\n");
+	msm_rpm_dump_half_channel_data(ch_info, ch_info->recv, ch_info->recv_data);
+}
+
 int msm_rpm_wait_for_ack(uint32_t msg_id)
 {
 	struct msm_rpm_wait_data *elem;
+	unsigned int remain = 0;
 	int rc = 0;
 
 	if (!msg_id) {
@@ -1173,7 +1201,18 @@ int msm_rpm_wait_for_ack(uint32_t msg_id)
 	if (!elem)
 		return rc;
 
-	wait_for_completion(&elem->ack);
+	remain = wait_for_completion_timeout(&elem->ack, msecs_to_jiffies(SMD_CHANNEL_NOTIF_TIMEOUT));
+
+	/* For timeout case, print warning and dump channel data, then let it go with TIMEOUT error. */
+	if (0 == remain) {
+		WARN(1, "%u msecs timeout for waiting msg rpm ack of msg %u.\n", SMD_CHANNEL_NOTIF_TIMEOUT, msg_id);
+
+		/* Dump SMD channel data to check details */
+		msm_rpm_dump_channel_data(msm_rpm_data.ch_info);
+
+		elem->errno = -ETIMEDOUT;
+	}
+
 	trace_rpm_ack_recd(0, msg_id);
 
 	rc = elem->errno;
@@ -1403,7 +1442,7 @@ fail:
 	return -EINVAL;
 }
 
-static struct of_device_id msm_rpm_match_table[] __initdata =  {
+static struct of_device_id msm_rpm_match_table[] =  {
 	{.compatible = "qcom,rpm-smd"},
 	{},
 };

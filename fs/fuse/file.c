@@ -15,6 +15,7 @@
 #include <linux/module.h>
 #include <linux/compat.h>
 #include <linux/swap.h>
+#include <trace/events/mmcio.h>
 
 static const struct file_operations fuse_direct_io_file_operations;
 
@@ -678,18 +679,15 @@ static int fuse_readpages_fill(void *_data, struct page *page)
 			return -ENOMEM;
 		}
 
+		lock_page(newpage);
 		err = replace_page_cache_page(oldpage, newpage, GFP_KERNEL);
 		if (err) {
+			unlock_page(newpage);
 			__free_page(newpage);
 			page_cache_release(oldpage);
 			return err;
 		}
 
-		/*
-		 * Decrement the count on new page to make page cache the only
-		 * owner of it
-		 */
-		lock_page(newpage);
 		put_page(newpage);
 
 		lru_cache_add_file(newpage);
@@ -960,6 +958,7 @@ static ssize_t fuse_perform_write(struct file *file,
 	return res > 0 ? res : err;
 }
 
+extern void collect_io_stats(size_t rw_bytes, int type);
 static ssize_t fuse_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 				   unsigned long nr_segs, loff_t pos)
 {
@@ -976,6 +975,7 @@ static ssize_t fuse_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 
 	WARN_ON(iocb->ki_pos != pos);
 
+	trace_fuse_file_write(iocb->ki_filp->f_path.dentry, iocb->ki_left);
 	ocount = 0;
 	err = generic_segment_checks(iov, &nr_segs, &ocount, VERIFY_READ);
 	if (err)
@@ -1002,6 +1002,7 @@ static ssize_t fuse_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 
 	file_update_time(file);
 
+	collect_io_stats(count, WRITE);
 	if (file->f_flags & O_DIRECT) {
 		written = generic_file_direct_write(iocb, iov, &nr_segs,
 						    pos, &iocb->ki_pos,

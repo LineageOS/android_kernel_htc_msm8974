@@ -12,7 +12,9 @@
 #ifndef _MSM_PCM_ROUTING_H
 #define _MSM_PCM_ROUTING_H
 #include <sound/apr_audio-v2.h>
-
+//HTC_AUD ++
+#include <sound/pcm.h>
+//HTC_AUD --
 #define LPASS_BE_PRI_I2S_RX "PRIMARY_I2S_RX"
 #define LPASS_BE_PRI_I2S_TX "PRIMARY_I2S_TX"
 #define LPASS_BE_SLIMBUS_0_RX "SLIMBUS_0_RX"
@@ -39,6 +41,7 @@
 #define LPASS_BE_QUAT_MI2S_RX "QUAT_MI2S_RX"
 #define LPASS_BE_QUAT_MI2S_TX "QUAT_MI2S_TX"
 #define LPASS_BE_SEC_MI2S_RX "SEC_MI2S_RX"
+#define LPASS_BE_SEC_MI2S_RX_VIBRA "SEC_MI2S_RX_VIBRA"
 #define LPASS_BE_SEC_MI2S_TX "SEC_MI2S_TX"
 #define LPASS_BE_PRI_MI2S_RX "PRI_MI2S_RX"
 #define LPASS_BE_PRI_MI2S_TX "PRI_MI2S_TX"
@@ -138,6 +141,7 @@ enum {
 	MSM_BACKEND_DAI_AUDIO_I2S_RX,
 	MSM_BACKEND_DAI_SEC_AUXPCM_RX,
 	MSM_BACKEND_DAI_SEC_AUXPCM_TX,
+	MSM_BACKEND_DAI_SECONDARY_MI2S_RX_VIBRA,
 	MSM_BACKEND_DAI_MAX,
 };
 
@@ -174,4 +178,8 @@ int multi_ch_pcm_set_volume(unsigned volume);
 uint32_t get_adm_rx_topology(void);
 
 uint32_t get_adm_tx_topology(void);
+
+//htc audio++
+int msm_pcm_routing_get_port(struct snd_pcm_substream *substream, u16 *port_id);
+//htc audio --
 #endif /*_MSM_PCM_H*/

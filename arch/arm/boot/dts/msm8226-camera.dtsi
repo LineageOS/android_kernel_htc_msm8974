@@ -127,10 +127,10 @@
 		qcom,gpio-tbl-label = "CCI_I2C_DATA0",
 				      "CCI_I2C_CLK0";
 		master0: qcom,cci-master0 {
-			status = "disabled";
+			status = "ok";
 		};
 		master1: qcom,cci-master1 {
-			status = "disabled";
+			status = "ok";
 		};
 	};
 };

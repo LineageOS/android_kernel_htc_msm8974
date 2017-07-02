@@ -99,7 +99,7 @@ static struct notifier_block __refdata lpm_cpu_nblk = {
 };
 
 static uint32_t allowed_l2_mode;
-static uint32_t sysfs_dbg_l2_mode __refdata = MSM_SPM_L2_MODE_POWER_COLLAPSE;
+static uint32_t sysfs_dbg_l2_mode = MSM_SPM_L2_MODE_POWER_COLLAPSE;
 static uint32_t default_l2_mode;
 
 
@@ -162,7 +162,7 @@ static ssize_t lpm_levels_attr_store(struct kobject *kobj,
 	struct kobj_attribute *attr, const char *buf, size_t count)
 {
 	struct kernel_param kp;
-	unsigned int temp;
+	unsigned int temp = 0;
 	int rc;
 
 	kp.arg = &temp;
@@ -895,7 +895,7 @@ static int lpm_cpu_probe(struct platform_device *pdev)
 	struct device_node *node = NULL;
 	int num_levels = 0;
 	char *key;
-	int ret;
+	int ret = 0;
 
 	for_each_child_of_node(pdev->dev.of_node, node)
 		num_levels++;
@@ -952,7 +952,7 @@ static int lpm_system_probe(struct platform_device *pdev)
 	int num_levels = 0;
 	struct device_node *node;
 	char *key;
-	int ret;
+	int ret = 0;
 
 	for_each_child_of_node(pdev->dev.of_node, node)
 		num_levels++;
@@ -1100,7 +1100,7 @@ fail:
 	return -EFAULT;
 }
 
-static struct of_device_id cpu_modes_mtch_tbl[] __initdata = {
+static struct of_device_id cpu_modes_mtch_tbl[] = {
 	{.compatible = "qcom,cpu-modes"},
 	{},
 };
@@ -1114,7 +1114,7 @@ static struct platform_driver cpu_modes_driver = {
 	},
 };
 
-static struct of_device_id system_modes_mtch_tbl[] __initdata = {
+static struct of_device_id system_modes_mtch_tbl[] = {
 	{.compatible = "qcom,system-modes"},
 	{},
 };
@@ -1128,7 +1128,7 @@ static struct platform_driver system_modes_driver = {
 	},
 };
 
-static struct of_device_id lpm_levels_match_table[] __initdata = {
+static struct of_device_id lpm_levels_match_table[] = {
 	{.compatible = "qcom,lpm-levels"},
 	{},
 };

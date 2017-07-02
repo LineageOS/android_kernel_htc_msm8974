@@ -26,6 +26,9 @@
 #include <linux/syscore_ops.h>
 #include <linux/rtc.h>
 #include <trace/events/power.h>
+#ifdef CONFIG_SUSPEND_ONLY_ALLOW_WFI
+#include <linux/pm_qos.h>
+#endif
 
 #include "power.h"
 
@@ -197,6 +200,9 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 	return error;
 }
 
+#ifdef CONFIG_SUSPEND_ONLY_ALLOW_WFI
+static struct pm_qos_request pm_qos_req_dma;
+#endif
 /**
  * suspend_devices_and_enter - Suspend devices and enter system sleep state.
  * @state: System sleep state to enter.
@@ -210,12 +216,20 @@ int suspend_devices_and_enter(suspend_state_t state)
 		return -ENOSYS;
 
 	trace_machine_suspend(state);
+
+#ifdef CONFIG_SUSPEND_ONLY_ALLOW_WFI
+	printk("PM: only allow wfi\n");
+	pm_qos_add_request(&pm_qos_req_dma, PM_QOS_CPU_DMA_LATENCY, PM_QOS_DEFAULT_VALUE);
+	pm_qos_update_request(&pm_qos_req_dma, 2);
+#endif
+
 	if (suspend_ops->begin) {
 		error = suspend_ops->begin(state);
 		if (error)
 			goto Close;
 	}
-	suspend_console();
+	if (!suspend_console_deferred)
+		suspend_console();
 	suspend_test_start();
 	error = dpm_suspend_start(PMSG_SUSPEND);
 	if (error) {
@@ -235,10 +249,17 @@ int suspend_devices_and_enter(suspend_state_t state)
 	suspend_test_start();
 	dpm_resume_end(PMSG_RESUME);
 	suspend_test_finish("resume devices");
-	resume_console();
+	if (!suspend_console_deferred)
+		resume_console();
  Close:
 	if (suspend_ops->end)
 		suspend_ops->end();
+
+#ifdef CONFIG_SUSPEND_ONLY_ALLOW_WFI
+	pm_qos_update_request(&pm_qos_req_dma, PM_QOS_DEFAULT_VALUE);
+	pm_qos_remove_request(&pm_qos_req_dma);
+#endif
+
 	trace_machine_suspend(PWR_EVENT_EXIT);
 	return error;
 
@@ -279,10 +300,7 @@ static int enter_state(suspend_state_t state)
 	if (!mutex_trylock(&pm_mutex))
 		return -EBUSY;
 
-	printk(KERN_INFO "PM: Syncing filesystems ... ");
-	sys_sync();
-	printk("done.\n");
-
+	suspend_sys_sync_queue();
 	pr_debug("PM: Preparing system for %s sleep\n", pm_states[state]);
 	error = suspend_prepare();
 	if (error)

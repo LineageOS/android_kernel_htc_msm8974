@@ -73,12 +73,81 @@ static atomic_t msm_rtb_idx;
 #endif
 
 static struct msm_rtb_state msm_rtb = {
+#if defined(CONFIG_HTC_DEBUG_RTB)
+	
+	.filter = (1 << LOGK_READL)|(1 << LOGK_WRITEL)|(1 << LOGK_LOGBUF)
+		|(1 << LOGK_HOTPLUG)|(1 << LOGK_CTXID)|(1 << LOGK_IRQ)|(1 << LOGK_DIE)|(1 << LOGK_DEBUG_SCM),
+#else
 	.filter = 1 << LOGK_LOGBUF,
+#endif
 	.enabled = 1,
 };
 
 module_param_named(filter, msm_rtb.filter, uint, 0644);
 module_param_named(enable, msm_rtb.enabled, int, 0644);
+
+#if defined(CONFIG_HTC_DEBUG_RTB)
+
+#define HTC_DEBUG_RTB_MAGIC 0x5254424D 
+
+struct htc_debug_rtb {
+	unsigned int magic;
+	unsigned int phys;
+	unsigned int cpu_idx[];
+};
+
+static int htc_debug_rtb_save(struct platform_device *pdev)
+{
+	struct resource *res = NULL;
+	phys_addr_t phys;
+	resource_size_t size;
+	struct htc_debug_rtb *rtb = NULL;
+	unsigned int cpu;
+
+	if (!pdev->dev.of_node) {
+		pr_err("%s: of_node not found\n", __func__);
+		return -EINVAL;
+	}
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
+			"htc_debug_rtb_res");
+	if (!res) {
+		pr_err("%s: 'htc_debug_rtb_res' not found\n", __func__);
+		return -EINVAL;
+	}
+	size = resource_size(res);
+	if (!size) {
+		pr_err("%s: invalid size\n", __func__);
+		return -EINVAL;
+	}
+	phys = res->start;
+
+	rtb = ioremap(phys, size);
+	if (!rtb) {
+		pr_err("%s: ioremap(0x%x, 0x%x) failed\n", __func__, phys, size);
+		return -ENOMEM;
+	}
+
+	pr_info("htc_debug_rtb: phys: 0x%x, size: 0x%x\n", phys, size);
+
+	rtb->magic = (unsigned int) HTC_DEBUG_RTB_MAGIC;
+	rtb->phys = (unsigned int) virt_to_phys(&msm_rtb);
+	for (cpu = 0; cpu < msm_rtb.step_size; ++cpu)
+		rtb->cpu_idx[cpu] = (unsigned int) virt_to_phys(&per_cpu(msm_rtb_idx_cpu, cpu));
+	mb();
+
+	iounmap(rtb);
+
+	return 0;
+}
+
+void msm_rtb_disable(void)
+{
+	msm_rtb.enabled = 0;
+	return;
+}
+EXPORT_SYMBOL(msm_rtb_disable);
+
+#endif 
 
 static int msm_rtb_panic_notifier(struct notifier_block *this,
 					unsigned long event, void *ptr)
@@ -234,35 +303,46 @@ EXPORT_SYMBOL(uncached_logk);
 static int msm_rtb_probe(struct platform_device *pdev)
 {
 	struct msm_rtb_platform_data *d = pdev->dev.platform_data;
+	struct resource *res = NULL;
 #if defined(CONFIG_MSM_RTB_SEPARATE_CPUS)
 	unsigned int cpu;
 #endif
 	int ret;
 
 	if (!pdev->dev.of_node) {
+		if (!d) {
+			return -EINVAL;
+		}
 		msm_rtb.size = d->size;
 	} else {
-		int size;
+		res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
+					"msm_rtb_res");
+		if (res) {
+			msm_rtb.size = resource_size(res);
+		} else {
+			int size;
 
-		ret = of_property_read_u32((&pdev->dev)->of_node,
-					"qcom,memory-reservation-size",
-					&size);
+			ret = of_property_read_u32((&pdev->dev)->of_node,
+						"qcom,memory-reservation-size",
+						&size);
 
-		if (ret < 0)
-			return ret;
+			if (ret < 0)
+				return ret;
 
-		msm_rtb.size = size;
+			msm_rtb.size = size;
+		}
 	}
+	pr_info("msm_rtb.size: 0x%x\n", msm_rtb.size);
 
 	if (msm_rtb.size <= 0 || msm_rtb.size > SZ_1M)
 		return -EINVAL;
 
-	/*
-	 * The ioremap call is made separately to store the physical
-	 * address of the buffer. This is necessary for cases where
-	 * the only way to access the buffer is a physical address.
-	 */
-	msm_rtb.phys = allocate_contiguous_ebi_nomap(msm_rtb.size, SZ_4K);
+	if (res) {
+		msm_rtb.phys = res->start;
+	} else {
+		msm_rtb.phys = allocate_contiguous_ebi_nomap(msm_rtb.size, SZ_4K);
+	}
+	pr_info("msm_rtb.phys: 0x%x\n", msm_rtb.phys);
 
 	if (!msm_rtb.phys)
 		return -ENOMEM;
@@ -270,7 +350,9 @@ static int msm_rtb_probe(struct platform_device *pdev)
 	msm_rtb.rtb = ioremap(msm_rtb.phys, msm_rtb.size);
 
 	if (!msm_rtb.rtb) {
-		free_contiguous_memory_by_paddr(msm_rtb.phys);
+		if (!res) {
+			free_contiguous_memory_by_paddr(msm_rtb.phys);
+		}
 		return -ENOMEM;
 	}
 
@@ -296,6 +378,11 @@ static int msm_rtb_probe(struct platform_device *pdev)
 	atomic_notifier_chain_register(&panic_notifier_list,
 						&msm_rtb_panic_blk);
 	msm_rtb.initialized = 1;
+
+#if defined(CONFIG_HTC_DEBUG_RTB)
+	htc_debug_rtb_save(pdev);
+#endif
+
 	return 0;
 }
 

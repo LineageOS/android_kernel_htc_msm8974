@@ -37,6 +37,8 @@
 #include <linux/timer.h>
 #include <linux/jiffies.h>
 #include "dmxdev.h"
+#include <mach/devices_cmdline.h>
+
 
 static int debug;
 
@@ -4533,6 +4535,9 @@ static const struct file_operations dbgfs_filters_fops = {
 int dvb_dmxdev_init(struct dmxdev *dmxdev, struct dvb_adapter *dvb_adapter)
 {
 	int i;
+
+	if (board_mfg_mode() == 9) //MFG_MODE_MINI mode
+		return 0;
 
 	if (dmxdev->demux->open(dmxdev->demux) < 0)
 		return -EUSERS;
