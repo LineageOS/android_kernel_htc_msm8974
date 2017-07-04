@@ -18,6 +18,8 @@
 #include <mach/gpiomux.h>
 #include <mach/socinfo.h>
 
+#define m8_DUG_PID 299
+#define m8_DUGL_PID 300
 #define m8_UHL_PID 305
 
 static struct gpiomux_setting ap2mdm_cfg = {
@@ -1224,7 +1226,8 @@ void __init msm_htc_8974_init_gpiomux(void)
 			ARRAY_SIZE(msm_sensor_configs_non_common));
 
 	//For china sku, GPIO 132 is for front cam ID, for non-china sku, GPIO 117 is for front cam ID
-	if (of_machine_pid() == m8_UHL_PID)
+	if (of_machine_pid() == m8_DUG_PID || of_machine_pid() == m8_DUGL_PID ||
+			of_machine_pid() == m8_UHL_PID)
 		msm_gpiomux_install(msm_sensor_configs_china_sku,
 				ARRAY_SIZE(msm_sensor_configs_china_sku));
 	else
