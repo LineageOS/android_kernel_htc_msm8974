@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "04213d25_993af5f4",
+        "filename": "drivers/input/misc/CwMcuSensor.c",
+        "patchSetId": 2
+      },
+      "lineNbr": 3062,
+      "author": {
+        "id": 11801
+      },
+      "writtenOn": "2017-08-10T21:05:17Z",
+      "side": 0,
+      "message": "fwiw, you could just remove 0x in the sscanf, and it would accomplish the same thing",
+      "revId": "1053aaee5ed845002ac43f182f20855234ed4ea3",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
