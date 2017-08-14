@@ -246,6 +246,7 @@ static void build_pairing_cmd(struct l2cap_conn *conn,
 		req->init_key_dist = all_keys;
 		req->resp_key_dist = dist_keys;
 		req->auth_req = (authreq & AUTH_REQ_MASK);
+
 		BT_DBG("SMP_CMD_PAIRING_REQ %d %d %d %d %2.2x %2.2x",
 				req->io_capability, req->oob_flag,
 				req->auth_req, req->max_key_size,
@@ -265,6 +266,7 @@ static void build_pairing_cmd(struct l2cap_conn *conn,
 	rsp->init_key_dist = req->init_key_dist & all_keys;
 	rsp->resp_key_dist = req->resp_key_dist & dist_keys;
 	rsp->auth_req = (authreq & AUTH_REQ_MASK);
+
 	BT_DBG("SMP_CMD_PAIRING_RSP %d %d %d %d %2.2x %2.2x",
 			req->io_capability, req->oob_flag, req->auth_req,
 			req->max_key_size, req->init_key_dist,
@@ -736,9 +738,9 @@ invalid_key:
 	return 0;
 }
 
-int smp_conn_security(struct hci_conn *hcon, __u8 sec_level)
+int smp_conn_security(struct l2cap_conn *conn, __u8 sec_level)
 {
-	struct l2cap_conn *conn = hcon->l2cap_data;
+	struct hci_conn *hcon = conn->hcon;
 	__u8 authreq;
 
 	BT_DBG("conn %p hcon %p %d req: %d",
@@ -1052,7 +1054,7 @@ int smp_link_encrypt_cmplt(struct l2cap_conn *conn, u8 status, u8 encrypt)
 
 	/* Fall back to Pairing request if failed a Link Security request */
 	else if (hcon->sec_req  && (status || !encrypt))
-		smp_conn_security(hcon, hcon->pending_sec_level);
+		smp_conn_security(conn, hcon->pending_sec_level);
 
 	hci_conn_put(hcon);
 
