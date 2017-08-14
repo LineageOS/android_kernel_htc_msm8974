@@ -1647,11 +1647,7 @@ static inline void hci_conn_complete_evt(struct hci_dev *hdev, struct sk_buff *s
 		if (conn->type == ACL_LINK) {
 			conn->state = BT_CONFIG;
 			hci_conn_hold(conn);
-			if (!conn->out &&
-			    !hci_find_link_key(hdev, &ev->bdaddr))
-				conn->disc_timeout = HCI_PAIRING_TIMEOUT;
-			else
-				conn->disc_timeout = HCI_DISCONN_TIMEOUT;
+			conn->disc_timeout = HCI_DISCONN_TIMEOUT;
 			mgmt_connected(hdev->id, &ev->bdaddr, 0);
 		} else if (conn->type == LE_LINK) {
 			conn->state = BT_CONNECTED;
