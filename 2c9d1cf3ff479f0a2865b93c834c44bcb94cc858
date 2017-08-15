@@ -1,0 +1,119 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "30cd5d0a_07e0e4c3",
+        "filename": "net/bluetooth/hci_core.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 1578,
+      "author": {
+        "id": 13648
+      },
+      "writtenOn": "2017-08-15T19:59:57Z",
+      "side": 0,
+      "message": "https://github.com/LineageOS/android_kernel_htc_msm8974/commit/1a0da46b46bc9b27414fcb1f1ad6f0eeee311f5e#diff-35c65d7cbb2c4b19ae8a9a06ddc57ea8",
+      "range": {
+        "startLine": 1578,
+        "startChar": 1,
+        "endLine": 1578,
+        "endChar": 35
+      },
+      "revId": "2c9d1cf3ff479f0a2865b93c834c44bcb94cc858",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1dba9159_6d968eba",
+        "filename": "net/bluetooth/hci_sock.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 443,
+      "author": {
+        "id": 13648
+      },
+      "writtenOn": "2017-08-15T19:59:57Z",
+      "side": 0,
+      "message": "https://github.com/LineageOS/android_kernel_htc_msm8974/commit/639edee79eb2035b6fe3976f50a1c5364acc7352",
+      "range": {
+        "startLine": 443,
+        "startChar": 1,
+        "endLine": 443,
+        "endChar": 23
+      },
+      "revId": "2c9d1cf3ff479f0a2865b93c834c44bcb94cc858",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "ceddaebb_32262889",
+        "filename": "net/bluetooth/hci_sock.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 734,
+      "author": {
+        "id": 13648
+      },
+      "writtenOn": "2017-08-15T19:59:57Z",
+      "side": 0,
+      "message": "https://github.com/LineageOS/android_kernel_htc_msm8974/commit/87c42a1dfd5939d0a24795cd99b3d63daa4e1eff",
+      "range": {
+        "startLine": 734,
+        "startChar": 3,
+        "endLine": 734,
+        "endChar": 30
+      },
+      "revId": "2c9d1cf3ff479f0a2865b93c834c44bcb94cc858",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "999d96b2_bfc0c8a0",
+        "filename": "net/bluetooth/l2cap_sock.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 407,
+      "author": {
+        "id": 13648
+      },
+      "writtenOn": "2017-08-15T19:59:57Z",
+      "side": 0,
+      "message": "https://github.com/LineageOS/android_kernel_htc_msm8974/commit/dbcba7a54a0327f0ef6d6a3ec53b67d0969109b6",
+      "range": {
+        "startLine": 407,
+        "startChar": 1,
+        "endLine": 407,
+        "endChar": 43
+      },
+      "revId": "2c9d1cf3ff479f0a2865b93c834c44bcb94cc858",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "1b347700_8bacbba6",
+        "filename": "net/bluetooth/rfcomm/sock.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 555,
+      "author": {
+        "id": 13648
+      },
+      "writtenOn": "2017-08-15T19:59:57Z",
+      "side": 0,
+      "message": "https://github.com/LineageOS/android_kernel_htc_msm8974/commit/8717cd3d63233ee5591bf8e8d6e5960a1f6252b1",
+      "range": {
+        "startLine": 555,
+        "startChar": 1,
+        "endLine": 555,
+        "endChar": 28
+      },
+      "revId": "2c9d1cf3ff479f0a2865b93c834c44bcb94cc858",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
