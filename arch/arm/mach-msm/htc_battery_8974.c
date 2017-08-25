@@ -32,7 +32,7 @@
 #include <linux/miscdevice.h>
 #include <linux/pmic8058-xoadc.h>
 #include <mach/mpp.h>
-#include <linux/android_alarm.h>
+#include <linux/alarmtimer.h>
 #include <linux/suspend.h>
 #if defined(CONFIG_FB)
 #include <linux/notifier.h>
@@ -1265,10 +1265,10 @@ static void batt_regular_timer_handler(unsigned long data)
 	}
 }
 
-static void batt_check_alarm_handler(struct alarm *alarm)
+static enum alarmtimer_restart batt_check_alarm_handler(struct alarm *alarm, ktime_t now)
 {
 	pr_debug("alarm handler, but do nothing.\n");
-	return;
+	return ALARMTIMER_NORESTART;
 }
 
 static int bounding_fullly_charged_level(int upperbd, int current_level)
@@ -2478,7 +2478,6 @@ static void htc_battery_late_resume(struct early_suspend *h)
 static int htc_battery_prepare(struct device *dev)
 {
 	ktime_t interval;
-	ktime_t slack = ktime_set(0, 0);
 	ktime_t next_alarm;
 	struct timespec xtime;
 	unsigned long cur_jiffies;
@@ -2523,9 +2522,8 @@ static int htc_battery_prepare(struct device *dev)
 			__func__, htc_batt_timer.total_time_ms, next_alarm_sec,
 			suspend_highfreq_check_reason, htc_batt_info.state);
 
-	next_alarm = ktime_add(alarm_get_elapsed_realtime(), interval);
-	alarm_start_range(&htc_batt_timer.batt_check_wakeup_alarm,
-			next_alarm, ktime_add(next_alarm, slack));
+	next_alarm = ktime_add(ktime_get_boottime(), interval);
+	alarm_start_relative(&htc_batt_timer.batt_check_wakeup_alarm, next_alarm);
 
 	return 0;
 }
@@ -2702,7 +2700,7 @@ static int htc_battery_probe(struct platform_device *pdev)
 	init_timer(&htc_batt_timer.batt_timer);
 	htc_batt_timer.batt_timer.function = batt_regular_timer_handler;
 	alarm_init(&htc_batt_timer.batt_check_wakeup_alarm,
-			ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP,
+			ALARM_REALTIME,
 			batt_check_alarm_handler);
 	htc_batt_timer.batt_wq = create_singlethread_workqueue("batt_timer");
 
