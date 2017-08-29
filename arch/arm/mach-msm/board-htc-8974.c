@@ -730,6 +730,11 @@ void __init htc_8974_add_drivers(void)
 #endif
 }
 
+static struct of_dev_auxdata msm_hsic_host_adata[] = {
+	OF_DEV_AUXDATA("qcom,hsic-host", 0xF9A00000, "msm_hsic_host", NULL),
+	{}
+};
+
 static struct of_dev_auxdata htc_8974_auxdata_lookup[] __initdata = {
 	OF_DEV_AUXDATA("qcom,hsusb-otg", 0xF9A55000, "msm_otg", NULL),
 	OF_DEV_AUXDATA("qcom,ehci-host", 0xF9A55000, "msm_ehci_host", NULL),
@@ -750,6 +755,7 @@ static struct of_dev_auxdata htc_8974_auxdata_lookup[] __initdata = {
 	OF_DEV_AUXDATA("qcom,msm-tsens", 0xFC4A8000, "msm-tsens", NULL),
 	OF_DEV_AUXDATA("qcom,qcedev", 0xFD440000, "qcedev.0", NULL),
 	OF_DEV_AUXDATA("qcom,hsic-host", 0xF9A00000, "msm_hsic_host", NULL),
+	OF_DEV_AUXDATA("qcom,hsic-smsc-hub", 0, "msm_smsc_hub", msm_hsic_host_adata),
 	{}
 };
 
