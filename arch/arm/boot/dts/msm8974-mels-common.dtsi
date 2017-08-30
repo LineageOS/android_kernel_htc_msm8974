@@ -41,6 +41,7 @@
 	};
 
         i2c@f9925000 {
+                qcom,clk-ctl-xfer;
 
                 htc_mcu@3a {
                         compatible = "htc_mcu";
