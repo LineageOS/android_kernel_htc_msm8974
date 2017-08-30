@@ -35,6 +35,8 @@
 	};
 
 	i2c@f9925000 {
+		qcom,clk-ctl-xfer;
+
 		nxp_pn544_nfc@28 {
 			compatible = "nxp,pn544-nfc";
 			reg = <0x28>;
