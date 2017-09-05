@@ -294,9 +294,6 @@ Optional properties:
 - qcom,mdss-tear-check-frame-rate:	Specify the value to be a real frame rate(fps) x 100 factor to tune the
 					timing of TE simulation with more precision.
 					The default value is 6000 with 60 fps.
-- qcom,panel-roi-alignment:		Specifies the panel ROI alignment restrictions on its
-					left, top, width, height alignments and minimum width and
-					height values
 - qcom,esd-check-enabled:		Boolean used to enable ESD recovery feature.
 - qcom,mdss-dsi-panel-status-command:	A byte stream formed by multiple dcs packets based on
 					qcom dsi controller protocol, to read the panel status.
@@ -461,7 +458,6 @@ Example:
 		qcom,mdss-tear-check-start-pos = <1280>;
 		qcom,mdss-tear-check-rd-ptr-trigger-intr = <1281>;
 		qcom,mdss-tear-check-frame-rate = <6000>;
-		qcom,panel-roi-alignment = <4 4 2 2 20 20>;
 		qcom,esd-check-enabled;
 		qcom,mdss-dsi-panel-status-command = [06 01 00 01 05 00 02 0A 08];
 		qcom,mdss-dsi-panel-status-command-state = "dsi_lp_mode";
