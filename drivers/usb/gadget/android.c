@@ -3263,7 +3263,7 @@ field ## _store(struct device *dev, struct device_attribute *attr,	\
 }									\
 static DEVICE_ATTR(field, S_IRUGO | S_IWUSR, field ## _show, field ## _store);
 
-#if 0
+
 DESCRIPTOR_ATTR(idVendor, "%04x\n")
 DESCRIPTOR_ATTR(idProduct, "%04x\n")
 DESCRIPTOR_ATTR(bcdDevice, "%04x\n")
@@ -3273,7 +3273,7 @@ DESCRIPTOR_ATTR(bDeviceProtocol, "%d\n")
 DESCRIPTOR_STRING_ATTR(iManufacturer, manufacturer_string)
 DESCRIPTOR_STRING_ATTR(iProduct, product_string)
 DESCRIPTOR_STRING_ATTR(iSerial, serial_string)
-#endif
+
 static DEVICE_ATTR(functions, S_IRUGO | S_IWUSR, functions_show,
 						 functions_store);
 static DEVICE_ATTR(restart_adbd, 0664, NULL, restart_adbd_store);
@@ -3284,7 +3284,6 @@ static DEVICE_ATTR(remote_wakeup, S_IRUGO | S_IWUSR,
 		remote_wakeup_show, remote_wakeup_store);
 
 static struct device_attribute *android_usb_attributes[] = {
-#if 0
 	&dev_attr_idVendor,
 	&dev_attr_idProduct,
 	&dev_attr_bcdDevice,
@@ -3294,7 +3293,6 @@ static struct device_attribute *android_usb_attributes[] = {
 	&dev_attr_iManufacturer,
 	&dev_attr_iProduct,
 	&dev_attr_iSerial,
-#endif
 	&dev_attr_functions,
 	&dev_attr_restart_adbd,
 	&dev_attr_pm_qos,
