@@ -467,3 +467,4 @@ header-y += msm_pft.h
 header-y += msm_thermal_ioctl.h
 header-y += minifb.h
 header-y += tfa9887.h
+header-y += rt5506.h

@@ -25,7 +25,7 @@
 #include <linux/input.h>
 #include <linux/workqueue.h>
 #include <linux/freezer.h>
-#include <mach/rt5506.h>
+#include <linux/rt5506.h>
 #include <linux/mutex.h>
 #include <linux/debugfs.h>
 #include <linux/gpio.h>

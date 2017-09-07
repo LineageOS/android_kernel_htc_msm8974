@@ -5,19 +5,23 @@
 #define RT5506_H
 
 #include <linux/ioctl.h>
+#ifdef __KERNEL__
 #include <linux/wakelock.h>
 #include <mach/rpm-regulator.h>
 #include <mach/rpm-regulator-smd.h>
 #include <linux/regulator/consumer.h>
+#endif
 
 #define RT5506_I2C_NAME "rt5506"
 #define MAX_REG_DATA 15
 
+#ifdef __KERNEL__
 struct rt5506_platform_data {
 	uint32_t gpio_rt5506_enable;
 	const char *power_supply;
 	struct rpm_regulator *power_reg;
 };
+#endif
 
 struct rt5506_reg_data {
 	unsigned char addr;
@@ -74,14 +78,6 @@ enum HEADSET_QUERY_STATUS {
 	QUERY_FINISH,
 };
 
-
-enum AMP_STATUS {
-	STATUS_OFF = 0,
-	STATUS_PLAYBACK,
-	STATUS_SUSPEND,
-
-};
-
 enum HEADSET_OM {
 	HEADSET_8OM = 0,
 	HEADSET_16OM,
@@ -93,6 +89,12 @@ enum HEADSET_OM {
 	HEADSET_1KOM,
 	HEADSET_MONO,
 	HEADSET_OM_UNDER_DETECT,
+};
+
+enum AMP_STATUS {
+	STATUS_OFF = 0,
+	STATUS_PLAYBACK,
+	STATUS_SUSPEND,
 };
 
 enum AMP_GPIO_STATUS {
@@ -111,12 +113,11 @@ enum AMP_S4_STATUS {
 #define AMP_SENSE_READY		0x80
 
 #define AMP_IOCTL_MAGIC		'g'
-#define AMP_SET_CONFIG		_IOW(AMP_IOCTL_MAGIC, 0x01, unsigned)
-#define AMP_READ_CONFIG		_IOW(AMP_IOCTL_MAGIC, 0x02, unsigned)
+//#define AMP_SET_CONFIG	_IOW(AMP_IOCTL_MAGIC, 0x01, unsigned)
+//#define AMP_READ_CONFIG	_IOW(AMP_IOCTL_MAGIC, 0x02, unsigned)
 #define AMP_SET_MODE		_IOW(AMP_IOCTL_MAGIC, 0x03, unsigned)
 #define AMP_SET_PARAM		_IOW(AMP_IOCTL_MAGIC, 0x04, unsigned)
-#define AMP_WRITE_REG		_IOW(AMP_IOCTL_MAGIC, 0x07, unsigned)
+//#define AMP_WRITE_REG		_IOW(AMP_IOCTL_MAGIC, 0x07, unsigned)
 #define AMP_QUERY_OM		_IOW(AMP_IOCTL_MAGIC, 0x08, unsigned)
 
 #endif
-
