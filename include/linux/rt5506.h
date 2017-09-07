@@ -5,19 +5,23 @@
 #define RT5506_H
 
 #include <linux/ioctl.h>
+#ifdef __KERNEL__
 #include <linux/wakelock.h>
 #include <mach/rpm-regulator.h>
 #include <mach/rpm-regulator-smd.h>
 #include <linux/regulator/consumer.h>
+#endif
 
 #define RT5506_I2C_NAME "rt5506"
 #define MAX_REG_DATA 15
 
+#ifdef __KERNEL__
 struct rt5506_platform_data {
 	uint32_t gpio_rt5506_enable;
 	const char *power_supply;
 	struct rpm_regulator *power_reg;
 };
+#endif
 
 struct rt5506_reg_data {
 	unsigned char addr;
