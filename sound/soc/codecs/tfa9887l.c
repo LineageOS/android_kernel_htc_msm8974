@@ -25,7 +25,7 @@
 #include <linux/input.h>
 #include <linux/workqueue.h>
 #include <linux/freezer.h>
-#include <mach/tfa9887.h>
+#include <linux/tfa9887.h>
 #include <linux/mutex.h>
 #include <linux/debugfs.h>
 #include <linux/gpio.h>
@@ -33,12 +33,6 @@
 #include <linux/of_gpio.h>
 #include <mach/htc_acoustic_alsa.h>
 
-#define TPA9887_IOCTL_MAGIC 'a'
-#define TPA9887_WRITE_CONFIG	_IOW(TPA9887_IOCTL_MAGIC, 0x01, unsigned int)
-#define TPA9887_READ_CONFIG	_IOW(TPA9887_IOCTL_MAGIC, 0x02, unsigned int)
-#define TPA9887_ENABLE_DSP	_IOW(TPA9887_IOCTL_MAGIC, 0x03, unsigned int)
-#define TPA9887_KERNEL_LOCK	_IOW(TPA9887_IOCTL_MAGIC, 0x06, unsigned int)
-#define TPA9887_KERNEL_INIT	_IOW(TPA9887_IOCTL_MAGIC, 0x07, unsigned int)
 #define DEBUG (0)
 
 static struct i2c_client *this_client;
@@ -329,8 +323,8 @@ static long tfa9887l_ioctl(struct file *file, unsigned int cmd,
 	char *buf;
 
 	switch (cmd) {
-	case TPA9887_WRITE_CONFIG:
-		pr_debug("%s: TPA9887_WRITE_CONFIG\n", __func__);
+	case TFA9887_WRITE_CONFIG:
+		pr_debug("%s: TFA9887_WRITE_CONFIG\n", __func__);
 		rc = copy_from_user(reg_value, argp, sizeof(reg_value));
 		if (rc < 0) {
 			pr_err("%s: copy from user failed.\n", __func__);
@@ -355,8 +349,8 @@ static long tfa9887l_ioctl(struct file *file, unsigned int cmd,
 		kfree(buf);
 
 		break;
-	case TPA9887_READ_CONFIG:
-		pr_debug("%s: TPA9887_READ_CONFIG\n", __func__);
+	case TFA9887_READ_CONFIG:
+		pr_debug("%s: TFA9887_READ_CONFIG\n", __func__);
 		rc = copy_from_user(reg_value, argp, sizeof(reg_value));;
 		if (rc < 0) {
 			pr_err("%s: copy from user failed.\n", __func__);
@@ -386,8 +380,8 @@ static long tfa9887l_ioctl(struct file *file, unsigned int cmd,
 			goto err;
 		}
 		break;
-	case TPA9887_ENABLE_DSP:
-		pr_info("%s: TPA9887_ENABLE_DSP\n", __func__);
+	case TFA9887_ENABLE_DSP:
+		pr_info("%s: TFA9887_ENABLE_DSP\n", __func__);
 		rc = copy_from_user(reg_value, argp, sizeof(reg_value));;
 		if (rc < 0) {
 			pr_err("%s: copy from user failed.\n", __func__);
@@ -397,7 +391,7 @@ static long tfa9887l_ioctl(struct file *file, unsigned int cmd,
 		len = reg_value[0];
 		dspl_enabled = reg_value[1];
 		break;
-	case TPA9887_KERNEL_LOCK:
+	case TFA9887_KERNEL_LOCK:
 		rc = copy_from_user(reg_value, argp, sizeof(reg_value));;
 		if (rc < 0) {
 		   pr_err("%s: copy from user failed.\n", __func__);
@@ -406,7 +400,7 @@ static long tfa9887l_ioctl(struct file *file, unsigned int cmd,
 
 		len = reg_value[0];
 		
-		pr_debug("TPA9887_KLOCK2 %d\n", reg_value[1]);
+		pr_debug("TFA9887_KLOCK2 %d\n", reg_value[1]);
 		if (reg_value[1]) {
 			mutex_lock(&spk_ampl_lock);
 			lock_from_userspace++;
@@ -423,18 +417,18 @@ static long tfa9887l_ioctl(struct file *file, unsigned int cmd,
 		}
 		break;
 
-	case TPA9887_KERNEL_INIT:
-		pr_info("%s: TPA9887_KERNEL_INIT (L) ++ kernel count %d\n",
+	case TFA9887_KERNEL_INIT:
+		pr_info("%s: TFA9887_KERNEL_INIT (L) ++ kernel count %d\n",
 			__func__, atomic_read(&(spk_ampl_lock.count)));
 		while (lock_from_userspace > 0) {
-			pr_info("%s: TPA9887_KERNEL_INIT (L) lock count from userspace %d != 0, unlock it\n",
+			pr_info("%s: TFA9887_KERNEL_INIT (L) lock count from userspace %d != 0, unlock it\n",
 				__func__, lock_from_userspace);
 			lock_from_userspace--;
 			mutex_unlock(&spk_ampl_lock);
 		}
 		lock_from_userspace = 0;
 		mutex_init(&spk_ampl_lock);
-		pr_info("%s: TPA9887_KERNEL_INIT (L) -- kernel count %d\n",
+		pr_info("%s: TFA9887_KERNEL_INIT (L) -- kernel count %d\n",
 			__func__, atomic_read(&(spk_ampl_lock.count)));
 		break;
 
