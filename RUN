@@ -1,0 +1,15 @@
+export PATH=/home/ac130kz/Downloads/toolchain/bin:$PATH
+make ARCH=arm CROSS_COMPILE=arm-linaro-linux-androideabi-
+
+
+
+
+to .bashrc
+
+
+# Android toolchain
+
+export ARCH=arm
+export CCOMPILE=$CROSS_COMPILE
+export CROSS_COMPILE=arm-linaro-linux-androideabi-
+export PATH=$PATH:/home/ac130kz/Download/toolchain/bin
