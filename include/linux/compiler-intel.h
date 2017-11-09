@@ -34,5 +34,3 @@
 #define __must_be_array(a) 0
 
 #endif
-
-#define uninitialized_var(x) x
