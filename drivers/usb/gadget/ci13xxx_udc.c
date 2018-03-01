@@ -69,8 +69,6 @@
 #include <linux/tracepoint.h>
 #include <mach/usb_trace.h>
 #include "ci13xxx_udc.h"
-#include <mach/htc_battery_common.h>
-#include <mach/devices_cmdline.h>
 
 /******************************************************************************
  * DEFINE
@@ -83,7 +81,6 @@
 
 /* ctrl register bank access */
 static DEFINE_SPINLOCK(udc_lock);
-extern int msm_otg_usb_disable;
 
 /* control endpoint description */
 static const struct usb_endpoint_descriptor
@@ -1857,12 +1854,6 @@ static inline u8 _usb_addr(struct ci13xxx_ep *ep)
 	return ((ep->dir == TX) ? USB_ENDPOINT_DIR_MASK : 0) | ep->num;
 }
 
-static void usb_chg_stop(struct work_struct *w)
-{
-	pr_debug("disable charger\n");
-	htc_battery_pwrsrc_disable();
-}
-
 static void ep_prime_timer_func(unsigned long data)
 {
 	struct ci13xxx_ep *mep = (struct ci13xxx_ep *)data;
@@ -2287,7 +2278,7 @@ __acquires(mEp->lock)
  *
  * This function returns an error code
  */
-static int _gadget_stop_activity(struct usb_gadget *gadget, int mute)
+static int _gadget_stop_activity(struct usb_gadget *gadget)
 {
 	struct ci13xxx    *udc = container_of(gadget, struct ci13xxx, gadget);
 	unsigned long flags;
@@ -2310,10 +2301,7 @@ static int _gadget_stop_activity(struct usb_gadget *gadget, int mute)
 	gadget->host_request = 0;
 	gadget->otg_srp_reqd = 0;
 
-	if (mute)
-		udc->driver->mute_disconnect(gadget);
-	else
-		udc->driver->disconnect(gadget);
+	udc->driver->disconnect(gadget);
 
 	spin_lock_irqsave(udc->lock, flags);
 	_ep_nuke(&udc->ep0out);
@@ -2369,7 +2357,7 @@ __acquires(udc->lock)
 	if (udc->transceiver)
 		usb_phy_set_power(udc->transceiver, 100);
 
-	retval = _gadget_stop_activity(&udc->gadget, 1);
+	retval = _gadget_stop_activity(&udc->gadget);
 	if (retval)
 		goto done;
 
@@ -2394,12 +2382,6 @@ static void isr_resume_handler(struct ci13xxx *udc)
 {
 	udc->gadget.speed = hw_port_is_high_speed() ?
 		USB_SPEED_HIGH : USB_SPEED_FULL;
-
-	if (udc->gadget.speed == USB_SPEED_HIGH)
-		pr_debug("portchange USB_SPEED_HIGH\n");
-	else
-		pr_debug("portchange USB_SPEED_FULL\n");
-
 	if (udc->suspended) {
 		spin_unlock(udc->lock);
 		if (udc->udc_driver->notify_event)
@@ -2830,8 +2812,6 @@ __acquires(udc->lock)
 					case TEST_K:
 					case TEST_SE0_NAK:
 					case TEST_PACKET:
-						if (!udc->test_mode)
-							schedule_delayed_work(&udc->chg_stop, 0);
 					case TEST_FORCE_EN:
 						udc->test_mode = tmode;
 						err = isr_setup_status_phase(
@@ -3365,7 +3345,6 @@ static int ci13xxx_vbus_session(struct usb_gadget *_gadget, int is_active)
 
 	spin_lock_irqsave(udc->lock, flags);
 	udc->vbus_active = is_active;
-	_gadget->ats_reset_irq_count = 0;
 	if (udc->driver)
 		gadget_ready = 1;
 	spin_unlock_irqrestore(udc->lock, flags);
@@ -3378,7 +3357,7 @@ static int ci13xxx_vbus_session(struct usb_gadget *_gadget, int is_active)
 				hw_device_state(udc->ep0out.qh.dma);
 		} else {
 			hw_device_state(0);
-			_gadget_stop_activity(&udc->gadget, 0);
+			_gadget_stop_activity(&udc->gadget);
 			if (udc->udc_driver->notify_event)
 				udc->udc_driver->notify_event(udc,
 					CI13XXX_CONTROLLER_DISCONNECT_EVENT);
@@ -3404,7 +3383,6 @@ static int ci13xxx_pullup(struct usb_gadget *_gadget, int is_active)
 	unsigned long flags;
 
 	spin_lock_irqsave(udc->lock, flags);
-	_gadget->ats_reset_irq_count = 0;
 	udc->softconnect = is_active;
 	if (((udc->udc_driver->flags & CI13XXX_PULLUP_ON_VBUS) &&
 			!udc->vbus_active) || !udc->driver) {
@@ -3415,10 +3393,8 @@ static int ci13xxx_pullup(struct usb_gadget *_gadget, int is_active)
 
 	if (is_active)
 		hw_device_state(udc->ep0out.qh.dma);
-	else {
+	else
 		hw_device_state(0);
-		_gadget_stop_activity(&udc->gadget, 1);
-	}
 
 	return 0;
 }
@@ -3620,7 +3596,7 @@ static int ci13xxx_stop(struct usb_gadget_driver *driver)
 			udc->vbus_active) {
 		hw_device_state(0);
 		spin_unlock_irqrestore(udc->lock, flags);
-		_gadget_stop_activity(&udc->gadget, 0);
+		_gadget_stop_activity(&udc->gadget);
 		spin_lock_irqsave(udc->lock, flags);
 		pm_runtime_put(&udc->gadget.dev);
 	}
@@ -3703,27 +3679,7 @@ static irqreturn_t udc_irq(void)
 		/* order defines priority - do NOT change it */
 		if (USBi_URI & intr) {
 			isr_statistics.uri++;
-
-			if (udc->gadget.ats_reset_irq_count == 50) {
-				udc->gadget.ats_reset_irq_count++;
-				if (udc->driver->broadcast_abnormal_usb_reset) {
-					pr_err("gadget irq :abnormal the amount of reset irq!\n");
-					udc->driver->broadcast_abnormal_usb_reset();
-				}
-			} else if (udc->gadget.ats_reset_irq_count < 50)
-				udc->gadget.ats_reset_irq_count++;
-
-			if (board_mfg_mode() == 5 || msm_otg_usb_disable) {
-				pr_debug("Offmode / QuickBootMode\n");
-				spin_unlock(udc->lock);
-				if (udc->transceiver)
-					udc->transceiver->notify_usb_disabled();
-				spin_lock(udc->lock);
-			}
-
 			isr_reset_handler(udc);
-			if (udc->transceiver)
-				udc->transceiver->notify_usb_attached(NULL);
 		}
 		if (USBi_PCI & intr) {
 			isr_statistics.pci++;
@@ -3826,7 +3782,6 @@ static int udc_probe(struct ci13xxx_udc_driver *driver, struct device *dev,
 	}
 
 	INIT_DELAYED_WORK(&udc->rw_work, usb_do_remote_wakeup);
-	INIT_DELAYED_WORK(&udc->chg_stop, usb_chg_stop);
 
 	retval = hw_device_init(regs);
 	if (retval < 0)

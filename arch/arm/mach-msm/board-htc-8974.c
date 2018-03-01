@@ -406,7 +406,7 @@ static int __maybe_unused m8wl_usb_product_id_match(int product_id, int intrshar
 	return product_id;
 }
 
-
+/*
 static struct android_usb_platform_data android_usb_pdata = {
 	.vendor_id		= 0x0bb4,
 	.product_id		= 0x060e, 
@@ -501,7 +501,8 @@ static void htc_8974_add_usb_devices(void)
 		android_usb_pdata.product_id	= 0x064A;
 
 	platform_device_register(&android_usb_device);
-}
+}*/
+
 #if (defined(CONFIG_MACH_GLU_U) || defined(CONFIG_MACH_GLU_WLJ))
 static ssize_t syn_vkeys_show(struct kobject *kobj,
 			struct kobj_attribute *attr, char *buf)
@@ -718,12 +719,13 @@ void __init htc_8974_add_drivers(void)
 	syn_init_vkeys_8974();
 #endif
 	htc_8974_cable_detect_register();
-	
+
+/*	
 	if (board_mfg_mode() != 6 && board_mfg_mode() != 7)
 		htc_8974_add_usb_devices();
 	else
 		pr_info("%s: Don't load USB since board_mfg_mode=%d\n", __func__, board_mfg_mode());
-
+*/
 	htc_8974_dsi_panel_power_register();
 #if defined(CONFIG_FB_MSM_MDSS_HDMI_MHL_SII9234) && defined(CONFIG_HTC_MHL_DETECTION)
 	htc_8974_mhl_ctrl_register();

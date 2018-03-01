@@ -87,7 +87,6 @@ struct f_rndis {
 	struct usb_ep			*notify;
 	struct usb_request		*notify_req;
 	atomic_t			notify_count;
-	atomic_t			online;
 };
 
 static inline struct f_rndis *func_to_rndis(struct usb_function *f)
@@ -490,16 +489,6 @@ static void rndis_command_complete(struct usb_ep *ep, struct usb_request *req)
 	int				status;
 	rndis_init_msg_type		*buf;
 
-	if (req->status < 0) {
-		pr_err("%s: staus error: %d\n", __func__, req->status);
-		return;
-	}
-
-	if (!atomic_read(&rndis->online)) {
-		pr_warning("%s: usb rndis is not online\n", __func__);
-		return;
-	}
-
 	if (!rndis->port.func.config || !rndis->port.func.config->cdev)
 		return;
 	else
@@ -539,11 +528,6 @@ rndis_setup(struct usb_function *f, const struct usb_ctrlrequest *ctrl)
 	u16			w_index = le16_to_cpu(ctrl->wIndex);
 	u16			w_value = le16_to_cpu(ctrl->wValue);
 	u16			w_length = le16_to_cpu(ctrl->wLength);
-
-	if (!atomic_read(&rndis->online)) {
-		pr_warning("%s: usb rndis is not online\n", __func__);
-		return -ENOTCONN;
-	}
 
 	/* composite driver infrastructure handles everything except
 	 * CDC class messages; interface activation uses set_alt().
@@ -608,9 +592,7 @@ invalid:
 	return value;
 }
 
-extern int bam_adaptive_timer_enabled;
-extern int POLLING_MIN_SLEEP;
-extern int POLLING_MAX_SLEEP;
+
 static int rndis_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 {
 	struct f_rndis		*rndis = func_to_rndis(f);
@@ -669,10 +651,6 @@ static int rndis_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 		rndis->port.cdc_filter = 0;
 
 		DBG(cdev, "RNDIS RX/TX early activation ... \n");
-		bam_adaptive_timer_enabled = 0;
-		POLLING_MIN_SLEEP = 950;
-		POLLING_MAX_SLEEP = 1050;
-		pr_info("%s: bam_adaptive_timer_enabled = %d POLLING_MIN_SLEEP = %d POLLING_MAX_SLEEP = %d\n", __func__,bam_adaptive_timer_enabled, POLLING_MIN_SLEEP, POLLING_MAX_SLEEP);
 		net = gether_connect(&rndis->port);
 		if (IS_ERR(net))
 			return PTR_ERR(net);
@@ -682,27 +660,15 @@ static int rndis_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 	} else
 		goto fail;
 
-	atomic_set(&rndis->online, 1);
 	return 0;
 fail:
 	return -EINVAL;
-}
-
-static void rndis_suspend(struct usb_function *f)
-{
-	bam_adaptive_timer_enabled = 1;
-	POLLING_MIN_SLEEP = 2950;
-	POLLING_MAX_SLEEP = 3050;
-	pr_info("%s: bam_adaptive_timer_enabled = %d POLLING_MIN_SLEEP = %d POLLING_MAX_SLEEP = %d\n", __func__,bam_adaptive_timer_enabled, POLLING_MIN_SLEEP, POLLING_MAX_SLEEP);
-	pr_info("%s: need suspend function\n", __func__);
 }
 
 static void rndis_disable(struct usb_function *f)
 {
 	struct f_rndis		*rndis = func_to_rndis(f);
 	struct usb_composite_dev *cdev = f->config->cdev;
-
-	atomic_set(&rndis->online, 0);
 
 	if (!rndis->notify->driver_data)
 		return;
@@ -714,10 +680,6 @@ static void rndis_disable(struct usb_function *f)
 
 	usb_ep_disable(rndis->notify);
 	rndis->notify->driver_data = NULL;
-	bam_adaptive_timer_enabled = 1;
-	POLLING_MIN_SLEEP = 2950;
-	POLLING_MAX_SLEEP = 3050;
-	pr_info("%s: bam_adaptive_timer_enabled = %d POLLING_MIN_SLEEP = %d POLLING_MAX_SLEEP = %d\n", __func__,bam_adaptive_timer_enabled, POLLING_MIN_SLEEP, POLLING_MAX_SLEEP);
 }
 
 /*-------------------------------------------------------------------------*/
@@ -1023,7 +985,6 @@ rndis_bind_config_vendor(struct usb_configuration *c, u8 ethaddr[ETH_ALEN],
 	rndis->port.func.unbind = rndis_unbind;
 	rndis->port.func.set_alt = rndis_set_alt;
 	rndis->port.func.setup = rndis_setup;
-	rndis->port.func.suspend = rndis_suspend;
 	rndis->port.func.disable = rndis_disable;
 
 	status = usb_add_function(c, &rndis->port.func);

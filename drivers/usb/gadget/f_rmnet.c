@@ -388,7 +388,7 @@ static int rmnet_gport_setup(void)
 
 static int gport_rmnet_connect(struct f_rmnet *dev)
 {
-	int			ret = 0;
+	int			ret;
 	unsigned		port_num;
 	enum transport_type	cxport = rmnet_ports[dev->port_num].ctrl_xport;
 	enum transport_type	dxport = rmnet_ports[dev->port_num].data_xport;
@@ -1229,7 +1229,6 @@ static int frmnet_bind_config(struct usb_configuration *c, unsigned portno)
 	dev->port.disconnect = frmnet_disconnect;
 	dev->port.connect = frmnet_connect;
 
-	rmnet_interface_desc.iInterface = rmnet_string_defs[0].id;
 	status = usb_add_function(c, f);
 	if (status) {
 		pr_err("%s: usb add function failed: %d\n",

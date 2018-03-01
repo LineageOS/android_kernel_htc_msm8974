@@ -180,7 +180,6 @@ struct ci13xxx {
 	bool                      skip_flush; /* skip flushing remaining EP
 						upon flush timeout for the
 						first EP. */
-	struct delayed_work chg_stop;
 };
 
 /******************************************************************************

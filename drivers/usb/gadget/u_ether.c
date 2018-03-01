@@ -12,7 +12,6 @@
  */
 
 /* #define VERBOSE_DEBUG */
-#define fcAUTO_PERF_LOCK	0
 
 #include <linux/kernel.h>
 #include <linux/gfp.h>
@@ -86,16 +85,6 @@ struct eth_dev {
 
 	bool			zlp;
 	u8			host_mac[ETH_ALEN];
-	int			miMaxMtu;
-
-#if fcAUTO_PERF_LOCK
-	bool			auto_perf_lock_on;
-	struct work_struct	release_perf_lock_work;
-	struct timer_list	perf_timer;
-	unsigned long		timer_expired;
-	struct switch_dev	EthPerf_sdev;
-	struct switch_dev	*pEthPerf_sdev;
-#endif
 };
 
 /*-------------------------------------------------------------------------*/
@@ -154,9 +143,6 @@ static inline int qlen(struct usb_gadget *gadget)
 	xprintk(dev , KERN_INFO , fmt , ## args)
 
 /*-------------------------------------------------------------------------*/
-static struct eth_dev *the_dev;
-
-/*-------------------------------------------------------------------------*/
 
 /* NETWORK DRIVER HOOKUP (to the layer above this driver) */
 
@@ -165,18 +151,12 @@ static int ueth_change_mtu(struct net_device *net, int new_mtu)
 	struct eth_dev	*dev = netdev_priv(net);
 	unsigned long	flags;
 	int		status = 0;
-	int		iMaxMtuSet = ETH_FRAME_LEN;
-
-	if (the_dev) {
-		if (the_dev->miMaxMtu == ETH_FRAME_LEN_MAX - ETH_HLEN)
-			iMaxMtuSet = ETH_FRAME_LEN_MAX - ETH_HLEN;
-	}
 
 	/* don't change MTU on "live" link (peer won't know) */
 	spin_lock_irqsave(&dev->lock, flags);
 	if (dev->port_usb)
 		status = -EBUSY;
-	else if (new_mtu <= ETH_HLEN || new_mtu > iMaxMtuSet)
+	else if (new_mtu <= ETH_HLEN || new_mtu > ETH_FRAME_LEN)
 		status = -ERANGE;
 	else
 		net->mtu = new_mtu;
@@ -184,66 +164,6 @@ static int ueth_change_mtu(struct net_device *net, int new_mtu)
 
 	return status;
 }
-
-#if fcAUTO_PERF_LOCK
-static const char iEthPerf_name[] = "USB_PERF";
-
-static void eth_perf_send_event(struct eth_dev *sEthDev, int iNetOn)
-{
-	struct eth_dev *dev = the_dev;
-
-	if (dev->pEthPerf_sdev != NULL)
-		switch_set_state(&dev->EthPerf_sdev, iNetOn);
-}
-
-#define AUTO_PERF_EXPIRED	(10000)
-
-static void auto_setup_perf_lock(bool auto_perf_lock_on)
-{
-	struct eth_dev *dev = the_dev;
-
-	/* reset the timer */
-	del_timer(&dev->perf_timer);
-	if (auto_perf_lock_on) {
-		if (!dev->auto_perf_lock_on)
-			eth_perf_send_event(dev, auto_perf_lock_on);
-	} else {
-		if (dev->auto_perf_lock_on)
-			eth_perf_send_event(dev, auto_perf_lock_on);
-	}
-	dev->auto_perf_lock_on = auto_perf_lock_on;
-}
-
-static void release_perf_lock_work_func(struct work_struct *work)
-{
-	auto_setup_perf_lock(false);
-}
-
-static void auto_perf_lock_enable(int expire_time)
-{
-	struct eth_dev *dev = the_dev;
-
-	if (expire_time) {
-		auto_setup_perf_lock(true);
-		dev->timer_expired = AUTO_PERF_EXPIRED * expire_time;
-		mod_timer(&dev->perf_timer,
-			jiffies + msecs_to_jiffies(dev->timer_expired));
-	} else
-		auto_setup_perf_lock(false);
-}
-
-static void auto_perf_lock_disable(unsigned long data)
-{
-	struct eth_dev *dev = the_dev;
-
-	schedule_work(&dev->release_perf_lock_work);
-}
-
-static void auto_perf_timeout_handler(unsigned long data)
-{
-	auto_perf_lock_disable(data);
-}
-#endif
 
 static void eth_get_drvinfo(struct net_device *net, struct ethtool_drvinfo *p)
 {
@@ -400,8 +320,7 @@ static void rx_complete(struct usb_ep *ep, struct usb_request *req)
 		DBG(dev, "rx %s reset\n", ep->name);
 		defer_kevent(dev, WORK_RX_MEMORY);
 quiesce:
-		if (skb)
-			dev_kfree_skb_any(skb);
+		dev_kfree_skb_any(skb);
 		goto clean;
 
 	/* data overrun */
@@ -533,19 +452,14 @@ static void process_rx_w(struct work_struct *work)
 	struct eth_dev	*dev = container_of(work, struct eth_dev, rx_work);
 	struct sk_buff	*skb;
 	int		status = 0;
-	unsigned int	uiCurMtu = 0;
 
 	if (!dev->port_usb)
 		return;
 
-	uiCurMtu = dev->net->mtu + ETH_HLEN;
-	if ((uiCurMtu <= ETH_HLEN) || (uiCurMtu > ETH_FRAME_LEN_MAX))
-		uiCurMtu = ETH_FRAME_LEN;
-
 	while ((skb = skb_dequeue(&dev->rx_frames))) {
 		if (status < 0
 				|| ETH_HLEN > skb->len
-				|| skb->len > uiCurMtu) {
+				|| skb->len > ETH_FRAME_LEN) {
 			dev->net->stats.rx_errors++;
 			dev->net->stats.rx_length_errors++;
 			DBG(dev, "rx length %d\n", skb->len);
@@ -556,10 +470,6 @@ static void process_rx_w(struct work_struct *work)
 		dev->net->stats.rx_packets++;
 		dev->net->stats.rx_bytes += skb->len;
 
-#if fcAUTO_PERF_LOCK
-		if (skb->len >= 1024)
-			auto_perf_lock_enable(1);
-#endif
 		status = netif_rx_ni(skb);
 	}
 
@@ -749,7 +659,7 @@ static netdev_tx_t eth_start_xmit(struct sk_buff *skb,
 					struct net_device *net)
 {
 	struct eth_dev		*dev = netdev_priv(net);
-	int			length;
+	int			length = skb->len;
 	int			retval;
 	struct usb_request	*req = NULL;
 	unsigned long		flags;
@@ -757,13 +667,6 @@ static netdev_tx_t eth_start_xmit(struct sk_buff *skb,
 	u16			cdc_filter;
 	bool			multi_pkt_xfer = false;
 
-	if ((!skb) || (IS_ERR(skb)))
-		return NETDEV_TX_OK;
-
-	if ((!net) || (IS_ERR(net)))
-		return NETDEV_TX_OK;
-
-	length = skb->len;
 	spin_lock_irqsave(&dev->lock, flags);
 	if (dev->port_usb) {
 		in = dev->port_usb->in_ep;
@@ -887,8 +790,8 @@ static netdev_tx_t eth_start_xmit(struct sk_buff *skb,
 
 	/* NCM requires no zlp if transfer is dwNtbInMaxSize */
 	if (dev->port_usb->is_fixed &&
-		length == dev->port_usb->fixed_in_len &&
-		(length % in->maxpacket) == 0)
+	    length == dev->port_usb->fixed_in_len &&
+	    (length % in->maxpacket) == 0)
 		req->zero = 0;
 	else
 		req->zero = 1;
@@ -926,11 +829,6 @@ static netdev_tx_t eth_start_xmit(struct sk_buff *skb,
 	case 0:
 		net->trans_start = jiffies;
 	}
-
-#if fcAUTO_PERF_LOCK
-	if (skb->len >= 1024)
-		auto_perf_lock_enable(1);
-#endif
 
 	if (retval) {
 		if (!multi_pkt_xfer)
@@ -985,10 +883,6 @@ static int eth_stop(struct net_device *net)
 {
 	struct eth_dev	*dev = netdev_priv(net);
 	unsigned long	flags;
-
-#if fcAUTO_PERF_LOCK
-	auto_setup_perf_lock(false);
-#endif
 
 	VDBG(dev, "%s\n", __func__);
 	netif_stop_queue(net);
@@ -1075,7 +969,7 @@ static int get_ether_addr(const char *str, u8 *dev_addr)
 	return 1;
 }
 
-/* static struct eth_dev *the_dev; */
+static struct eth_dev *the_dev;
 
 static const struct net_device_ops eth_netdev_ops = {
 	.ndo_open		= eth_open,
@@ -1129,15 +1023,8 @@ int gether_setup_name(struct usb_gadget *g, u8 ethaddr[ETH_ALEN],
 	struct net_device	*net;
 	int			status;
 
-	if (the_dev) {
-		memcpy(ethaddr, the_dev->host_mac, ETH_ALEN);
-		if (g) {
-			the_dev->miMaxMtu = g->miMaxMtu;
-			if (the_dev->miMaxMtu == ETH_FRAME_LEN_MAX - ETH_HLEN)
-				the_dev->net->mtu = ETH_FRAME_LEN_MAX - ETH_HLEN;
-		}
-		return 0;
-	}
+	if (the_dev)
+		return -EBUSY;
 
 	net = alloc_etherdev(sizeof *dev);
 	if (!net)
@@ -1185,30 +1072,12 @@ int gether_setup_name(struct usb_gadget *g, u8 ethaddr[ETH_ALEN],
 
 		the_dev = dev;
 
-		if (g) {
-			the_dev->miMaxMtu = g->miMaxMtu;
-			if (the_dev->miMaxMtu == ETH_FRAME_LEN_MAX - ETH_HLEN)
-				the_dev->net->mtu = ETH_FRAME_LEN_MAX - ETH_HLEN;
-		}
-
 		/* two kinds of host-initiated state changes:
 		 *  - iff DATA transfer is active, carrier is "on"
 		 *  - tx queueing enabled if open *and* carrier is "on"
 		 */
 		netif_carrier_off(net);
 	}
-
-#if fcAUTO_PERF_LOCK
-	INIT_WORK(&dev->release_perf_lock_work, release_perf_lock_work_func);
-	setup_timer(&dev->perf_timer, auto_perf_timeout_handler, (unsigned long) dev);
-
-	dev->pEthPerf_sdev = NULL;
-	dev->EthPerf_sdev.name = iEthPerf_name;
-	status = switch_dev_register(&dev->EthPerf_sdev);
-	if (status < 0)
-		pr_err("USB EthPerf_sdev switch_dev_register register fail\n");
-	dev->pEthPerf_sdev = &dev->EthPerf_sdev;
-#endif
 
 	return status;
 }
@@ -1221,18 +1090,8 @@ int gether_setup_name(struct usb_gadget *g, u8 ethaddr[ETH_ALEN],
  */
 void gether_cleanup(void)
 {
-#if fcAUTO_PERF_LOCK
-	struct eth_dev *dev = the_dev;
-#endif
-
 	if (!the_dev)
 		return;
-
-#if fcAUTO_PERF_LOCK
-	del_timer(&dev->perf_timer);
-	switch_dev_unregister(&dev->EthPerf_sdev);
-	dev->pEthPerf_sdev = NULL;
-#endif
 
 	unregister_netdev(the_dev->net);
 	flush_work_sync(&the_dev->work);
@@ -1241,11 +1100,6 @@ void gether_cleanup(void)
 	the_dev = NULL;
 }
 
-int gether_change_mtu(int new_mtu)
-{
-	struct eth_dev *dev = the_dev;
-	return ueth_change_mtu(dev->net, new_mtu);
-}
 
 /**
  * gether_connect - notify network layer that USB link is active

@@ -54,7 +54,7 @@
 	printk(KERN_DEBUG fmt, ## args)
 
 /* #define SDQXDM_DEBUG */
-#define DIAG_XPST 1
+#define DIAG_XPST 0
 
 #define DIAG_LEGACY		"diag"
 #define DIAG_MDM		"diag_mdm"

@@ -5,7 +5,7 @@
  * Copyright (C) 2008 by David Brownell
  * Copyright (C) 2008 by Nokia Corporation
  * Copyright (C) 2009 by Samsung Electronics
- * Copyright (c) 2011 Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011 The Linux Foundation. All rights reserved.
  * Author: Michal Nazarewicz (mina86@mina86.com)
  *
  * This software is distributed under the terms of the GNU General
@@ -75,8 +75,7 @@ struct f_acm {
 #define ACM_CTRL_DSR		(1 << 1)
 #define ACM_CTRL_DCD		(1 << 0)
 };
-static struct f_acm *_f_acm;
-/*
+
 static unsigned int no_acm_tty_ports;
 static unsigned int no_acm_sdio_ports;
 static unsigned int no_acm_smd_ports;
@@ -87,7 +86,7 @@ static struct acm_port_info {
 	unsigned		port_num;
 	unsigned		client_port_num;
 } gacm_ports[GSERIAL_NO_PORTS];
-*/
+
 static inline struct f_acm *func_to_acm(struct usb_function *f)
 {
 	return container_of(f, struct f_acm, port.func);
@@ -97,7 +96,7 @@ static inline struct f_acm *port_to_acm(struct gserial *p)
 {
 	return container_of(p, struct f_acm, port);
 }
-/*
+
 static int acm_port_setup(struct usb_configuration *c)
 {
 	int ret = 0;
@@ -115,20 +114,12 @@ static int acm_port_setup(struct usb_configuration *c)
 
 	return ret;
 }
-*/
-
-/*-------------------------------------------------------------------------*/
-static unsigned hsm_newpid = 1;
-module_param(hsm_newpid, uint, S_IRUGO|S_IWUSR);
-MODULE_PARM_DESC(hsm_newpid, "Use New PID for HSM ACM");
-
-/*-------------------------------------------------------------------------*/
 
 static int acm_port_connect(struct f_acm *acm)
 {
 	unsigned port_num;
 
-	port_num = gserial_ports[acm->port_num].client_port_num;
+	port_num = gacm_ports[acm->port_num].client_port_num;
 
 
 	pr_debug("%s: transport:%s f_acm:%p gserial:%p port_num:%d cl_port_no:%d\n",
@@ -158,7 +149,7 @@ static int acm_port_disconnect(struct f_acm *acm)
 {
 	unsigned port_num;
 
-	port_num = gserial_ports[acm->port_num].client_port_num;
+	port_num = gacm_ports[acm->port_num].client_port_num;
 
 	pr_debug("%s: transport:%s f_acm:%p gserial:%p port_num:%d cl_pno:%d\n",
 			__func__, xport_to_str(acm->transport),
@@ -469,8 +460,6 @@ static int acm_setup(struct usb_function *f, const struct usb_ctrlrequest *ctrl)
 	/* GET_LINE_CODING ... return what host sent, or initial value */
 	case ((USB_DIR_IN | USB_TYPE_CLASS | USB_RECIP_INTERFACE) << 8)
 			| USB_CDC_REQ_GET_LINE_CODING:
-		if (w_index != acm->ctrl_id)
-			goto invalid;
 
 		value = min_t(unsigned, w_length,
 				sizeof(struct usb_cdc_line_coding));
@@ -480,9 +469,6 @@ static int acm_setup(struct usb_function *f, const struct usb_ctrlrequest *ctrl)
 	/* SET_CONTROL_LINE_STATE ... save what the host sent */
 	case ((USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE) << 8)
 			| USB_CDC_REQ_SET_CONTROL_LINE_STATE:
-		if (w_index != acm->ctrl_id)
-			goto invalid;
-
 		value = 0;
 
 		/* FIXME we should not allow data to flow until the
@@ -492,7 +478,7 @@ static int acm_setup(struct usb_function *f, const struct usb_ctrlrequest *ctrl)
 		acm->port_handshake_bits = w_value;
 		if (acm->port.notify_modem) {
 			unsigned port_num =
-				gserial_ports[acm->port_num].client_port_num;
+				gacm_ports[acm->port_num].client_port_num;
 
 			acm->port.notify_modem(&acm->port, port_num, w_value);
 		}
@@ -924,7 +910,7 @@ int acm_bind_config(struct usb_configuration *c, u8 port_num)
 	spin_lock_init(&acm->lock);
 
 	acm->port_num = port_num;
-	acm->transport = gserial_ports[port_num].transport;
+	acm->transport = gacm_ports[port_num].transport;
 
 	acm->port.connect = acm_connect;
 	acm->port.disconnect = acm_disconnect;
@@ -944,8 +930,6 @@ int acm_bind_config(struct usb_configuration *c, u8 port_num)
 	acm->port.func.setup = acm_setup;
 	acm->port.func.disable = acm_disable;
 
-	_f_acm = acm;
-
 	status = usb_add_function(c, &acm->port.func);
 	if (status)
 		kfree(acm);
@@ -955,7 +939,6 @@ int acm_bind_config(struct usb_configuration *c, u8 port_num)
 /**
  * acm_init_port - bind a acm_port to its transport
  */
- /*
 static int acm_init_port(int port_num, const char *name)
 {
 	enum transport_type transport;
@@ -993,4 +976,3 @@ static int acm_init_port(int port_num, const char *name)
 
 	return 0;
 }
-*/

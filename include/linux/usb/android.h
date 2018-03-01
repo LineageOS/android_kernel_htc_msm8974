@@ -26,52 +26,9 @@ struct android_usb_platform_data {
 	u32 swfi_latency;
 	u8 usb_core_id;
 	bool cdrom;
-
-	/* USB device descriptor fields */
-	__u16 vendor_id;
-	/* Default product ID. */
-	__u16 product_id;
-
-	char *product_name;
-	char *manufacturer_name;
-	char *serial_number;
-
-	/* To indicate the GPIO num for USB id */
-	int usb_id_pin_gpio;
-	/* For multiple serial function support
-	 * Ex: "tty:serial[,sdio:modem_mdm][,smd:modem]"
-	 */
-	const char *fserial_init_string;
-
-	/* the ctrl/data interface name for rmnet interface.
-	 * format(per port):"ctrl0,data0,ctrl1,data1..."
-	 * Ex: "smd,bam" or  "hsic,hsic"
-	 */
-	const char *usb_rmnet_interface;
-	const char *usb_diag_interface;
-
-	/* The gadget driver need to initial at beginning
-	 */
-	unsigned char diag_init:1;
-	unsigned char modem_init:1;
-	unsigned char rmnet_init:1;
-	unsigned char reserved:5;
-
-	int (*match)(int product_id, int intrsharing);
-
-	/* ums initial parameters */
-
-	/* number of LUNS */
-	int nluns;
-	/* bitmap of lun to indicate cdrom disk.
-	 * NOTE: Only support one cdrom disk
-	 * and it must be located in last lun */
-	int cdrom_lun;
-	int cdrom_cttype;
 	bool internal_ums;
 	char streaming_func[MAX_STREAMING_FUNCS][FUNC_NAME_LEN];
 	int  streaming_func_count;
-    int vzw_unmount_cdrom;
 	u32 uicc_nluns;
 };
 
