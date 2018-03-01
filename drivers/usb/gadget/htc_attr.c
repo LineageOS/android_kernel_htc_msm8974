@@ -491,7 +491,7 @@ int android_switch_function(unsigned func)
 					pr_err("android_switch_function: Cannot add %s\n", f->name);
 			}
 
-		} else if ((func & (1 << USB_FUNCTION_ADB)) && !strcmp(f->name, "adb")) {
+		} else if ((func & (1 << USB_FUNCTION_ADB)) && !strcmp(f->name, "ffs")) {
 			if (func == ((1 << USB_FUNCTION_UMS) | (1 << USB_FUNCTION_ADB)))
 				fadb = f;
 			else if (swap_ums_adb == 1) {
