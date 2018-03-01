@@ -91,7 +91,6 @@ int msm_otg_usb_disable = 0;
 static int msm_id_backup = 1;
 
 static char *override_phy_init;
-extern int rom_stockui;
 module_param(override_phy_init, charp, S_IRUGO|S_IWUSR);
 MODULE_PARM_DESC(override_phy_init,
 	"Override HSUSB PHY Init Settings");

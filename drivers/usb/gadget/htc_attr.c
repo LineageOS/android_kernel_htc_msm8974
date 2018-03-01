@@ -18,16 +18,13 @@
 #include <mach/devices_cmdline.h>
 #include <mach/devices_dtb.h>
 
-int rom_stockui = 0;
-
 enum {
 	USB_FUNCTION_UMS = 0,
 	USB_FUNCTION_ADB = 1,
 	USB_FUNCTION_RNDIS,
 	USB_FUNCTION_DIAG,
 	USB_FUNCTION_SERIAL,
-	USB_FUNCTION_PROJECTOR,
-	USB_FUNCTION_FSYNC,
+	USB_FUNCTION_FSYNC = 6,
 	USB_FUNCTION_MTP,
 	USB_FUNCTION_MODEM,
 	USB_FUNCTION_ECM,
@@ -37,12 +34,9 @@ enum {
 	USB_FUNCTION_ACCESSORY,
 	USB_FUNCTION_MODEM_MDM,
 	USB_FUNCTION_NCM,
-	USB_FUNCTION_PROJECTOR2,
-	USB_FUNCTION_AUDIO_SOURCE,
+	USB_FUNCTION_AUDIO_SOURCE = 17,
 	USB_FUNCTION_PTP,
 	USB_FUNCTION_MIDI,
-	USB_FUNCTION_CHARGING,
-	USB_FUNCTION_AUTOBOT = 30,
 	USB_FUNCTION_RNDIS_IPT = 31,
 };
 
@@ -71,10 +65,6 @@ static struct usb_string_node usb_string_array[] = {
 	{
 		.usb_function_flag = 1 << USB_FUNCTION_SERIAL,
 		.name = "serial",
-	},
-	{
-		.usb_function_flag = 1 << USB_FUNCTION_PROJECTOR,
-		.name = "projector",
 	},
 	{
 		.usb_function_flag = 1 << USB_FUNCTION_MODEM,
@@ -113,10 +103,6 @@ static struct usb_string_node usb_string_array[] = {
 		.name = "mtp",
 	},
 	{
-		.usb_function_flag = 1 << USB_FUNCTION_PROJECTOR2,
-		.name = "projector2",
-	},
-	{
 		.usb_function_flag = 1 << USB_FUNCTION_AUDIO_SOURCE,
 		.name = "audio_source",
 	},
@@ -128,11 +114,6 @@ static struct usb_string_node usb_string_array[] = {
 		.usb_function_flag = 1 << USB_FUNCTION_MIDI,
 		.name = "midi",
 	},
-	{
-		.usb_function_flag = 1 << USB_FUNCTION_CHARGING,
-		.name = "charging",
-	},
-
 };
 
 static int use_mfg_serialno;
@@ -146,8 +127,6 @@ static int intrsharing;
 #define PID_NCM			0x0f93
 #define PID_ACM			0x0ff4
 #define PID_MTPUMS		0x0f91
-#define PID_MTPUMS_STOCKUI	0x0f26
-#define PID_STOCKUI	0x060d
 #define PID_UL 0x061A
 
 #define PDATA_NOT_DEFINED(field) \
@@ -409,8 +388,6 @@ static bool is_mtp_enable(void)
 		return false;
 }
 
-extern int rom_stockui;
-
 int android_switch_function(unsigned func)
 {
 	struct android_dev *dev = _android_dev;
@@ -443,16 +420,14 @@ int android_switch_function(unsigned func)
 
 	pr_info(" %u, before %u\n", func, val);
 
-	if (func == val && rom_stockui != 1) {
+	if (func == val) {
 		pr_info("%s: SKIP due the function is the same ,%u\n" , __func__, func);
 		mutex_unlock(&function_bind_sem);
 		return 0;
 	}
 
 	if ((get_radio_flag() & BIT(17)) || (get_debug_flag() & 0x100)) {
-		if (func == (1 << USB_FUNCTION_CHARGING))
-			func = (1 << USB_FUNCTION_UMS);
-		else if (func == (1 << USB_FUNCTION_ADB))
+		if (func == (1 << USB_FUNCTION_ADB))
 			func = (1 << USB_FUNCTION_UMS) | (1 << USB_FUNCTION_ADB);
 		pr_info("%s: got radio_flag or debug_flag, change func to %d\n", __func__, func);
 	}
@@ -571,14 +546,6 @@ int android_switch_function(unsigned func)
 			if (android_usb_function_holder_list_add_tail(f, &conf->enabled_functions, dev))
 				pr_err("android_switch_function: Cannot add %s\n", f->name);
 
-		} else if ((func & (1 << USB_FUNCTION_PROJECTOR)) && !strcmp(f->name, "projector")) {
-			if (android_usb_function_holder_list_add_tail(f, &conf->enabled_functions, dev))
-				pr_err("android_switch_function: Cannot add %s\n", f->name);
-
-		} else if ((func & (1 << USB_FUNCTION_PROJECTOR2)) && !strcmp(f->name, "projector2")) {
-			if (android_usb_function_holder_list_add_tail(f, &conf->enabled_functions, dev))
-				pr_err("android_switch_function: Cannot add %s\n", f->name);
-
 		}
 #ifdef CONFIG_USB_ANDROID_MDM9K_DIAG
 		else if ((func & (1 << USB_FUNCTION_DIAG_MDM)) && !strcmp(f->name, "diag_mdm")) {
@@ -613,11 +580,6 @@ int android_switch_function(unsigned func)
 				pr_err("android_switch_function: Cannot add %s\n", f->name);
 
 		}
-		else if ((func & (1 << USB_FUNCTION_CHARGING)) && !strcmp(f->name, "charging")) {
-			if (android_usb_function_holder_list_add_tail(f, &conf->enabled_functions, dev))
-				pr_err("android_switch_function: Cannot add %s\n", f->name);
-
-		}
 	}
 	
 	if (func == ((1 << USB_FUNCTION_UMS) | (1 << USB_FUNCTION_ADB))) {
@@ -647,15 +609,6 @@ int android_switch_function(unsigned func)
 
 	if (dev->pdata && dev->pdata->match)
 		product_id = dev->pdata->match(product_id, intrsharing);
-
-	if (rom_stockui && (product_id == PID_MTPUMS)) {
-		product_id = PID_MTPUMS_STOCKUI;
-		pr_info("%s: stockUI ROM for mtp+ums\n", __func__);
-	} else if (rom_stockui && (product_id == PID_UL)) {
-		product_id = PID_STOCKUI;
-		pr_info("%s: stockUI ROM for default function\n", __func__);
-	}
-	pr_info("%s: rom_stockui=%d\n", __func__, rom_stockui);
 
 	pr_info("%s: vendor_id=0x%x, product_id=0x%x\n",
 			__func__, vendor_id, product_id);
@@ -762,52 +715,6 @@ static int android_switch_setup(struct usb_gadget *gadget,
 	}
 
 	return value;
-}
-
-
-static void setup_usb_denied(int htc_mode)
-{
-	if (htc_mode)
-		_android_dev->autobot_mode = 1;
-	else
-		_android_dev->autobot_mode = 0;
-}
-
-
-static int usb_autobot_mode(void)
-{
-	if (_android_dev->autobot_mode)
-		return 1;
-	else
-		return 0;
-}
-
-void android_switch_default(void)
-{
-	unsigned val;
-
-	mutex_lock(&function_bind_sem);
-	val = htc_usb_get_func_combine_value();
-	mutex_unlock(&function_bind_sem);
-
-	if (val & (1 << USB_FUNCTION_ADB))
-		android_switch_function(
-				(1 << USB_FUNCTION_MTP) |
-				(1 << USB_FUNCTION_ADB) |
-				(1 << USB_FUNCTION_UMS));
-	else
-		android_switch_function(
-				(1 << USB_FUNCTION_MTP) |
-				(1 << USB_FUNCTION_UMS));
-}
-
-void android_switch_htc_mode(void)
-{
-	android_switch_function((1 << USB_FUNCTION_ADB) |
-		(1 << USB_FUNCTION_PROJECTOR) |
-		(1 << USB_FUNCTION_SERIAL) |
-		(1 << USB_FUNCTION_UMS) |
-		(1 << USB_FUNCTION_AUTOBOT));
 }
 
 void android_set_serialno(char *serialno)
@@ -1114,21 +1021,6 @@ static ssize_t store_usb_host_mode(struct device *dev,
 static DEVICE_ATTR(host_mode, 0220,
 		NULL, store_usb_host_mode);
 
-static ssize_t show_is_usb_denied(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	unsigned length;
-	int deny = 0;
-
-	if (usb_autobot_mode()) {
-		deny = 1;;
-	}
-
-	length = sprintf(buf, "%d\n", deny);
-	pr_debug("%s: %s\n", __func__, buf);
-	return length;
-}
-
 static ssize_t show_os_type(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -1173,7 +1065,6 @@ static DEVICE_ATTR(usb_phy_setting, 0664,
 		show_usb_phy_setting, store_usb_phy_setting);
 #endif
 static DEVICE_ATTR(usb_disable, 0664,show_usb_disable_setting, store_usb_disable_setting);
-static DEVICE_ATTR(usb_denied, 0444, show_is_usb_denied, NULL);
 static DEVICE_ATTR(os_type, 0444, show_os_type, NULL);
 static DEVICE_ATTR(ats, 0664, show_ats, store_ats);
 static DEVICE_ATTR(cdrom_unmount, 0644, show_is_cdrom, store_is_cdrom);
@@ -1191,7 +1082,6 @@ static __maybe_unused struct attribute *android_htc_usb_attributes[] = {
 #endif
 	&dev_attr_host_mode.attr,
 	&dev_attr_usb_disable.attr,
-	&dev_attr_usb_denied.attr,
 	&dev_attr_os_type.attr,
 	&dev_attr_ats.attr,
 	&dev_attr_cdrom_unmount.attr,
@@ -1300,10 +1190,8 @@ static void setup_vendor_info(struct android_dev *dev) {
 	} else if (board_mfg_mode() == 2) {
 		ANDROID_USB_ENABLE_FUNC(dev, conf, "mass_storage");
 	} else {
-		if (!rom_stockui) {
-			ANDROID_USB_ENABLE_FUNC(dev, conf, "mtp");
-			ANDROID_USB_ENABLE_FUNC(dev, conf, "mass_storage");
-		}
+		ANDROID_USB_ENABLE_FUNC(dev, conf, "mtp");
+		ANDROID_USB_ENABLE_FUNC(dev, conf, "mass_storage");
 	}
 
 	product = get_product(dev, &conf->enabled_functions);
@@ -1315,16 +1203,6 @@ static void setup_vendor_info(struct android_dev *dev) {
 		product_id =  dev->pdata->product_id;
 	} else
 		PDATA_NOT_DEFINED("vendor/product id");
-
-	if (rom_stockui && (product_id == PID_MTPUMS)) {
-		product_id = PID_MTPUMS_STOCKUI;
-		pr_info("%s: stockUI ROM\n", __func__);
-	} else if (rom_stockui && (product_id == PID_UL)) {
-		product_id = PID_STOCKUI;
-		pr_info("%s: stockUI ROM for default function\n", __func__);
-	}
-
-	pr_info("%s: rom_stockui=%d\n", __func__, rom_stockui);
 
 	pr_info("%s: vendor_id=0x%x, product_id=0x%x\n", __func__, vendor_id, product_id);
 
