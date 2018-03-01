@@ -52,11 +52,6 @@ extern void android_set_serialno(char *serialno);
 extern void android_force_reset(void);
 extern int htc_usb_enable_function(char *name, int ebl);
 
-extern void htc_mode_enable(int enable);
-extern int check_htc_mode_status(void);
-extern void android_switch_default(void);
-extern void android_switch_htc_mode(void);
-
 #define ANDROID_USB_ENABLE_FUNC(dev, conf, func) 		\
 	if (android_enable_function(dev, conf, func)) {		\
 		pr_err("android_usb: Cannot enable %s", func);	\

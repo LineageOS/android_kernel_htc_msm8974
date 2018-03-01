@@ -111,7 +111,6 @@ static void ctusbcmd_vzw_unmount_work(struct work_struct *w)
 }
 
 static void composite_disconnect(struct usb_gadget *gadget);
-static int usb_autobot_mode(void);
 static void mtp_update_mode(int _mac_mtp_mode);
 static void fsg_update_mode(int _linux_fsg_mode);
 static bool is_mtp_enable(void);
@@ -123,7 +122,7 @@ static void composite_request_reset(struct work_struct *w)
 			(struct delayed_work *)w,
 			struct usb_composite_dev, request_reset);
 	if (cdev) {
-		if (usb_autobot_mode() || board_mfg_mode())
+		if (board_mfg_mode())
 			return;
 
 		INFO(cdev, "%s\n", __func__);

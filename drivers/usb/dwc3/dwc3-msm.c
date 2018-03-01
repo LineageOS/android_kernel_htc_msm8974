@@ -2941,7 +2941,6 @@ unreg_chrdev:
 	return ret;
 }
 
-extern int rom_stockui;
 static int __devinit dwc3_msm_probe(struct platform_device *pdev)
 {
 	struct device_node *node = pdev->dev.of_node, *dwc3_node;
@@ -3257,9 +3256,6 @@ static int __devinit dwc3_msm_probe(struct platform_device *pdev)
 	}
 
 	mdwc->io_res = res; /* used to calculate chg block offset */
-
-	if (of_property_read_u32(node, "usb_stock_ui_check", &rom_stockui))
-		dev_dbg(&pdev->dev, "unable to read rom type\n");
 
 	if (of_property_read_u32(node, "qcom,dwc-hsphy-init",
 						&mdwc->hsphy_init_seq))
