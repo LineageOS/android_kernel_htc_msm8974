@@ -71,10 +71,6 @@ static char *usb_functions_midi_adb[] = {
 	"adb",
 };
 
-static char *usb_functions_charging[] = {
-	"charging",
-};
-
 static char *usb_functions_adb[] = {
 	"mass_storage",
 	"adb",
@@ -217,67 +213,6 @@ static char *usb_functions_audio[] = { "audio_source"};
 static char *usb_functions_audio_adb[] = { "audio_source", "adb" };
 static char *usb_functions_accessory_audio[] = { "accessory", "audio_source"};
 static char *usb_functions_accessory_audio_adb[] = { "accessory", "audio_source", "adb" };
-
-static char *usb_functions_projector[] = {
-	"mass_storage",
-	"projector",
-};
-static char *usb_functions_adb_projector[] = {
-	"mass_storage",
-	"adb",
-	"projector",
-};
-static char *usb_functions_mtp_ums_projector[] = {
-	"mtp",
-	"mass_storage",
-	"projector",
-};
-static char *usb_functions_mtp_ums_adb_projector[] = {
-	"mtp",
-	"adb",
-	"mass_storage",
-	"projector",
-};
-static char *usb_function_adb_diag_projector[] = {
-	"mass_storage",
-	"adb",
-	"diag",
-	"projector",
-#if defined(CONFIG_USB_ANDROID_MDM9K_DIAG)
-	"diag_mdm",
-#endif
-};
-static char *usb_function_mtp_ums_adb_diag_projector[] = {
-	"mtp",
-	"adb",
-	"mass_storage",
-	"diag",
-	"projector",
-#if defined(CONFIG_USB_ANDROID_MDM9K_DIAG)
-	"diag_mdm",
-#endif
-};
-static char *usb_function_adb_diag_modem_projector[] = {
-	"mass_storage",
-	"adb",
-	"diag",
-	"modem",
-	"projector",
-#if defined(CONFIG_USB_ANDROID_MDM9K_DIAG)
-	"diag_mdm",
-#endif
-};
-static char *usb_function_mtp_ums_adb_diag_modem_projector[] = {
-	"mtp",
-	"adb",
-	"mass_storage",
-	"diag",
-	"modem",
-	"projector",
-#if defined(CONFIG_USB_ANDROID_MDM9K_DIAG)
-	"diag_mdm",
-#endif
-};
 
 static char *usb_functions_mtp[] = {
 	"mtp",
@@ -840,19 +775,7 @@ static char *usb_functions_mtp_ums_diag_modem_serial_acm[] = {
 	"diag_mdm",
 #endif
 };
-static char *usb_functions_mtp_ums_projector_acm[] = {
-	"mtp",
-	"mass_storage",
-	"projector",
-	"acm",
-};
-static char *usb_functions_mtp_ums_adb_projector_acm[] = {
-	"mtp",
-	"adb",
-	"mass_storage",
-	"projector",
-	"acm",
-};
+
 static char *usb_functions_mtp_ums_adb_acm_rmnet[] = {
 	"mtp",
 	"adb",
@@ -868,28 +791,14 @@ static char *usb_functions_mtp_ums_acm_rmnet[] = {
 };
 
 #ifdef CONFIG_USB_ANDROID_NCM
-	#ifdef CONFIG_USB_ANDROID_PROJECTOR
-static char *usb_functions_ncm_adb_projector[] = {
-	"cdc_network",
-	"adb",
-	"projector",
-};
-	#else
 static char *usb_functions_ncm_adb[] = {
 	"cdc_network",
 	"adb",
 };
-	#endif
-	#ifdef CONFIG_USB_ANDROID_PROJECTOR
-static char *usb_functions_ncm_projector[] = {
-	"cdc_network",
-	"projector",
-};
-	#else
+
 static char *usb_functions_ncm[] = {
 	"cdc_network",
 };
-	#endif
 #endif
 
 static char *usb_functions_adb_diag_modem_svlte2[] = {
@@ -1115,7 +1024,6 @@ static __maybe_unused char *usb_functions_all[] = {
 	"mtp",
 	"ptp",
 	"midi",
-	"charging",
 #if defined(CONFIG_USB_ANDROID_MTP36) && defined(CONFIG_USB_ANDROID_MTP)
 	"mtp36",
 #endif
@@ -1127,7 +1035,6 @@ static __maybe_unused char *usb_functions_all[] = {
 	"cdc_ethernet",
 	"diag",
 	"serial",
-	"projector",
 	"acm",
 #if defined(CONFIG_USB_ANDROID_MDM9K_DIAG)
 	"diag_mdm",
@@ -1194,26 +1101,14 @@ static struct android_usb_product usb_products[] = {
 	},
 #ifdef CONFIG_USB_ANDROID_NCM
 	{
-	#ifdef CONFIG_USB_ANDROID_PROJECTOR
-		.product_id	= 0x0f8b,
-		.num_functions	= ARRAY_SIZE(usb_functions_ncm_adb_projector),
-		.functions	= usb_functions_ncm_adb_projector,
-	#else
 		.product_id	= 0x0f92,
 		.num_functions	= ARRAY_SIZE(usb_functions_ncm_adb),
 		.functions	= usb_functions_ncm_adb,
-	#endif
 	},
 	{
-	#ifdef CONFIG_USB_ANDROID_PROJECTOR
-		.product_id	= 0x0f8a,
-		.num_functions	= ARRAY_SIZE(usb_functions_ncm_projector),
-		.functions	= usb_functions_ncm_projector,
-	#else
 		.product_id	= 0x0f93,
 		.num_functions	= ARRAY_SIZE(usb_functions_ncm),
 		.functions	= usb_functions_ncm,
-	#endif
 	},
 #endif
 	{
@@ -1388,69 +1283,6 @@ static struct android_usb_product usb_products[] = {
 		.product_id	= 0x0faa,
 		.num_functions	= ARRAY_SIZE(usb_functions_mtp_ums_diag_modem),
 		.functions	= usb_functions_mtp_ums_diag_modem,
-	},
-#endif
-	{
-		.product_id	= 0x0c05,
-		.num_functions	= ARRAY_SIZE(usb_functions_projector),
-		.functions	= usb_functions_projector,
-	},
-	{
-		.product_id	= 0x0c06,
-		.num_functions	= ARRAY_SIZE(usb_functions_adb_projector),
-		.functions	= usb_functions_adb_projector,
-	},
-	{
-		.product_id	= 0x0f97,
-		.num_functions	= ARRAY_SIZE(usb_functions_mtp_ums_adb_projector),
-		.functions	= usb_functions_mtp_ums_adb_projector,
-	},
-	{
-		.product_id	= 0x0f98,
-		.num_functions	= ARRAY_SIZE(usb_functions_mtp_ums_projector),
-		.functions	= usb_functions_mtp_ums_projector,
-	},
-#if defined(CONFIG_USB_ANDROID_MDM9K_DIAG)
-	{
-		.product_id	= 0x0FE3,
-		.num_functions	= ARRAY_SIZE(usb_function_adb_diag_projector),
-		.functions	= usb_function_adb_diag_projector,
-	},
-	{
-		.product_id	= 0x0FB2,
-		.num_functions	= ARRAY_SIZE(usb_function_mtp_ums_adb_diag_projector),
-		.functions	= usb_function_mtp_ums_adb_diag_projector,
-	},
-	{
-		.product_id	= 0x0FE4,
-		.num_functions	= ARRAY_SIZE(usb_function_adb_diag_modem_projector),
-		.functions	= usb_function_adb_diag_modem_projector,
-	},
-	{
-		.product_id	= 0x0FB3,
-		.num_functions	= ARRAY_SIZE(usb_function_mtp_ums_adb_diag_modem_projector),
-		.functions	= usb_function_mtp_ums_adb_diag_modem_projector,
-	},
-#else
-	{
-		.product_id	= 0x0FF1,
-		.num_functions	= ARRAY_SIZE(usb_function_adb_diag_projector),
-		.functions	= usb_function_adb_diag_projector,
-	},
-	{
-		.product_id	= 0x0FA8,
-		.num_functions	= ARRAY_SIZE(usb_function_mtp_ums_adb_diag_projector),
-		.functions	= usb_function_mtp_ums_adb_diag_projector,
-	},
-	{
-		.product_id	= 0x0FF2,
-		.num_functions	= ARRAY_SIZE(usb_function_adb_diag_modem_projector),
-		.functions	= usb_function_adb_diag_modem_projector,
-	},
-	{
-		.product_id	= 0x0FA9,
-		.num_functions	= ARRAY_SIZE(usb_function_mtp_ums_adb_diag_modem_projector),
-		.functions	= usb_function_mtp_ums_adb_diag_modem_projector,
 	},
 #endif
 	{
@@ -1666,18 +1498,6 @@ static struct android_usb_product usb_products[] = {
 		.product_id	= 0x0f34,
 		.num_functions	= ARRAY_SIZE(usb_functions_mtp_ums_modem_serial_acm),
 		.functions	= usb_functions_mtp_ums_modem_serial_acm,
-	},
-	
-	{
-		.product_id	= 0x0f2c,
-		.num_functions	= ARRAY_SIZE(usb_functions_mtp_ums_projector_acm),
-		.functions	= usb_functions_mtp_ums_projector_acm,
-	},
-	
-	{
-		.product_id	= 0x0f2b,
-		.num_functions	= ARRAY_SIZE(usb_functions_mtp_ums_adb_projector_acm),
-		.functions	= usb_functions_mtp_ums_adb_projector_acm,
 	},
 	
 	{
@@ -1918,12 +1738,6 @@ static struct android_usb_product usb_products[] = {
 		.product_id	= 0x4ee9,
 		.num_functions	= ARRAY_SIZE(usb_functions_midi_adb),
 		.functions	= usb_functions_midi_adb,
-	},
-	
-	{
-		.product_id	= 0xf006,
-		.num_functions	= ARRAY_SIZE(usb_functions_charging),
-		.functions	= usb_functions_charging,
 	},
 	
 	{
