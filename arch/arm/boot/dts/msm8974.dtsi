@@ -1704,7 +1704,6 @@
 		#address-cells = <1>;
 		#size-cells = <1>;
 		ranges;
-		usb_stock_ui_check = <0>;
 		interrupt-parent = <&usb3>;
 		interrupts = <0 1>;
 		#interrupt-cells = <1>;
