@@ -881,11 +881,6 @@ config USB_ANDROID_ACM
 	help
 	  Provides ACM serial function for android gadget driver.
 
-config USB_ANDROID_PROJECTOR
-	boolean "Android gadget Projector function"
-	depends on USB_G_ANDROID
-	help
-
 config USB_ANDROID_ECM
 	boolean "Android gadget ECM function"
 	depends on USB_G_ANDROID
