@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "6cf91166_52c8e2d5",
+        "filename": "fs/sdfat/amap_smart.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 387,
+      "author": {
+        "id": 11801
+      },
+      "writtenOn": "2018-03-14T12:46:23Z",
+      "side": 1,
+      "message": "tabs, not spaces. fixed in my new PS",
+      "range": {
+        "startLine": 387,
+        "startChar": 0,
+        "endLine": 387,
+        "endChar": 8
+      },
+      "revId": "4dd9669e265503225053ea4f96ac7b5ef0a2d063",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
