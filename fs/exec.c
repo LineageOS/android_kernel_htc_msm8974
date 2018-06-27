@@ -1282,6 +1282,9 @@ static void bprm_fill_uid(struct linux_binprm *bprm)
 	if (bprm->file->f_path.mnt->mnt_flags & MNT_NOSUID)
 		return;
 
+	if (task_no_new_privs(current))
+		return;
+
 	inode = bprm->file->f_path.dentry->d_inode;
 	mode = ACCESS_ONCE(inode->i_mode);
 	if (!(mode & (S_ISUID|S_ISGID)))
