@@ -37,8 +37,6 @@
 #if defined(CONFIG_FB)
 #include <linux/notifier.h>
 #include <linux/fb.h>
-#elif defined(CONFIG_HAS_EARLYSUSPEND)
-#include <linux/earlysuspend.h>
 #endif
 
 #include <mach/htc_gauge.h>
@@ -152,9 +150,6 @@ struct wake_lock batt_shutdown_wake_lock;
 
 #define RECHARGE_RECOVER_LEVEL	95
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-static struct early_suspend early_suspend;
-#endif
 #ifdef CONFIG_HTC_BATT_ALARM
 static int screen_state;
 
@@ -261,7 +256,6 @@ struct mutex batt_set_alarm_lock;
 static int fb_notifier_callback(struct notifier_block *self,
                                  unsigned long event, void *data);
 #endif
-static bool is_fb_notifier_ready = false;
 
 struct dec_level_by_current_ua {
 	int threshold_ua;
@@ -1848,55 +1842,8 @@ static void batt_level_adjust(unsigned long time_since_last_update_ms)
 	first = 0;
 }
 
-#define SCREEN_FILE_NODE_PATH "sys/class/graphics/fb0/show_blank_event"
-#define SCREEN_FILE_NODE_SIZE 18
-int update_screen_status_by_filenode (void)
-{
-	char file_node_data[SCREEN_FILE_NODE_SIZE];
-	struct file *filp = NULL;
-	int  rc;
-
-	filp = filp_open(SCREEN_FILE_NODE_PATH, O_RDONLY, 0);
-	if (IS_ERR(filp)) {
-		pr_warn("%s Open file node \"show_blank_event\" fail.\n", __func__);
-		return -EINVAL;
-	}
-
-	rc = filp->f_op->read(filp, file_node_data, SCREEN_FILE_NODE_SIZE, &filp->f_pos);
-	if (rc < 0) {
-		filp_close(filp, NULL);
-		pr_warn("%s Read file node \"show_blank_event\" fail.\n", __func__);
-		return -EINVAL;
-	}
-
-	filp_close(filp, NULL);
-
-	if (strcmp( "panel_power_on = ", file_node_data)) {
-		if (file_node_data[SCREEN_FILE_NODE_SIZE - 1] == '0') {
-			htc_batt_info.state |= STATE_EARLY_SUSPEND;
-			pr_debug("%s: Screen is OFF\n", __func__);
-		} else {
-			htc_batt_info.state &= ~STATE_EARLY_SUSPEND;
-			pr_debug("%s: Screen is ON\n", __func__);
-		}
-	} else {
-		pr_err("%s: The patterm of file node is not correct, %s.\n", __func__, file_node_data);
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
 static void batt_update_limited_charge(void)
 {
-	int rc;
-
-	if (!htc_batt_info.fb_notif.notifier_call || !is_fb_notifier_ready) {
-		rc = update_screen_status_by_filenode();
-		if (rc)
-			return;
-	}
-
 	if (htc_batt_info.state & STATE_EARLY_SUSPEND) {
 		if ((!(chg_limit_reason & HTC_BATT_CHG_LIMIT_BIT_THRML)) &&
 				htc_batt_info.rep.batt_temp > 450) {
@@ -2424,10 +2371,6 @@ static int fb_notifier_callback(struct notifier_block *self,
 {
 	struct fb_event *evdata = data;
 	int *blank;
-	static bool first = true;
-
-	if(first)
-		is_fb_notifier_ready = true;
 
 	if (evdata && evdata->data && event == FB_EVENT_BLANK) {
 		blank = evdata->data;
@@ -2448,29 +2391,7 @@ static int fb_notifier_callback(struct notifier_block *self,
 		}
 	}
 
-	first = false;
 	return 0;
-}
-#elif defined(CONFIG_HAS_EARLYSUSPEND)
-static void htc_battery_early_suspend(struct early_suspend *h)
-{
-	htc_batt_info.state |= STATE_EARLY_SUSPEND;
-#ifdef CONFIG_HTC_BATT_ALARM
-	screen_state = 0;
-	batt_set_voltage_alarm_mode(BATT_ALARM_DISABLE_MODE);
-#endif
-	htc_batt_schedule_batt_info_update();
-	return;
-}
-
-static void htc_battery_late_resume(struct early_suspend *h)
-{
-	htc_batt_info.state &= ~STATE_EARLY_SUSPEND;
-#ifdef CONFIG_HTC_BATT_ALARM
-	screen_state = 1;
-	batt_set_voltage_alarm_mode(BATT_ALARM_CRITICAL_MODE);
-#endif
-	htc_batt_schedule_batt_info_update();
 }
 #endif
 
@@ -2767,11 +2688,6 @@ static int htc_battery_probe(struct platform_device *pdev)
 	}
 	INIT_DELAYED_WORK(&htc_batt_info.work_fb, htc_battery_fb_register);
 	queue_delayed_work(htc_batt_info.batt_fb_wq, &htc_batt_info.work_fb, msecs_to_jiffies(30000));
-#elif defined(CONFIG_HAS_EARLYSUSPEND)
-	early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN - 1;
-	early_suspend.suspend = htc_battery_early_suspend;
-	early_suspend.resume = htc_battery_late_resume;
-	register_early_suspend(&early_suspend);
 #endif
 
 	ret = register_reboot_notifier(&reboot_consistent_command);
