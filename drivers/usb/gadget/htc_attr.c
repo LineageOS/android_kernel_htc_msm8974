@@ -1188,7 +1188,7 @@ static void setup_vendor_info(struct android_dev *dev) {
 		ANDROID_USB_ENABLE_FUNC(dev, conf, "modem");
 		ANDROID_USB_ENABLE_FUNC(dev, conf, "rmnet");
 	} else if (board_mfg_mode() == 2) {
-		ANDROID_USB_ENABLE_FUNC(dev, conf, "mass_storage");
+		ANDROID_USB_ENABLE_FUNC(dev, conf, "ffs");
 	} else {
 		ANDROID_USB_ENABLE_FUNC(dev, conf, "mtp");
 		ANDROID_USB_ENABLE_FUNC(dev, conf, "mass_storage");
