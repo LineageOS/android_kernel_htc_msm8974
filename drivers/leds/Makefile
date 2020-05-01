@@ -71,3 +71,4 @@ obj-$(CONFIG_LEDS_TRIGGER_SLEEP)	+= ledtrig-sleep.o
 # FLASHLIGHT Drivers
 obj-$(CONFIG_FLASHLIGHT_TPS61310)	+= tps61310_flashlight.o
 obj-$(CONFIG_FLASHLIGHT_TPS61310_FRONT)       += tps61310_flashlight_front.o
+obj-$(CONFIG_FLASHLIGHT_LM3643)       += lm3643_flashlight.o
