@@ -51,14 +51,14 @@
 		qcom,mount-angle = <90>;
 		qcom,sensor-name = "imx214_784m";
 		htc,mirror-flip = <1>;
+
 		qcom,vdd-cx-supply = <&pm8841_s2>;
 		qcom,vdd-cx-name = "qcom,vdd-cx";
 		cam_vdig-supply = <&ncp6924_dcdc1>;
 		cam_vana-supply = <&ncp6924_ldo1>;
 		cam_vio-supply = <&pm8941_lvs3>;
 		cam_vaf-supply = <&ncp6924_ldo3>;
-		qcom,cam-vreg-name = "cam_vdig", "cam_vio", "cam_vana",
-				     "cam_vaf";
+		qcom,cam-vreg-name = "cam_vdig", "cam_vio", "cam_vana", "cam_vaf";
 		qcom,cam-vreg-type = <0 1 0 0>;
 		qcom,cam-vreg-min-voltage = <1000000 1800000 2700000 2800000>;
 		qcom,cam-vreg-max-voltage =<1000000 1800000 2700000 2800000>;
@@ -87,6 +87,7 @@
 		qcom,sensor-position = <0>;
 		qcom,sensor-mode = <1>;
 		qcom,cci-master = <0>;
+
 		status = "ok";
 	};
 
@@ -107,8 +108,7 @@
 		cam_vana-supply = <&ncp6924_ldo1>;
 		cam_vio-supply = <&pm8941_lvs3>;
 		cam_vaf-supply = <&ncp6924_ldo3>;
-		qcom,cam-vreg-name = "cam_vdig", "cam_vio", "cam_vana",
-				     "cam_vaf";
+		qcom,cam-vreg-name = "cam_vdig", "cam_vio", "cam_vana", "cam_vaf";
 		qcom,cam-vreg-type = <0 1 0 0>;
 		qcom,cam-vreg-min-voltage = <1200000 1800000 2800000 2800000>;
 		qcom,cam-vreg-max-voltage =<1200000 1800000 2800000 2800000>;
@@ -137,6 +137,7 @@
 		qcom,sensor-position = <0>;
 		qcom,sensor-mode = <1>;
 		qcom,cci-master = <0>;
+
 		status = "ok";
 	};
 
@@ -151,6 +152,7 @@
 		qcom,mount-angle = <270>;
 		qcom,sensor-name = "imx214_800m_fov87";
 		qcom,htc-image = <0>;
+
 		qcom,vdd-cx-supply = <&pm8841_s2>;
 		qcom,vdd-cx-name = "qcom,vdd-cx";
 		cam_vdig-supply = <&ncp6924_dcdc2>;
@@ -168,6 +170,7 @@
 		gpios = <&msmgpio 16 0>,
 			<&msmgpio 31 0>,
 			<&pm8941_gpios 23 0>;
+
 		qcom,gpio-reset = <1>;
 		qcom,gpio-standby = <2>;   //Used for NCP6924_CAM_EN
 		qcom,gpio-req-tbl-num = <0 1 2>;
@@ -181,6 +184,7 @@
 		qcom,sensor-position = <1>;
 		qcom,sensor-mode = <1>;
 		qcom,cci-master = <1>;
+
 		status = "ok";
 	};
 
@@ -202,8 +206,7 @@
 		cam_vana-supply = <&ncp6924_ldo2>;
 		cam_vio-supply = <&pm8941_lvs3>;
 		cam_vaf-supply = <&ncp6924_ldo4>;
-		qcom,cam-vreg-name = "cam_vdig", "cam_vio", "cam_vana",
-				     "cam_vaf";
+		qcom,cam-vreg-name = "cam_vdig", "cam_vio", "cam_vana", "cam_vaf";
 		qcom,cam-vreg-type = <0 1 0 0>;
 		qcom,cam-vreg-min-voltage = <1000000 1800000 2700000 2800000>;
 		qcom,cam-vreg-max-voltage =<1000000 1800000 2700000 2800000>;
@@ -228,6 +231,8 @@
 		qcom,sensor-position = <1>;
 		qcom,sensor-mode = <1>;
 		qcom,cci-master = <1>;
+
 		status = "ok";
 	};
+
 };
