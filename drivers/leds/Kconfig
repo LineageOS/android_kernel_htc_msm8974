@@ -584,6 +584,11 @@ config FLASHLIGHT_LM3643
     help
       Say Y here to enable the TI LM3643 flashlight
 
+config FRONT_FLASHLIGHT_COMMON
+	tristate "FRONT_FLASHLIGHT_COMMON"
+    help
+     Say Y here to enable the front flashlight common
+
 config FLASHLIGHT_1500mA
 	bool "FLASHLIGHT_1500mA"
 	depends on FLASHLIGHT_TPS61310
