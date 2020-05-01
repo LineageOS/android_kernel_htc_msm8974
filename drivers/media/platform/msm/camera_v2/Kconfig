@@ -304,3 +304,10 @@ config IMX214_800M_FOV77
 	default n
 	---help---
 	  Support for IMX214 sensor driver.
+
+config IMX214_800M_FOV87
+	bool "Sensor imx214 800M fov 87"
+	depends on MSMB_CAMERA
+	default n
+	---help---
+	  Support for IMX214 sensor driver.
