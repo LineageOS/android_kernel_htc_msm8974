@@ -689,6 +689,15 @@ config VIB_TRIGGERS
 	  These triggers allow kernel events to drive the vibrator. If
 	  unsure, say N.
 
+config QPNP_VIBRATOR_PWM
+	tristate "Vibrator support drived by QPNP PMIC's PWM"
+	depends on OF_SPMI
+	help
+		This option enables device driver support for the vibrator
+		by the Qualcomm's QPNP PMIC's PWM. The vibrator is connected on the
+		PMIC GPIO line and PWM wave can be configured by the PWM registers.
+		It uses the android timed-output framework.
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"
