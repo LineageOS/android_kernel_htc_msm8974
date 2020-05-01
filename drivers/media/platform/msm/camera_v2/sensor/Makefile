@@ -10,6 +10,7 @@ obj-$(CONFIG_S5K5E_TWOLANE) += s5k5e2_twolane.o
 obj-$(CONFIG_IMX134) += imx134.o
 obj-$(CONFIG_OV8825) += ov8825.o
 obj-$(CONFIG_OV8865) += ov8865.o
+obj-$(CONFIG_OV13850_800M) += ov13850_800m.o
 obj-$(CONFIG_s5k4e1) += s5k4e1.o
 obj-$(CONFIG_OV12830) += ov12830.o
 obj-$(CONFIG_OV9724) += ov9724.o
