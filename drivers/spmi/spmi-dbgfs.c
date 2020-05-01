@@ -627,6 +627,72 @@ struct dentry *spmi_dfs_get_root(void)
 	return dbgfs_data.root;
 }
 
+#if defined(CONFIG_MACH_EYE_UL)
+#define VREG_DUMP_DRIVER_NAME	"htc,vreg-dump"
+#define VREG_NAME_VOL_LEN       32
+#define VREG_EN_PD_MODE_LEN     8
+#define VREG_DUMP_LEN           128
+
+struct _vreg {
+	int id;
+	int type;
+	const char *name;
+	u32 base_addr;
+};
+
+struct _qpnp_vregs {
+	struct _vreg *vregs;
+	struct spmi_controller *ctrl;
+	u32 en_ctl_offset;
+	u32 pd_ctl_offset;
+	u32 mode_ctl_offset;
+	u32 range_ctl_offset;
+	u32 step_ctl_offset;
+	u32 en_bit;
+	u32 pd_bit;
+	int total_vregs;
+};
+
+enum {
+        VREG_TYPE_NLDO,
+        VREG_TYPE_PLDO,
+        VREG_TYPE_HF_SMPS,
+        VREG_TYPE_FT_SMPS,
+        VREG_TYPE_BOOST_SMPS,
+        VREG_TYPE_LVS,
+};
+
+struct qpnp_voltage_range {
+	int             min_uV;
+	int             max_uV;
+	int             step_uV;
+	int             set_point_min_uV;
+	unsigned        n_voltages;
+	u8              range_sel;
+};
+
+#define VREG_IS_LDO(type)       (type == VREG_TYPE_NLDO || type == VREG_TYPE_PLDO)
+#define VREG_IS_SMPS(type)      (type == VREG_TYPE_HF_SMPS || type == VREG_TYPE_FT_SMPS || type == VREG_TYPE_BOOST_SMPS)
+
+#define VOLTAGE_RANGE(_range_sel, _min_uV, _set_point_min_uV, _max_uV, \
+			_step_uV) \
+	{ \
+		.min_uV			= _min_uV, \
+		.set_point_min_uV	= _set_point_min_uV, \
+		.max_uV			= _max_uV, \
+		.step_uV		= _step_uV, \
+		.range_sel		= _range_sel, \
+	}
+
+#define SET_POINTS(_ranges) \
+{ \
+	.range	= _ranges, \
+	.count	= ARRAY_SIZE(_ranges), \
+};
+
+struct _qpnp_vregs qpnp_vregs;
+#endif
+
 /*
  * spmi_dfs_add_controller: adds new spmi controller entry
  * @return zero on success
@@ -774,6 +840,23 @@ static void __exit spmi_dfs_destroy(void)
 	}
 	mutex_unlock(&dbgfs_data.lock);
 }
+
+#if defined(CONFIG_MACH_EYE_UL)
+#define PN547_I2C_POWEROFF_SEQUENCE_FOR_EYE
+#endif
+#if defined(PN547_I2C_POWEROFF_SEQUENCE_FOR_EYE)
+void force_disable_PM8941_VREG_ID_L22(void)
+{
+	int ret;
+	uint8_t voltage_sel = 0x00;
+
+
+	ret = spmi_write_data(qpnp_vregs.ctrl, &voltage_sel, 0x15546, 1);
+	if (ret) {
+                pr_err("force_disable_PM8941_VREG_ID_L22, SPMI write failed, err = %zu\n", ret);
+        }
+}
+#endif
 
 module_exit(spmi_dfs_destroy);
 
