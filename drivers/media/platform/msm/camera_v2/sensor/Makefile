@@ -22,6 +22,7 @@ obj-$(CONFIG_GC0339) += gc0339.o
 obj-$(CONFIG_OV4688) += ov4688.o
 obj-$(CONFIG_VD6869) += vd6869.o
 obj-$(CONFIG_IMX214_800M_FOV77) += imx214_800m_fov77.o
+obj-$(CONFIG_IMX214_800M_FOV87) += imx214_800m_fov87.o
 obj-$(CONFIG_S5K5E_ONELANE) += s5k5e_onelane.o
 obj-$(CONFIG_s5k5e) += s5k5e.o
 obj-$(CONFIG_OV2722) += ov2722.o ov2722-subcam.o
