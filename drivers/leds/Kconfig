@@ -579,6 +579,11 @@ config FLASHLIGHT_TPS61310_FRONT
     help
       Say Y here to enable the TI TPS61310 flashlight
 
+config FLASHLIGHT_LM3643
+    tristate "TI LM3643 flashlight"
+    help
+      Say Y here to enable the TI LM3643 flashlight
+
 config FLASHLIGHT_1500mA
 	bool "FLASHLIGHT_1500mA"
 	depends on FLASHLIGHT_TPS61310
