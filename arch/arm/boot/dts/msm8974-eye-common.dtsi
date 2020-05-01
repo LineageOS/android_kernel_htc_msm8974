@@ -44,8 +44,8 @@
                         nxp,ven-gpio = <&msmgpio 2 0x00>;
                         nxp,irq-gpio = <&msmgpio 144 0x00>;
                         nxp,fwdl-gpio = <&msmgpio 3 0x00>;
-                        nxp,ven_isinvert = <0>;
-						nxp,isalive = <1>;
+						nxp,ven_isinvert = <0>;
+			nxp,isalive = <1>;
                 };
 
                 htc_mcu@3a {
@@ -55,15 +55,15 @@
                         interrupts = <67 0x0>;
                         mcu,intr-gpio  = <&msmgpio 67 0x00>;
                         mcu,GS_chip_layout = <1>;
-                        mcu,Acceleration_axes  = <1>;
+                        mcu,Acceleration_axes  = <3>;
                         mcu,Magnetic_axes  = <0>;
-                        mcu,Gyro_axes  = <1>;
+                        mcu,Gyro_axes  = <3>;
                         mcu,Cpu_wake_mcu-gpio    = <&msmgpio 76 0x00>;
                         mcu,Reset-gpio    = <&msmgpio 89 0x00>;
                         mcu,Chip_mode-gpio    = <&msmgpio 53 0x00>;
                         mcu,ALS_goldh  = <0x09>;
                         mcu,ALS_goldl  = <0x65>;
-                        mcu,proximity_debu_info = <1>;
+			mcu,proximity_debu_info = <1>;
                 };
         };
 
@@ -419,6 +419,12 @@
 		reg-names = "phys_addr_base";
 		qcom,sleep-stats-version = <3>;
 	};
+
+        htc_radio_smem {
+                compatible = "htc,htc_radio_smem";
+                reg = <0x0fbf0000 0x10000>;
+                reg-names = "smem-start-addr";
+        };
 };
 
 &spmi_bus {
@@ -627,6 +633,7 @@
 	qcom,rconn-mohm-sw-est-ocv = <10>;
 	qcom,enable-batt-full-fake-ocv = <1>;
 	qcom,qb-mode-cc-criteria-uah = <10000>;
+	qcom,soc-overrate-criteria-for-sw-ocv = <5>;
 	status = "ok";
 };
 
@@ -641,10 +648,10 @@
 	qcom,ibatsafe-ma = <1750>;
 	qcom,thermal-mitigation = <1500 700 600 225>;
 	qcom,cool-bat-decidegc = <0>;
-	qcom,cool-bat-mv = <4350>;
+	qcom,cool-bat-mv = <4000>;
 	qcom,ibatmax-warm-ma = <1750>;
 	qcom,warm-bat-decidegc = <480>;
-	qcom,warm-bat-mv = <4100>;
+	qcom,warm-bat-mv = <4000>;
 	qcom,ibatmax-cool-ma = <1750>;
 	qcom,vbatdet-delta-mv = <50>;
 	qcom,resume-soc = <99>;
@@ -660,6 +667,7 @@
 	qcom,stored-pre-delta-vddmax-mv= <(-1)>;
 	qcom,stored-batt-magic-num= <(-1)>;
 	qcom,is-aicl-adapter-wa-enabled = <1>;
+	qcom,disable-pwrpath-after-eoc = <1>;
 
 	status = "ok";
 	qcom,charging-disabled;
