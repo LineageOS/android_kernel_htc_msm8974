@@ -297,3 +297,10 @@ config RUMBAS_ACT
 	default n
 	---help---
 	  Autofocus of RUMBA-S actuator
+
+config IMX214_800M_FOV77
+	bool "Sensor imx214 800M fov 77"
+	depends on MSMB_CAMERA
+	default n
+	---help---
+	  Support for IMX214 sensor driver.
