@@ -23,6 +23,8 @@
 #include <linux/qpnp/vibrator.h>
 #include "../../staging/android/timed_output.h"
 
+#include <linux/vibtrig.h>
+
 #define QPNP_VIB_VTG_CTL(base)		(base + 0x41)
 #define QPNP_VIB_EN_CTL(base)		(base + 0x46)
 
@@ -39,6 +41,9 @@ struct qpnp_vib {
 	struct spmi_device *spmi;
 	struct hrtimer vib_timer;
 	struct timed_output_dev timed_dev;
+#ifdef CONFIG_VIB_TRIGGERS
+	struct vib_trigger_enabler enabler;
+#endif
 
 	u8  reg_vtg_ctl;
 	u8  reg_en_ctl;
@@ -53,6 +58,8 @@ struct qpnp_vib {
 };
 
 static struct qpnp_vib *vib_dev;
+
+static struct of_device_id spmi_match_table[];
 
 static ssize_t qpnp_vib_level_show(struct device *dev,
 					struct device_attribute *attr,
@@ -262,6 +269,22 @@ retry:
 	spin_unlock_irqrestore(&vib->lock, flags);
 }
 
+#ifdef CONFIG_VIB_TRIGGERS
+static void qpnp_vib_trigger_enable(struct vib_trigger_enabler *enabler, int value)
+{
+	struct qpnp_vib *vib;
+	struct timed_output_dev *dev;
+
+	vib = enabler->trigger_data;
+	dev = &vib->timed_dev;
+
+	printk(KERN_INFO "[VIB]"
+			"vib_trigger=%d.\r\n", value);
+
+	qpnp_vib_enable(dev, value);
+}
+#endif
+
 static int qpnp_vib_get_time(struct timed_output_dev *dev)
 {
 	struct qpnp_vib *vib = container_of(dev, struct qpnp_vib,
@@ -410,6 +433,14 @@ static int __devinit qpnp_vibrator_probe(struct spmi_device *spmi)
 	if (rc < 0)
 		goto error_create_default;
 
+#ifdef CONFIG_VIB_TRIGGERS
+	vib->enabler.name = "qpnp-vibrator";
+	vib->enabler.default_trigger = "vibrator";
+	vib->enabler.enable = qpnp_vib_trigger_enable;
+	vib->enabler.trigger_data = vib;
+	vib_trigger_enabler_register(&vib->enabler);
+#endif
+
 	vib_dev = vib;
 
 	return 0;
@@ -428,6 +459,10 @@ error_create_level:
 static int  __devexit qpnp_vibrator_remove(struct spmi_device *spmi)
 {
 	struct qpnp_vib *vib = dev_get_drvdata(&spmi->dev);
+
+#ifdef CONFIG_VIB_TRIGGERS
+	vib_trigger_enabler_unregister(&vib->enabler);
+#endif
 
 	hrtimer_cancel(&vib->vib_timer);
 	device_remove_file(vib->timed_dev.dev, &dev_attr_vtg_level);
