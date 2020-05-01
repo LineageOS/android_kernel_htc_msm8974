@@ -29,6 +29,8 @@
 #include <linux/qpnp/vibrator.h>
 #include "../staging/android/timed_output.h"
 
+#include <linux/vibtrig.h>
+
 #define DTSI_PWM_CONFIG_DEFAULT   0
 #define DTSI_PWMVALUE_1P_DEFAULT 80
 #define DTSI_PWMVALUE_1P_MAX    100
@@ -82,6 +84,10 @@ struct qpnp_vib_pwm {
 	struct timed_output_dev timed_dev;
 	struct work_struct      work;
 	const char*             default_trigger;
+
+#ifdef CONFIG_VIB_TRIGGERS
+	struct vib_trigger_enabler enabler;
+#endif
 
 	uint32_t   power_en;
 	uint32_t   ctrl_en;
@@ -209,6 +215,22 @@ retry:
 	spin_unlock_irqrestore(&vib->lock, flags);
 	schedule_work(&vib->work);
 }
+
+#ifdef CONFIG_VIB_TRIGGERS
+static void __vib_pwm_trigger_enable(struct vib_trigger_enabler *enabler, int value)
+{
+	struct qpnp_vib_pwm *vib;
+	struct timed_output_dev *dev;
+
+	vib = enabler->trigger_data;
+	dev = &vib->timed_dev;
+
+	printk(KERN_INFO "[VIB]"
+			"vib_trigger=%d.\r\n", value);
+
+	qpnp_vib_pwm_enable(dev, value);
+}
+#endif
 
 static void qpnp_vib_pwm_update(struct work_struct *work)
 {
@@ -511,6 +533,14 @@ static int __devinit qpnp_vibrator_pwm_probe(struct spmi_device *spmi)
 				"%s, create pwm_value sysfs fail: pwm_value\n", __func__);
 	}
 
+#ifdef CONFIG_VIB_TRIGGERS
+	vib->enabler.name = "qpnp-vibrator-pwm";
+	vib->enabler.default_trigger = vib->default_trigger;
+	vib->enabler.enable = __vib_pwm_trigger_enable;
+	vib->enabler.trigger_data = vib;
+	vib_trigger_enabler_register(&vib->enabler);
+#endif
+
 	printk(KERN_INFO "[VIB]"
 			"probe done.\n");
 	return rc;
@@ -520,6 +550,9 @@ static int  __devexit qpnp_vibrator_pwm_remove(struct spmi_device *spmi)
 {
 	struct qpnp_vib_pwm *vib = dev_get_drvdata(&spmi->dev);
 
+#ifdef CONFIG_VIB_TRIGGERS
+	vib_trigger_enabler_unregister(&vib->enabler);
+#endif
 	cancel_work_sync(&vib->work);
 	hrtimer_cancel(&vib->vib_timer);
 	timed_output_dev_unregister(&vib->timed_dev);
