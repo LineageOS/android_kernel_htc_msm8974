@@ -114,6 +114,12 @@ int msm_sensor_free_sensor_data(struct msm_sensor_ctrl_t *s_ctrl);
 
 int32_t msm_sensor_init_default_params(struct msm_sensor_ctrl_t *s_ctrl);
 
+struct file* msm_fopen(const char* path, int flags, int rights);
+
+int msm_fwrite(struct file* file, unsigned long long offset, unsigned char* data, unsigned int size);
+
+void msm_fclose(struct file* file);
+
 int32_t msm_sensor_get_dt_gpio_req_tbl(struct device_node *of_node,
 	struct msm_camera_gpio_conf *gconf, uint16_t *gpio_array,
 	uint16_t gpio_array_size);
