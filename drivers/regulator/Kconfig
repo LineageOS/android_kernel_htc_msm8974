@@ -457,5 +457,11 @@ config REGULATOR_QPNP
 	  chips provide several different varieties of LDO and switching
 	  regulators.  They also provide voltage switches and boost regulators.
 
+config REGULATOR_NCP6924
+	tristate "ON NCP6924 PMIC"
+	depends on I2C
+	help
+	  This driver supports voltage regulator of ON Semiconductor NCP6924 chips.
+
 endif
 
