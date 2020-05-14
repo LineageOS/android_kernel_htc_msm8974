@@ -443,6 +443,7 @@ obj-$(CONFIG_MACH_M8) += board-m8-gpiomux.o
 obj-$(CONFIG_MACH_M8_DUG) += board-m8-gpiomux.o
 obj-$(CONFIG_MACH_M8_WHL) += board-m8-gpiomux.o
 obj-$(CONFIG_MACH_M8_WL) += board-m8-gpiomux.o
+obj-$(CONFIG_MACH_MELS_TUHL) += board-mels-gpiomux.o
 
 obj-y += smlog.o
 
